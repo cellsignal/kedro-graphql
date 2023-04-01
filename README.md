@@ -8,15 +8,37 @@ A tool for serving kedro projects as a graphql api.
 
 - include EXCEPTION_STATES in kedro_graphql.events.PipelineEventMonitor to exit when task fails
 - fix and write all unittests
+- support custom runners
 
-## Rules and guidelines
 
-In order to get the best out of the template:
+## Quickstart
 
-* Don't remove any lines from the `.gitignore` file we provide
-* Make sure your results can be reproduced by following a [data engineering convention](https://kedro.readthedocs.io/en/stable/faq/faq.html#what-is-data-engineering-convention)
-* Don't commit data to your repository
-* Don't commit any credentials or your local configuration to your repository. Keep all your credentials and local configuration in `conf/local/`
+Install kedro-graphql into your kedro project envirvonment.
+
+```
+pip install kedro_graphql
+```
+
+Start redis and mongo services.
+
+```
+docker-compose up -d
+```
+
+Start the api server.
+
+```
+kedro gql
+```
+
+Start a worker (in another terminal).
+
+```
+kedro gql -w
+```
+
+Navigate to http://127.0.0.1:5000/graphql to access the graphql interface.
+
 
 ## How to install dependencies
 

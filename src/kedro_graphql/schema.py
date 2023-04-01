@@ -59,6 +59,7 @@ class Mutation:
 
         print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
+        print(p)
 
         return p
 
