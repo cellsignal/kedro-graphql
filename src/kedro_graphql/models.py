@@ -223,6 +223,7 @@ class Pipeline:
 
 @strawberry.type
 class PipelineEvent:
+    id: str
     task_id: str
     status: str
     result: str

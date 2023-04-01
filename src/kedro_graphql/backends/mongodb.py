@@ -31,10 +31,13 @@ class MongoBackend(BaseBackend):
         else:
             r = self.db["pipelines"].find_one({"_id": ObjectId(id)})
 
-        id = r.pop("_id")
-        p = Pipeline.from_dict(r)
-        p.id = str(id)
-        return p
+        if r:
+            id = r.pop("_id")
+            p = Pipeline.from_dict(r)
+            p.id = str(id)
+            return p
+        else:
+            return None
 
     def create(self, pipeline: Pipeline):
         """Save a pipeline"""

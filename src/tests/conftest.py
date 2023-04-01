@@ -5,6 +5,8 @@ from kedro.config import ConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
 from kedro_graphql.config import backend, backend_kwargs
+from kedro_graphql.tasks import run_pipeline
+from kedro_graphql.models import Pipeline, DataSet, Parameter
 from unittest.mock import patch
 
 
@@ -43,19 +45,51 @@ def celery_config():
 def celery_worker_parameters():
     return {"without_heartbeat": False}
 
+@pytest.fixture
+def mock_backend():
+    return backend(**backend_kwargs)
 
 @pytest.fixture
-def mock_info_context():
+def mock_info_context(mock_backend):
     class App():
-        backend = backend(**backend_kwargs)
+        backend = mock_backend
 
     class Request():
         app = App()
 
-    def side_effect():
-        return {"request": Request()}
-
-    with patch("strawberry.types.Info.context", autospec=True) as m:
-        m.side_effect = side_effect
+    with patch("strawberry.types.Info.context", {"request": Request()}) as m:
         yield m
 
+@pytest.fixture
+def mock_pipeline(mock_backend):
+
+    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}]
+    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}]
+    parameters = [{"name":"example", "value":"hello"}]
+
+    p = Pipeline(
+        name = "example00",
+        inputs = [DataSet(**i) for i in inputs],
+        outputs = [DataSet(**o) for o in outputs],
+        parameters = [Parameter(**p) for p in parameters],
+        task_name = str(run_pipeline),
+    )
+
+    serial = p.serialize()
+
+    result = run_pipeline.apply_async(kwargs = {"name": "example00", 
+                                                 "inputs": inputs, 
+                                                 "outputs": outputs,
+                                                 "parameters": parameters}, countdown=1)
+    p.task_id = result.id
+    p.status = result.status
+    p.task_kwargs = str(
+            {"name": serial["name"], 
+            "inputs": serial["inputs"], 
+            "outputs": serial["outputs"], 
+            "parameters": serial["parameters"]}
+    )
+
+    print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+    p = mock_backend.create(p)
+    return p

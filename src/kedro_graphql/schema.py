@@ -26,7 +26,6 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - Need to add celery signal to update document in mongo with status as task executes/completes
         - instead of using PipelineEvent Monitor can mongo stream events when document changes?
         - fill in missing values from default catalog?
         - is validation against template needed, e.g. check DataSet type?
@@ -66,8 +65,8 @@ class Mutation:
 @strawberry.type
 class Subscription:
     @strawberry.subscription
-    async def pipeline(self, uuid: str, info: Info) -> AsyncGenerator[PipelineEvent, None]:
-        async for e in PipelineEventMonitor(app = APP_CELERY, task_id = info.context["request"].app.backend.load(id=uuid).task_id ).consume():
+    async def pipeline(self, id: str, info: Info) -> AsyncGenerator[PipelineEvent, None]:
+        async for e in PipelineEventMonitor(app = APP_CELERY, task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
             yield PipelineEvent(**e)
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
