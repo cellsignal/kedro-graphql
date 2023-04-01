@@ -17,6 +17,7 @@ conf_parameters = context.config_loader["parameters"]
 
 
 config = {
+    **dotenv_values("example.env"),  # load 
     **dotenv_values(".env"),  # load 
     **os.environ,  # override loaded values with environment variables
 }

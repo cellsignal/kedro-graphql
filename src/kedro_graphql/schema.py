@@ -17,8 +17,8 @@ class Query:
         return pipes
 
     @strawberry.field
-    def pipeline(self, uuid: str, info: Info) -> Pipeline:
-        return info.context["request"].app.backend.load(uuid)
+    def pipeline(self, id: str, info: Info) -> Pipeline:
+        return info.context["request"].app.backend.load(id)
 
 
 @strawberry.type
@@ -59,8 +59,7 @@ class Mutation:
 
         print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
-        print(p)
-
+        print(p.id)
         return p
 
 

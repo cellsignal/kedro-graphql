@@ -4,7 +4,8 @@ from kedro.framework.project import settings
 from kedro.config import ConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
-
+from kedro_graphql.config import backend, backend_kwargs
+from unittest.mock import patch
 
 
 
@@ -41,3 +42,20 @@ def celery_config():
 @pytest.fixture(scope="session")
 def celery_worker_parameters():
     return {"without_heartbeat": False}
+
+
+@pytest.fixture
+def mock_info_context():
+    class App():
+        backend = backend(**backend_kwargs)
+
+    class Request():
+        app = App()
+
+    def side_effect():
+        return {"request": Request()}
+
+    with patch("strawberry.types.Info.context", autospec=True) as m:
+        m.side_effect = side_effect
+        yield m
+
