@@ -29,6 +29,4 @@ class TestSchemaSubscriptions:
         sub = await schema.subscribe(query)
 
         async for result in sub:
-            print(result)
-            ##assert not result.errors
-            ##assert result.data == {"count": index}
+            assert not result.errors

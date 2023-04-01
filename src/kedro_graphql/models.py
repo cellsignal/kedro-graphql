@@ -226,7 +226,7 @@ class PipelineEvent:
     id: str
     task_id: str
     status: str
-    result: str
+    result: Optional[str] = None
     timestamp: str
     traceback: Optional[str] = None
 

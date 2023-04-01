@@ -80,7 +80,7 @@ def mock_pipeline(mock_backend):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=1)
+                                                 "parameters": serial["parameters"]}, countdown=2)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(
