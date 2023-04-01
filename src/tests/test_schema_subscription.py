@@ -16,8 +16,12 @@ class TestSchemaSubscriptions:
         query = """
     	  subscription {
           	pipeline(id:"""+ '"' + str(mock_pipeline.id) + '"' + """) {
+              id
               taskId
-              
+              status
+              result
+              timestamp
+              traceback
             }
     	  }
         """

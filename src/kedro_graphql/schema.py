@@ -67,6 +67,7 @@ class Subscription:
     @strawberry.subscription
     async def pipeline(self, id: str, info: Info) -> AsyncGenerator[PipelineEvent, None]:
         async for e in PipelineEventMonitor(app = APP_CELERY, task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
+            e["id"] = id
             yield PipelineEvent(**e)
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
