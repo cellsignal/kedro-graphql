@@ -16,3 +16,6 @@ celery[pytest]
 uvicorn
 strawberry-graphql
 fastapi
+pymongo
+python-dotenv
+pytest-asyncio
