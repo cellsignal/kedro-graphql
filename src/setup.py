@@ -23,7 +23,7 @@ setup(
     entry_points={
         "console_scripts": [entry_point],
         ##"kedro.project_commands": ["kedro-graphql = kedro_graphql.plugin:commands"]
-        "kedro.project_commands": ["kedro-graphql = kedro_graphql.plugin:commands"]
+        "kedro.project_commands": ["kedro-graphql = kedro_graphql.commands:commands"]
         },
     install_requires=requires,
     extras_require={
