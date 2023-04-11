@@ -11,9 +11,12 @@ class Plugin(ABC):
     def __submit__(self, input: str) -> str:
         pass
 
-@qgl(name = "text_in")
+@gql(name = "text_in")
 class ExampleTextInPlugin(Plugin):
     
     def __input__(self, input: str) -> [str]:
         print("plugin example")
         return [input]
+
+    def __submit__(self, input: str) -> str:
+        return input

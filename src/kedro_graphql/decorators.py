@@ -25,6 +25,7 @@ def gql(name):
 
 def import_modules(dir_name):
     direc = os.path.join(WORKING_DIR, dir_name)
+    print(direc)
     for f in os.listdir(direc):
         path = os.path.join(direc, f)
         if (
@@ -37,4 +38,4 @@ def import_modules(dir_name):
                 f'{dir_name}.{file_name}'
             )
 
-#import_modules("plugins")
+import_modules("plugins")
