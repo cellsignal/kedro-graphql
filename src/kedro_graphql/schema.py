@@ -59,6 +59,9 @@ class Mutation:
         print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
         print(p.id)
+
+        ## testing plugin_resolvers, 
+        info.context["request"].app.plugin_resolvers["text_in"].__input__("called text_in resolver")
         return p
 
 

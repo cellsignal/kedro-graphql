@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from kedro_graphql.decorators import gql
 
-class Plugin(ABC):
+class PluginResolver(ABC):
 
     @abstractmethod
     def __input__(self, input: str) -> [str]:
@@ -12,10 +12,10 @@ class Plugin(ABC):
         pass
 
 @gql(name = "text_in")
-class ExampleTextInPlugin(Plugin):
+class ExampleTextInPlugin(PluginResolver):
     
     def __input__(self, input: str) -> [str]:
-        print("plugin example")
+        print("plugin example", input)
         return [input]
 
     def __submit__(self, input: str) -> str:

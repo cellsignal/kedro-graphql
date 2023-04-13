@@ -3,12 +3,14 @@ from strawberry.asgi import GraphQL
 from .config import config, backend, backend_kwargs
 from .schema import schema
 from celery.result import AsyncResult
+from .decorators import RESOLVERS
 
 
 
 graphql_app = GraphQL(schema)
 app = FastAPI()
 app.config = config
+app.plugin_resolvers = RESOLVERS
 app.backend = backend(**backend_kwargs)
 
 @app.on_event("startup")
