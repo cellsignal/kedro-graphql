@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from kedro_graphql.decorators import gql
 from kedro_graphql.models import ParameterInput, DataSetInput
 
-class ResolverPlugin(ABC):
+class IOResolverPlugin(ABC):
     """
     Implement this class to define custom behavior for pipeline inputs and
     outputs.  The methods of the class will called prior to pipeline 
@@ -17,7 +17,7 @@ class ResolverPlugin(ABC):
         pass
 
 @gql(name = "text_in")
-class ExampleTextInPlugin(ResolverPlugin):
+class ExampleTextInPlugin(IOResolverPlugin):
     
     def __input__(self, input: ParameterInput | DataSetInput) -> [ParameterInput | DataSetInput]:
         print("plugin example", input)
