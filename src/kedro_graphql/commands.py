@@ -1,6 +1,5 @@
 import click
 import uvicorn
-import importlib
 
 @click.group(name="kedro-graphql")
 def commands():
@@ -18,11 +17,6 @@ def commands():
 )
 def gql(metadata, worker):
     """Commands for working with kedro-graphql."""
-    ## for example
-    imports = ["kedro_graphql.plugins.plugins"]
-    for i in imports:
-        importlib.import_module(i)
-
     if worker:
         from .celeryapp import app
         worker = app.Worker()

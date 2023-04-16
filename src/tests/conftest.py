@@ -4,7 +4,7 @@ from kedro.framework.project import settings
 from kedro.config import ConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
-from kedro_graphql.config import backend, backend_kwargs
+from kedro_graphql.config import backend, backend_kwargs, RESOLVER_PLUGINS
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter
 from unittest.mock import patch
@@ -53,6 +53,7 @@ def mock_backend():
 def mock_info_context(mock_backend):
     class App():
         backend = mock_backend
+        resolver_plugins = RESOLVER_PLUGINS
 
     class Request():
         app = App()

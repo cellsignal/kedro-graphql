@@ -27,3 +27,10 @@ backend_module, backend_class = "kedro_graphql.backends.mongodb.MongoBackend".rs
 backend_kwargs = {"uri": config.get("MONGO_URI"), "db": config.get("MONGO_DB_NAME")}
 backend_module = import_module(backend_module)
 backend = getattr(backend_module, backend_class)
+
+RESOLVER_PLUGINS = {}
+
+## discover plugins e.g. decorated functions @gql
+kedro_graphql_imports = ["kedro_graphql.plugins.plugins"] ## make configurable
+for i in kedro_graphql_imports:
+    import_module(i)
