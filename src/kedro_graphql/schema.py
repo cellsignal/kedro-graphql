@@ -26,7 +26,6 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - instead of using PipelineEvent Monitor can mongo stream events when document changes?
         - fill in missing values from default catalog?
         - is validation against template needed, e.g. check DataSet type?
         """
