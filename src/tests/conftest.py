@@ -60,11 +60,27 @@ def mock_info_context(mock_backend):
     with patch("strawberry.types.Info.context", {"request": Request()}) as m:
         yield m
 
-@pytest.fixture
-def mock_pipeline(mock_backend):
 
-    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}]
-    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}]
+## refer to https://docs.pytest.org/en/7.1.x/how-to/tmp_path.html for info on tmp_path fixture
+@pytest.fixture
+def mock_text_in(tmp_path):
+    #tmp_path.mkdir()
+    text_in = tmp_path / "text_in.txt"
+    text_in.write_text("hello")
+    return text_in
+
+@pytest.fixture
+def mock_text_out(tmp_path):
+    #tmp_path.mkdir()
+    text_out = tmp_path / "text_out.txt"
+    text_out.write_text("good bye")
+    return text_out
+
+@pytest.fixture
+def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
+
+    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
 
     p = Pipeline(
@@ -80,7 +96,7 @@ def mock_pipeline(mock_backend):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=2)
+                                                 "parameters": serial["parameters"]}, countdown=0.1)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(

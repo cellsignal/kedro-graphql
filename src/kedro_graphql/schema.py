@@ -1,6 +1,7 @@
-from .config import PIPELINES
+from .config import PIPELINES, RESOLVER_PLUGINS, TYPE_PLUGINS
 from .events import PipelineEventMonitor
 import strawberry
+from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, List
 from .celeryapp import app as APP_CELERY
@@ -26,7 +27,6 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - instead of using PipelineEvent Monitor can mongo stream events when document changes?
         - fill in missing values from default catalog?
         - is validation against template needed, e.g. check DataSet type?
         """
@@ -55,10 +55,15 @@ class Mutation:
                 "outputs": serial["outputs"], 
                 "parameters": serial["parameters"]}
         )
+        
+        ## PLACE HOLDER for future reolver plugins
+        ## testing plugin_resolvers, 
+        RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
         print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
         print(p.id)
+
         return p
 
 
@@ -70,4 +75,8 @@ class Subscription:
             e["id"] = id
             yield PipelineEvent(**e)
 
-schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
+ComboQuery = merge_types("Query", tuple([Query] + TYPE_PLUGINS["query"]))
+ComboMutation = merge_types("Mutation", tuple([Mutation] + TYPE_PLUGINS["mutation"]))
+ComboSubscription = merge_types("Subscription", tuple([Subscription] + TYPE_PLUGINS["subscription"]))
+
+schema = strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
