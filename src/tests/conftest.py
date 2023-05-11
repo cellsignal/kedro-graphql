@@ -4,7 +4,7 @@ from kedro.framework.project import settings
 from kedro.config import ConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
-from kedro_graphql.config import backend, backend_kwargs, RESOLVER_PLUGINS
+from kedro_graphql.config import backend, backend_kwargs
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter
 from unittest.mock import patch
@@ -53,7 +53,6 @@ def mock_backend():
 def mock_info_context(mock_backend):
     class App():
         backend = mock_backend
-        resolver_plugins = RESOLVER_PLUGINS
 
     class Request():
         app = App()
@@ -97,7 +96,7 @@ def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=2)
+                                                 "parameters": serial["parameters"]}, countdown=0.1)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(

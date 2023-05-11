@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from strawberry.asgi import GraphQL
-from .config import config, backend, backend_kwargs, RESOLVER_PLUGINS
+from .config import config, backend, backend_kwargs
+#, RESOLVER_PLUGINS
 from .schema import schema
 from celery.result import AsyncResult
 
@@ -9,7 +10,7 @@ from celery.result import AsyncResult
 graphql_app = GraphQL(schema)
 app = FastAPI()
 app.config = config
-app.resolver_plugins = RESOLVER_PLUGINS
+#app.resolver_plugins = RESOLVER_PLUGINS
 app.backend = backend(**backend_kwargs)
 
 @app.on_event("startup")
