@@ -1,5 +1,6 @@
 import click
 import uvicorn
+import os
 
 @click.group(name="kedro-graphql")
 def commands():
@@ -9,18 +10,27 @@ def commands():
 @commands.command()
 @click.pass_obj
 @click.option(
+    "--imports",
+    "-i",
+    default="",
+    help="Additional import paths"
+)
+@click.option(
     "--worker",
     "-w",
     is_flag=True,
     default=False,
     help="Start a celery worker."
 )
-def gql(metadata, worker):
+def gql(metadata, imports, worker):
     """Commands for working with kedro-graphql."""
     if worker:
         from .celeryapp import app
         worker = app.Worker()
         worker.start()
     else:
+        ## set env var to override defaults
+        if len(imports) > 0:
+            os.environ["KEDRO_GRAPHQL_IMPORTS"] = imports
         from .asgi import app
         uvicorn.run(app, port=5000, log_level="info")

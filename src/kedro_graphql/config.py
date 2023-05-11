@@ -31,7 +31,7 @@ load_config = {
 config.update(load_config)
 
 ## parse imports
-config["KEDRO_GRAPHQL_IMPORTS"] = [i for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i) > 0]
+config["KEDRO_GRAPHQL_IMPORTS"] = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
 
 ## ".backends.mongodb.MongoBackend"
 backend_module, backend_class = "kedro_graphql.backends.mongodb.MongoBackend".rsplit(".", 1)
