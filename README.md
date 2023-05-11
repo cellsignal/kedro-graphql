@@ -7,8 +7,8 @@ A tool for serving kedro projects as a graphql api.
 ### TO DO
 
 - include EXCEPTION_STATES in kedro_graphql.events.PipelineEventMonitor to exit when task fails
-- fix and write all unittests
 - support custom runners
+- document plan for supporting custom IOResolverPlugins 
 
 
 ## Quickstart
@@ -63,7 +63,7 @@ kedro run
 Have a look at the file `src/tests/test_run.py` for instructions on how to write your tests. You can run your tests as follows:
 
 ```
-kedro test
+pytest src/tests
 ```
 
 To configure the coverage threshold, go to the `.coveragerc` file.

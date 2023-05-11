@@ -1,7 +1,7 @@
 [tool.kedro]
 package_name = "kedro_graphql"
 project_name = "kedro-graphql"
-project_version = "0.18.4"
+kedro_init_version = "0.18.4"
 
 [tool.isort]
 profile = "black"

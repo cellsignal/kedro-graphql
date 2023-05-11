@@ -29,6 +29,9 @@ backend_module = import_module(backend_module)
 backend = getattr(backend_module, backend_class)
 
 RESOLVER_PLUGINS = {}
+TYPE_PLUGINS = {"query":[],
+                "mutation":[],
+                "subscription":[]}
 
 ## discover plugins e.g. decorated functions @gql
 kedro_graphql_imports = ["kedro_graphql.plugins.plugins"] ## make configurable

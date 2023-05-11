@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from kedro_graphql.decorators import gql
+from kedro_graphql.decorators import gql, gql_type
 from kedro_graphql.models import ParameterInput, DataSetInput
+import strawberry
 
 class IOResolverPlugin(ABC):
     """
@@ -25,3 +26,10 @@ class ExampleTextInPlugin(IOResolverPlugin):
 
     def __submit__(self, input: ParameterInput | DataSetInput) -> ParameterInput | DataSetInput:
         return input
+
+@gql_type(type = "query")
+@strawberry.type
+class ExampleTypePlugin():
+    @strawberry.field
+    def helloWorld(self) -> str:
+        return "Hello World"
