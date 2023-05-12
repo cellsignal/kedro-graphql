@@ -86,10 +86,64 @@ Multiple import paths can be specified using comma seperated values.
 kedro gql --imports "kedro_graphql.plugins.plugins,example_pkg.example.my_types"
 ```
 
-Alternatively, use a ```.env``` file as described in the [configuration](#configuration) section.
+Alternatively, use a ```.env``` file as described in the [configuration](#general-configuration) section.
 
 
-## Configuration
+### Configurable Application
+
+The base application is strawberry + FastAPI instance.  One can leverage the 
+additional features FastAPI offers by defining a custom application class.
+
+
+This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/#use-corsmiddleware).
+
+```
+## src/kedro_graphql/example/app.py
+from fastapi.middleware.cors import CORSMiddleware
+from kedro_graphql import KedroGraphql
+
+
+
+class MyApp(KedroGraphql):
+
+    def __init__(self): 
+        super(MyApp, self).__init__()
+
+        origins = [
+            "http://localhost",
+            "http://localhost:8080",
+        ]
+        
+        self.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        print("added CORSMiddleware")
+
+```
+
+When starting the api server specify the import path using the 
+```--app``` flag.
+
+```
+kedro gql --app "my_kedro_project.app.MyApp"
+
+## example output
+added CORSMiddleware
+INFO:     Started server process [7032]
+INFO:     Waiting for application startup.
+Connected to the MongoDB database!
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
+```
+
+
+Alternatively, use a ```.env``` file as described in the [configuration](#general-configuration) section.
+
+## General Configuration
 
 Configuration can be supplied via environment variables or a ```.env``` file.
 
@@ -98,6 +152,7 @@ Configuration can be supplied via environment variables or a ```.env``` file.
 MONGO_URI = 'mongodb://root:example@localhost:27017/'
 MONGO_DB_NAME = 'pipelines'
 KEDRO_GRAPHQL_IMPORTS = "kedro_graphql.plugins.plugins"
+KEDRO_GRAPHQL_APP = "kedro_graphql.asgi.KedroGraphql"
 ```
 
 ## How to install dependencies

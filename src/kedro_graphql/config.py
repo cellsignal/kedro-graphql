@@ -19,7 +19,8 @@ conf_parameters = context.config_loader["parameters"]
 config = {
     "MONGO_URI": "mongodb://root:example@localhost:27017/",
     "MONGO_DB_NAME": "pipelines",
-    "KEDRO_GRAPHQL_IMPORTS": "kedro_graphql.plugins.plugins,"
+    "KEDRO_GRAPHQL_IMPORTS": "kedro_graphql.plugins.plugins,",
+    "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphql"
     }
 
 load_config = {
