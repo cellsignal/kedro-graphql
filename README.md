@@ -86,7 +86,7 @@ Multiple import paths can be specified using comma seperated values.
 kedro gql --imports "kedro_graphql.plugins.plugins,example_pkg.example.my_types"
 ```
 
-Alternatively, use a ```.env``` file as described in the [configuration](#general-configuration) section.
+Alternatively, use a ```.env``` file as described in the [General Configuration](#general-configuration) section.
 
 
 ### Configurable Application
@@ -141,7 +141,7 @@ INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
 ```
 
 
-Alternatively, use a ```.env``` file as described in the [configuration](#general-configuration) section.
+Alternatively, use a ```.env``` file as described in the [General Configuration](#general-configuration) section.
 
 ## General Configuration
 
