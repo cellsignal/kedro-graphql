@@ -359,7 +359,6 @@ When starting the api server specify the import path using the
 
 ```
 kedro gql --app "my_kedro_project.app.MyApp"
-6463991db98d7f8564ab15a0
 ## example output
 added CORSMiddleware
 INFO:     Started server process [7032]
