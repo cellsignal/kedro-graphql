@@ -19,6 +19,18 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10"]
+    services:
+      redis:
+        image: redis:6.2-apline
+        ports: 
+          - 6379:6379
+      mongo:
+        image: mongo:4.2.24
+        ports: 
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: example
 
     steps:
     - uses: actions/checkout@v3
@@ -30,7 +42,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f src/requirements.txt ]; then pip install -r src/requirements.txt; fi
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
