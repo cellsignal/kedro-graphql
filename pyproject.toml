@@ -1,3 +1,27 @@
+[project]
+name = "kedro-graphql"
+authors = [
+    {name = "opensean"}
+]
+description = "Kedro helps you build production-ready data and analytics pipelines"
+requires-python = ">=3.10, <3.11"
+keywords = [
+    "pipelines",
+    "machine learning",
+    "data pipelines",
+    "data science",
+    "data engineering",
+]
+license = {text = "Apache Software License (Apache 2.0)"}
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/opensean/kedro-graphql"
+Source = "https://github.com/opensean/kedro-graphql"
+
 [tool.kedro]
 package_name = "kedro_graphql"
 project_name = "kedro-graphql"
