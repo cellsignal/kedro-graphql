@@ -42,7 +42,7 @@ Install kedro-graphql into your kedro project environnment.
 pip install kedro_graphql
 ```
 
-Start the redis and mongo services.
+Start the redis and mongo services using this [docker-compose.yaml](https://github.com/opensean/kedro-graphql/blob/main/docker-compose.yaml).
 
 ```
 docker-compose up -d
