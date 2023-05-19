@@ -18,7 +18,6 @@ with open("requirements.txt", encoding="utf-8") as f:
 
 setup(
     name="kedro_graphql",
-    version='{{VERSION_PLACEHOLDER}}',
     packages=find_packages(exclude=["tests"]),
     entry_points={
         "console_scripts": [entry_point],
