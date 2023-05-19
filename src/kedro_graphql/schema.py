@@ -1,4 +1,4 @@
-from .config import PIPELINES, RESOLVER_PLUGINS, TYPE_PLUGINS
+from .config import PIPELINES, TYPE_PLUGINS
 from .events import PipelineEventMonitor
 import strawberry
 from strawberry.tools import merge_types
@@ -58,7 +58,7 @@ class Mutation:
         
         ## PLACE HOLDER for future reolver plugins
         ## testing plugin_resolvers, 
-        RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
+        #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
         print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
@@ -75,8 +75,10 @@ class Subscription:
             e["id"] = id
             yield PipelineEvent(**e)
 
-ComboQuery = merge_types("Query", tuple([Query] + TYPE_PLUGINS["query"]))
-ComboMutation = merge_types("Mutation", tuple([Mutation] + TYPE_PLUGINS["mutation"]))
-ComboSubscription = merge_types("Subscription", tuple([Subscription] + TYPE_PLUGINS["subscription"]))
 
-schema = strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
+def build_schema():
+    ComboQuery = merge_types("Query", tuple([Query] + TYPE_PLUGINS["query"]))
+    ComboMutation = merge_types("Mutation", tuple([Mutation] + TYPE_PLUGINS["mutation"]))
+    ComboSubscription = merge_types("Subscription", tuple([Subscription] + TYPE_PLUGINS["subscription"]))
+    
+    return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)

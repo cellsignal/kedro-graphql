@@ -20,7 +20,8 @@ config = {
     "MONGO_URI": "mongodb://root:example@localhost:27017/",
     "MONGO_DB_NAME": "pipelines",
     "KEDRO_GRAPHQL_IMPORTS": "kedro_graphql.plugins.plugins,",
-    "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphql"
+    "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphql",
+    "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend"
     }
 
 load_config = {
@@ -31,22 +32,14 @@ load_config = {
 ## override defaults
 config.update(load_config)
 
-## parse imports
-#config["KEDRO_GRAPHQL_IMPORTS"] = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
-imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
-
-## ".backends.mongodb.MongoBackend"
-backend_module, backend_class = "kedro_graphql.backends.mongodb.MongoBackend".rsplit(".", 1)
-backend_kwargs = {"uri": config.get("MONGO_URI"), "db": config.get("MONGO_DB_NAME")}
-backend_module = import_module(backend_module)
-backend = getattr(backend_module, backend_class)
 
 RESOLVER_PLUGINS = {}
 TYPE_PLUGINS = {"query":[],
                 "mutation":[],
                 "subscription":[]}
 
-## discover plugins e.g. decorated functions e.g @gql_resolver, @gql_query, etc...
-#for i in config["KEDRO_GRAPHQL_IMPORTS"]:
-for i in imports:
-    import_module(i)
+def discover_plugins():
+    ## discover plugins e.g. decorated functions e.g @gql_query, etc...
+    imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
+    for i in imports:
+        import_module(i)   

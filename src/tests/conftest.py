@@ -4,7 +4,7 @@ from kedro.framework.project import settings
 from kedro.config import ConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
-from kedro_graphql.config import backend, backend_kwargs
+from kedro_graphql.backends import init_backend
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter
 from unittest.mock import patch
@@ -47,7 +47,7 @@ def celery_worker_parameters():
 
 @pytest.fixture
 def mock_backend():
-    return backend(**backend_kwargs)
+    return init_backend()
 
 @pytest.fixture
 def mock_info_context(mock_backend):
