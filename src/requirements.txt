@@ -4,16 +4,17 @@ ipython>=7.31.1, <8.0
 isort~=5.0
 kedro~=0.18.4
 kedro-telemetry~=0.2.0
-kedro-datasets
+kedro-datasets~=1.2.0
 nbstripout~=0.4
 pytest-cov~=3.0
 pytest-mock>=1.7.1, <2.0
-pytest
-redis
-celery[pytest]
-uvicorn[standard]
-strawberry-graphql
-fastapi
-pymongo
-python-dotenv
-pytest-asyncio
+pytest~=7.3.1
+redis~=4.5.5
+celery[pytest]~=5.2.7
+click~=8.1.3
+uvicorn[standard]~=0.22.0
+strawberry-graphql~=0.177.2
+fastapi~=0.95.2
+pymongo~=4.3.3
+python-dotenv~=1.0.0
+pytest-asyncio~=0.21.0
