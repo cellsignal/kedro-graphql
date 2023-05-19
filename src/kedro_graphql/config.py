@@ -32,7 +32,8 @@ load_config = {
 config.update(load_config)
 
 ## parse imports
-config["KEDRO_GRAPHQL_IMPORTS"] = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
+#config["KEDRO_GRAPHQL_IMPORTS"] = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
+imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
 
 ## ".backends.mongodb.MongoBackend"
 backend_module, backend_class = "kedro_graphql.backends.mongodb.MongoBackend".rsplit(".", 1)
@@ -46,5 +47,6 @@ TYPE_PLUGINS = {"query":[],
                 "subscription":[]}
 
 ## discover plugins e.g. decorated functions e.g @gql_resolver, @gql_query, etc...
-for i in config["KEDRO_GRAPHQL_IMPORTS"]:
+#for i in config["KEDRO_GRAPHQL_IMPORTS"]:
+for i in imports:
     import_module(i)
