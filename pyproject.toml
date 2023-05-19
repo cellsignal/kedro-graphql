@@ -16,7 +16,7 @@ license = {text = "Apache Software License (Apache 2.0)"}
 classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
-dynamic = ["version", "readme"]
+dynamic = ["version", "readme", "dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/opensean/kedro-graphql"
@@ -25,6 +25,7 @@ Source = "https://github.com/opensean/kedro-graphql"
 [tool.setuptools.dynamic]
 readme = {file = "README.md", content-type = "text/markdown"}
 version = {attr = "kedro_graphql.__version__"}
+dependencies = {file = "src/requirements.txt"}
 
 [tool.kedro]
 package_name = "kedro_graphql"
