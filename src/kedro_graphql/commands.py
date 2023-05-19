@@ -40,7 +40,9 @@ def gql(metadata, app, imports, worker):
         module, class_name = app.rsplit(".", 1)
         module = import_module(module)
         class_inst = getattr(module, class_name)
-    
-        import_module(imports)
+
+        imports = [i.strip() for i in imports.split(",") if len(i.strip()) > 0]
+        for i in imports:
+            import_module(i)
         
         uvicorn.run(class_inst(), port=5000, log_level="info")

@@ -18,6 +18,12 @@ classifiers = [
 ]
 dynamic = ["version", "readme", "dependencies"]
 
+[project.scripts]
+kedro-graphql = "kedro_graphql.__main__:main"
+
+[project.entry-points."kedro.project_commands"]
+kedro-graphql = "kedro_graphql.commands:commands"
+
 [project.urls]
 Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
