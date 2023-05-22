@@ -4,6 +4,16 @@ import uuid
 from .config import conf_catalog, conf_parameters, PIPELINES
 
 @strawberry.type
+class Tag:
+    key: str
+    value: str
+
+@strawberry.input
+class TagInput:
+    key: str
+    value: str
+
+@strawberry.type
 class Parameter:
     name: str
     value: str
@@ -147,6 +157,7 @@ class PipelineInput:
     parameters: List[ParameterInput]
     inputs: List[DataSetInput]
     outputs: List[DataSetInput]
+    tags: Optional[List[TagInput]] = None
 
 @strawberry.type
 class Pipeline:
@@ -156,6 +167,7 @@ class Pipeline:
     outputs: List[DataSet]
     parameters: List[Parameter]
     status: Optional[str] = None
+    tags: Optional[List[Tag]] = None
     task_id: Optional[str] = None
     task_name: Optional[str] = None
     task_args: Optional[str] = None
@@ -204,6 +216,11 @@ class Pipeline:
 
     @staticmethod
     def from_dict(payload):
+        if payload["tags"]:
+            tags = [Tag(**t) for t in payload["tags"]]
+        else:
+            tags = None
+
         return Pipeline(
             id = payload.get("id", None),
             name = payload["name"],
@@ -211,6 +228,7 @@ class Pipeline:
             outputs = [DataSet.from_dict(o) for o in payload["outputs"]],
             parameters = [Parameter(**p) for p in payload["parameters"]],
             status = payload.get("status", None),
+            tags = tags,
             task_id = payload.get("task_id", None),
             task_name = payload.get("task_name", None),
             task_args = payload.get("task_args", None),
