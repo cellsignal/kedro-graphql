@@ -40,6 +40,10 @@ class TestSchemaMutations:
               value
             }
             status
+            tags {
+              key
+              value
+            }
             taskId
             taskName
             taskArgs
@@ -58,7 +62,8 @@ class TestSchemaMutations:
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}],
                                       "outputs": [{"name": "text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}],
-                                      "parameters": [{"name":"example", "value":"hello"}] 
+                                      "parameters": [{"name":"example", "value":"hello"}],
+                                      "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
                                     }})
         
         assert resp.errors is None

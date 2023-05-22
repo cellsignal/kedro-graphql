@@ -6,7 +6,7 @@ from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
 from kedro_graphql.backends import init_backend
 from kedro_graphql.tasks import run_pipeline
-from kedro_graphql.models import Pipeline, DataSet, Parameter
+from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from unittest.mock import patch
 
 
@@ -82,12 +82,14 @@ def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
     inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
     outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
+    tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
     p = Pipeline(
         name = "example00",
         inputs = [DataSet(**i) for i in inputs],
         outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
+        tags = [Tag(**p) for p in tags],
         task_name = str(run_pipeline),
     )
 

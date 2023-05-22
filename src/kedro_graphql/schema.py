@@ -6,7 +6,7 @@ from strawberry.types import Info
 from typing import AsyncGenerator, List
 from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
-from .models import Parameter, ParameterInput, DataSet, DataSetInput, Pipeline, PipelineInput, PipelineEvent, PipelineTemplate
+from .models import Parameter, ParameterInput, DataSet, DataSetInput, Pipeline, PipelineInput, PipelineEvent, PipelineTemplate, Tag, TagInput
 
 @strawberry.type
 class Query:
@@ -30,11 +30,17 @@ class Mutation:
         - fill in missing values from default catalog?
         - is validation against template needed, e.g. check DataSet type?
         """
+        if pipeline.tags:
+            tags = [Tag(**vars(t)) for t in pipeline.tags]
+        else:
+            tags = None
+
         p = Pipeline(
             name = pipeline.name,
             inputs = [DataSet(**vars(i)) for i in pipeline.inputs],
             outputs = [DataSet(**vars(o)) for o in pipeline.outputs],
             parameters = [Parameter(**vars(p)) for p in pipeline.parameters],
+            tags = tags,
             task_name = str(run_pipeline),
         )
 
