@@ -248,3 +248,8 @@ class PipelineEvent:
     timestamp: str
     traceback: Optional[str] = None
 
+@strawberry.type
+class PipelineLogMessage:
+    id: str
+    message_id: str
+    message: str

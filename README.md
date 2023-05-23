@@ -329,11 +329,11 @@ This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/
 ```
 ## src/kedro_graphql/example/app.py
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql import KedroGraphql
+from kedro_graphql import KedroGraphQL
 
 
 
-class MyApp(KedroGraphql):
+class MyApp(KedroGraphQL):
 
     def __init__(self): 
         super(MyApp, self).__init__()
@@ -380,7 +380,7 @@ Configuration can be supplied via environment variables or a ```.env``` file.
 MONGO_URI = 'mongodb://root:example@localhost:27017/'
 MONGO_DB_NAME = 'pipelines'
 KEDRO_GRAPHQL_IMPORTS = "kedro_graphql.plugins.plugins"
-KEDRO_GRAPHQL_APP = "kedro_graphql.asgi.KedroGraphql"
+KEDRO_GRAPHQL_APP = "kedro_graphql.asgi.KedroGraphQL"
 ```
 
 ## How to install dependencies

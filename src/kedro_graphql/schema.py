@@ -6,7 +6,8 @@ from strawberry.types import Info
 from typing import AsyncGenerator, List
 from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
-from .models import Parameter, ParameterInput, DataSet, DataSetInput, Pipeline, PipelineInput, PipelineEvent, PipelineTemplate, Tag, TagInput
+from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
+from .logs.logger import logger, PipelineLogStream
 
 @strawberry.type
 class Query:
@@ -66,9 +67,8 @@ class Mutation:
         ## testing plugin_resolvers, 
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
-        print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+        logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
         p = info.context["request"].app.backend.create(p)
-        print(p.id)
 
         return p
 
@@ -80,6 +80,12 @@ class Subscription:
         async for e in PipelineEventMonitor(app = APP_CELERY, task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
             e["id"] = id
             yield PipelineEvent(**e)
+
+    @strawberry.subscription
+    async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
+        async for e in PipelineLogStream(task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
+            e["id"] = id
+            yield PipelineLogMessage(**e)
 
 
 def build_schema():
