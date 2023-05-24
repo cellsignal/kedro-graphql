@@ -251,5 +251,7 @@ class PipelineEvent:
 @strawberry.type
 class PipelineLogMessage:
     id: str
-    message_id: str
     message: str
+    message_id: str
+    task_id: str
+    time: str

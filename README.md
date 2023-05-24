@@ -10,8 +10,7 @@ and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
  with features such as:
  
  - a distributed task queue
- - events
-   - subscribe to pipeline events (status updates) via GraphQL subscriptions 
+ - subscribe to pipline events and logs via GraphQL subscriptions
  - storage
    - persist and track all pipelines executed via the API
  - [additional features](#features)
@@ -130,6 +129,9 @@ Start a worker (in another terminal).
 ```
 kedro gql -w
 ```
+
+### Start a pipeline
+
 Navigate to http://127.0.0.1:5000/graphql to access the graphql interface 
 and execute the following mutation:
 
@@ -157,6 +159,8 @@ Expected response:
 }
 ```
 
+### Subscribe to pipeline events
+
 Now execute the following subscription to track the progress:
 
 ```
@@ -173,6 +177,29 @@ subscription MySubscription {
 ```
 
 ![subscription](docs/subscription.gif)
+
+
+### Susbscribe to pipeline logs
+
+Execute the following subscription to recieve log messages:
+
+
+```
+subscription {
+   	pipelineLogs(id:"6463991db98d7f8564ab15a0") {
+       id
+       message
+       messageId
+       taskId
+       time
+     }
+}
+```
+
+
+![logs subscription](docs/logs-subscription.gif)
+
+### Get the pipeline result
 
 Fetch the pipeline result with the following query:
 
@@ -418,8 +445,7 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ### TO DO
 
-- include EXCEPTION_STATES in kedro_graphql.events.PipelineEventMonitor to exit when task fails
 - support custom runners e.g. Argo Workflows, AWS Batch, etc...
 - document plan for supporting custom IOResolverPlugins 
-- extensible data model to capture additional metadata along with pipeline instance
+- document pipeline tags and implement "search" via tags and/or other fields
 

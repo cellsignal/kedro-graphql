@@ -1,5 +1,5 @@
 from kedro_graphql.config import config
-broker_url = config["KEDRO_GRAPHQL_CELERY_BROKER"]
+broker_url = config["KEDRO_GRAPHQL_BROKER"]
 result_backend = config["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"]
 result_extended = True
 

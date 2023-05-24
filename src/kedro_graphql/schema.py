@@ -77,15 +77,19 @@ class Mutation:
 class Subscription:
     @strawberry.subscription
     async def pipeline(self, id: str, info: Info) -> AsyncGenerator[PipelineEvent, None]:
-        async for e in PipelineEventMonitor(app = APP_CELERY, task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
-            e["id"] = id
-            yield PipelineEvent(**e)
+        p  = info.context["request"].app.backend.load(id=id)
+        if p:
+            async for e in PipelineEventMonitor(app = APP_CELERY, task_id = p.task_id).consume():
+                e["id"] = id
+                yield PipelineEvent(**e)
 
     @strawberry.subscription
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
-        async for e in PipelineLogStream(task_id = info.context["request"].app.backend.load(id=id).task_id ).consume():
-            e["id"] = id
-            yield PipelineLogMessage(**e)
+        p  = info.context["request"].app.backend.load(id=id)
+        if p:
+            async for e in PipelineLogStream(task_id = p.task_id ).consume():
+                e["id"] = id
+                yield PipelineLogMessage(**e)
 
 
 def build_schema():

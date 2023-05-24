@@ -22,7 +22,7 @@ config = {
     "KEDRO_GRAPHQL_IMPORTS": "kedro_graphql.plugins.plugins,",
     "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphQL",
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
-    "KEDRO_GRAPHQL_CELERY_BROKER": "redis://localhost",
+    "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
     }
 
