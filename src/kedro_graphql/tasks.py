@@ -5,7 +5,6 @@ from celery import shared_task, Task
 from .backends import init_backend
 from fastapi.encoders import jsonable_encoder
 
-
 class KedroGraphqlTask(Task):
     _db = None
 
@@ -98,10 +97,8 @@ class KedroGraphqlTask(Task):
         self.db.update(task_id = task_id, values = {"status": status, "task_einfo": str(einfo)})
 
 
-
 @shared_task(bind = True, base = KedroGraphqlTask)
 def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict):
-
     catalog = {**inputs, **outputs}
     io = DataCatalog().from_config(catalog = catalog)
 

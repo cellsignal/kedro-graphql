@@ -1,8 +1,8 @@
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql import KedroGraphql
+from kedro_graphql import KedroGraphQL
 
 
-class MyApp(KedroGraphql):
+class MyApp(KedroGraphQL):
 
     def __init__(self): 
         super(MyApp, self).__init__()

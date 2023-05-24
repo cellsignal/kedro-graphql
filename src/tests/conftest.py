@@ -111,3 +111,39 @@ def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
     print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
     p = mock_backend.create(p)
     return p
+
+@pytest.fixture
+def mock_pipeline2(mock_backend, tmp_path, mock_text_in, mock_text_out):
+
+    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
+    parameters = [{"name":"example", "value":"hello"}]
+    tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
+
+    p = Pipeline(
+        name = "example00",
+        inputs = [DataSet(**i) for i in inputs],
+        outputs = [DataSet(**o) for o in outputs],
+        parameters = [Parameter(**p) for p in parameters],
+        tags = [Tag(**p) for p in tags],
+        task_name = str(run_pipeline),
+    )
+
+    serial = p.serialize()
+
+    result = run_pipeline.apply_async(kwargs = {"name": "example00", 
+                                                 "inputs": serial["inputs"], 
+                                                 "outputs": serial["outputs"],
+                                                 "parameters": serial["parameters"]}, countdown=0.1)
+    p.task_id = result.id
+    p.status = result.status
+    p.task_kwargs = str(
+            {"name": serial["name"], 
+            "inputs": serial["inputs"], 
+            "outputs": serial["outputs"], 
+            "parameters": serial["parameters"]}
+    )
+
+    print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+    p = mock_backend.create(p)
+    return p

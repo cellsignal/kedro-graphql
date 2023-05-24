@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from strawberry.fastapi import GraphQLRouter
 from .backends import init_backend
 from .schema import build_schema       
-class KedroGraphql(FastAPI):
+class KedroGraphQL(FastAPI):
     def __init__(self):
-        super(KedroGraphql, self).__init__()
+        super(KedroGraphQL, self).__init__()
 
         self.backend = init_backend()
     
