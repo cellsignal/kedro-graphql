@@ -4,6 +4,7 @@ from kedro.runner import SequentialRunner
 from celery import shared_task, Task
 from .backends import init_backend
 from fastapi.encoders import jsonable_encoder
+from .config import RUNNER
 
 class KedroGraphqlTask(Task):
     _db = None
@@ -107,6 +108,6 @@ def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict)
     params["parameters"] = parameters
     io.add_feed_dict(params)
 
-    SequentialRunner().run(pipelines[name], catalog = io)
+    RUNNER().run(pipelines[name], catalog = io)
     
     return "success"
