@@ -29,12 +29,28 @@ class Mutation:
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - fill in missing values from default catalog?
-        - is validation against template needed, e.g. check DataSet type?
+        - is validation against template needed, e.g. check DataSet type or at least check the dataset names?
         """
         if pipeline.tags:
             tags = [Tag(**vars(t)) for t in pipeline.tags]
         else:
             tags = None
+
+        ## check for credentials
+        input_creds = []
+        for i in pipeline.inputs:
+            input_creds.append(i.serialize_credentials())
+            delattr(i, "credentials")
+            delattr(i, "credentials_nested")
+
+        output_creds = []
+        for o in pipeline.outputs:
+            input_creds.append(o.serialize_credentials())
+            delattr(o, "credentials")
+            delattr(o, "credentials_nested")
+                
+        print(input_creds)
+        print(output_creds)
 
         p = Pipeline(
             name = pipeline.name,
@@ -46,6 +62,9 @@ class Mutation:
         )
 
         serial = p.serialize()
+
+        ## merge any credentials with inputs and outputs
+        ## credentials are intentionally not persisted
 
         result = run_pipeline.delay(
             name = serial["name"], 
@@ -68,6 +87,7 @@ class Mutation:
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
         logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+
         p = info.context["request"].app.backend.create(p)
 
         return p

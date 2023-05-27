@@ -9,7 +9,13 @@ kubeAPI: # same as `--api-port myhost.my.domain:6445` (where the name would reso
   hostPort: "6445" # where the Kubernetes API listening port will be mapped to on your host system
 image: rancher/k3s:v1.20.4-k3s1 # same as `--image rancher/k3s:v1.20.4-k3s1`
 ports:
-  - port: 2746:30080 # same as `--port '8080:80@loadbalancer'`
+  - port: 2746:30080 ## argo workflows server and api
+    nodeFilters:
+      - agent:0
+  - port: 9000:30081 ## minio api (s3 storage)  
+    nodeFilters:
+      - agent:0
+  - port: 9001:30082 ## minio dashboad (s3 storage)  
     nodeFilters:
       - agent:0
 options:

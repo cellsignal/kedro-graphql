@@ -26,9 +26,10 @@ dev:
 dev-cluster:
 	k3d cluster create --config ./k3d-cluster.yaml
 	kubectl config use-context k3d-kedro-graphql
-	kubectl apply -f https://github.com/argoproj/argo-workflows/releases/download/v3.4.7/namespace-install.yaml
-	kubectl patch deployment argo-server --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe/httpGet/scheme", "value": "HTTP"},{"op": "replace", "path": "/spec/template/spec/containers/0/args", "value": ["server", "--auth-mode=server", "--secure=false"]}]'
+	kubectl apply -f https://github.com/argoproj/argo-workflows/releases/download/v3.4.8/quick-start-minimal.yaml
+	kubectl patch deployment argo-server --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe/httpGet/scheme", "value": "HTTP"},{"op": "replace", "path": "/spec/template/spec/containers/0/args", "value": ["server", "--auth-mode=server", "--secure=false", "--namespaced"]}]'
 	kubectl patch service argo-server --type='json' -p='[{"op": "add", "path": "/spec/ports/0/nodePort", "value": 30080},{"op": "replace", "path": "/spec/type", "value": "NodePort"}]'
+	kubectl patch service minio --type='json' -p='[{"op": "add", "path": "/spec/ports/0/nodePort", "value": 30081},{"op": "add", "path": "/spec/ports/1/nodePort", "value": 30082},{"op": "replace", "path": "/spec/type", "value": "NodePort"}]'
 
 
 .PHONY: clean

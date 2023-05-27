@@ -1,5 +1,5 @@
 import strawberry
-from typing import List, Optional
+from typing import List, Optional, Union
 import uuid
 from .config import conf_catalog, conf_parameters, PIPELINES
 
@@ -28,6 +28,63 @@ class Parameter:
 class ParameterInput:
     name: str
     value: str
+
+
+
+@strawberry.input
+class CredentialSetInput:
+    name: str
+    value: str
+
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        return {self.name: self.value}
+
+@strawberry.input
+class CredentialInput:
+    name: str
+    value: List[CredentialSetInput]
+
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        for v in self.value:
+            values.update(v.serialize())
+        return {self.name: values}
+
+@strawberry.input
+class CredentialNestedSetInput:
+    name: str
+    value: List[CredentialInput]
+    
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        for v in self.value:
+            values.update(v.serialize())
+        return {self.name: values}
+
+
+@strawberry.input
+class CredentialNestedInput:
+    name: str
+    value: List[CredentialNestedSetInput]
+    
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        for v in self.value:
+            values.update(v.serialize())
+        return {self.name: values}
+    
 
 @strawberry.type
 class DataSet:
@@ -86,7 +143,6 @@ class DataSet:
         )
 
 
-
 @strawberry.input
 class DataSetInput:
     name: str
@@ -94,6 +150,23 @@ class DataSetInput:
     filepath: str
     save_args: Optional[List[ParameterInput]] = None
     load_args: Optional[List[ParameterInput]] = None
+    credentials: Optional[List[CredentialInput]] = None
+    credentials_nested: Optional[List[CredentialNestedInput]] = None
+
+    def serialize_credentials(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        if self.credentials:
+            for v in self.credentials:
+                values.update(v.serialize())
+
+        if self.credentials_nested:
+            for v in self.credentials_nested:
+                values.update(v.serialize())
+        
+        return values
 
 @strawberry.type
 class Node:

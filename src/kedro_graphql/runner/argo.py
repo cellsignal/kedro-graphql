@@ -57,4 +57,20 @@ class ArgoWorkflowsRunner(AbstractRunner):
         if missing_inputs:
             raise KeyError(f"Datasets {missing_inputs} not found.")
         
+    def workflow_template(self):
+        """
+        https://docs.kedro.org/en/stable/deployment/argo.html
+        """
+        pass
+
+    def stream_logs(self):
+        """https://github.com/argoproj/argo-workflows/issues/4017
+        """
+        pass
+
+    def submit_workflow(self):
+        pass
+
+    def workflow_status(self):
+        pass
         
