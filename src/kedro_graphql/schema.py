@@ -36,22 +36,19 @@ class Mutation:
         else:
             tags = None
 
-        ## check for credentials
-        input_creds = []
-        for i in pipeline.inputs:
-            input_creds.append(i.serialize_credentials())
-            delattr(i, "credentials")
-            delattr(i, "credentials_nested")
-
-        output_creds = []
-        for o in pipeline.outputs:
-            input_creds.append(o.serialize_credentials())
-            delattr(o, "credentials")
-            delattr(o, "credentials_nested")
+##        ## check for credentials
+##        input_creds = {}
+##        for i in pipeline.inputs:
+##            input_creds[i.name] = i.serialize_credentials()
+##            delattr(i, "credentials")
+##            delattr(i, "credentials_nested")
+##
+##        output_creds = {}
+##        for o in pipeline.outputs:
+##            output_creds[o.name] = o.serialize_credentials()
+##            delattr(o, "credentials")
+##            delattr(o, "credentials_nested")
                 
-        print(input_creds)
-        print(output_creds)
-
         p = Pipeline(
             name = pipeline.name,
             inputs = [DataSet(**vars(i)) for i in pipeline.inputs],
@@ -63,8 +60,20 @@ class Mutation:
 
         serial = p.serialize()
 
+        print("INPUT", input_creds)
+        print("OUTPUT", output_creds)
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
+        for k,v in serial["inputs"].items():
+            if input_creds.get(k, None):
+                v["credentials"] = input_creds[k]
+                
+        for k,v in serial["outputs"].items():
+            if output_creds.get(k, None):
+                v["credentials"] = output_creds[k]
+
+
+        print("SERIAL", serial)
 
         result = run_pipeline.delay(
             name = serial["name"], 

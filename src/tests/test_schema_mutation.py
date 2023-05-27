@@ -120,15 +120,15 @@ class TestSchemaMutations:
                                       "inputs": [{"name": "text_in", 
                                                   "type": "text.TextDataSet", 
                                                   "filepath": str(mock_text_in),
-                                                  "credentials":{"name":"my_creds", "value": [{"name":"username", "value":"opensean"}]},
-                                                  "credentialsNested":{"name":"my_creds", 
+                                                  "credentials":[{"name":"my_creds", "value": [{"name":"username", "value":"opensean"}]}],
+                                                  "credentialsNested":[{"name":"my_creds", 
                                                                        "value": [{"name": "client_kwargs", 
-                                                                                 "value":[{"name": "client_kwargs",
-                                                                                          "value":[{"name":"endpoint_url", 
-                                                                                                   "value":"http://localhost:9000"}]
+                                                                                 "value":[{"name":"endpoint_url", 
+                                                                                            "value":"http://localhost:9000"
                                                                                          }]
                                                                                 }]
-                                                                      }
+                                                                      }]
+                                                                      
                                       }],
                                       "outputs": [{"name": "text_out", 
                                                    "type": "text.TextDataSet", 

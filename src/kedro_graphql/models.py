@@ -2,6 +2,7 @@ import strawberry
 from typing import List, Optional, Union
 import uuid
 from .config import conf_catalog, conf_parameters, PIPELINES
+from functools import reduce
 
 @strawberry.type
 class Tag:
@@ -56,8 +57,10 @@ class CredentialInput:
             values.update(v.serialize())
         return {self.name: values}
 
+
+
 @strawberry.input
-class CredentialNestedSetInput:
+class CredentialNestedInput:
     name: str
     value: List[CredentialInput]
     
@@ -70,20 +73,29 @@ class CredentialNestedSetInput:
             values.update(v.serialize())
         return {self.name: values}
 
-
-@strawberry.input
-class CredentialNestedInput:
-    name: str
-    value: List[CredentialNestedSetInput]
-    
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        values = {}
-        for v in self.value:
-            values.update(v.serialize())
-        return {self.name: values}
+##    def serialize(self) -> dict:
+##        """
+##        Returns serializable dict in format compatible with kedro.
+##        """
+##        values = {}
+##        for v in self.value:
+##            values.update(v.serialize())
+##        return {self.name: values}
+##
+##    def merge(self, a, b, path=None):
+##        "merges nested dictionaries recursively.  Merges b into a."
+##        if path is None: path = []
+##        for key in b:
+##            if key in a:
+##                if isinstance(a[key], dict) and isinstance(b[key], dict):
+##                    self.merge(a[key], b[key], path + [str(key)])
+##                elif a[key] == b[key]:
+##                    pass # same leaf value
+##                else:
+##                    raise Exception('Conflict at %s' % '.'.join(path + [str(key)]))
+##            else:
+##                a[key] = b[key]
+##        return a
     
 
 @strawberry.type
@@ -150,23 +162,8 @@ class DataSetInput:
     filepath: str
     save_args: Optional[List[ParameterInput]] = None
     load_args: Optional[List[ParameterInput]] = None
-    credentials: Optional[List[CredentialInput]] = None
-    credentials_nested: Optional[List[CredentialNestedInput]] = None
-
-    def serialize_credentials(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        values = {}
-        if self.credentials:
-            for v in self.credentials:
-                values.update(v.serialize())
-
-        if self.credentials_nested:
-            for v in self.credentials_nested:
-                values.update(v.serialize())
+    credentials: str
         
-        return values
 
 @strawberry.type
 class Node:
@@ -231,6 +228,8 @@ class PipelineInput:
     inputs: List[DataSetInput]
     outputs: List[DataSetInput]
     tags: Optional[List[TagInput]] = None
+    credentials: Optional[List[CredentialInput]] = None
+    credentials_nested: Optional[List[CredentialNestedInput]] = None
 
 @strawberry.type
 class Pipeline:
