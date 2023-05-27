@@ -2,7 +2,6 @@ import strawberry
 from typing import List, Optional, Union
 import uuid
 from .config import conf_catalog, conf_parameters, PIPELINES
-from functools import reduce
 
 @strawberry.type
 class Tag:
@@ -105,6 +104,7 @@ class DataSet:
     filepath: str
     save_args: Optional[List[Parameter]] = None
     load_args: Optional[List[Parameter]] = None
+    credentials: Optional[str] = None
 
     def serialize(self) -> dict:
         """
@@ -162,7 +162,7 @@ class DataSetInput:
     filepath: str
     save_args: Optional[List[ParameterInput]] = None
     load_args: Optional[List[ParameterInput]] = None
-    credentials: str
+    credentials: Optional[str] = None
         
 
 @strawberry.type

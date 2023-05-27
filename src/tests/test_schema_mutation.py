@@ -120,22 +120,23 @@ class TestSchemaMutations:
                                       "inputs": [{"name": "text_in", 
                                                   "type": "text.TextDataSet", 
                                                   "filepath": str(mock_text_in),
-                                                  "credentials":[{"name":"my_creds", "value": [{"name":"username", "value":"opensean"}]}],
-                                                  "credentialsNested":[{"name":"my_creds", 
-                                                                       "value": [{"name": "client_kwargs", 
-                                                                                 "value":[{"name":"endpoint_url", 
-                                                                                            "value":"http://localhost:9000"
-                                                                                         }]
-                                                                                }]
-                                                                      }]
-                                                                      
+                                                  "credentials": "my_creds"
                                       }],
                                       "outputs": [{"name": "text_out", 
                                                    "type": "text.TextDataSet", 
                                                    "filepath": str(mock_text_out)}],
                                       "parameters": [{"name":"example", "value":"hello"}],
                                       "tags": [{"key": "author", "value": "opensean"},
-                                               {"key":"package", "value":"kedro-graphql"}]
+                                               {"key":"package", "value":"kedro-graphql"}],
+
+                                      "credentials":[{"name":"my_creds", "value": [{"name":"username", "value":"opensean"}]}],
+                                      "credentialsNested":[{"name":"my_creds", 
+                                                           "value": [{"name": "client_kwargs", 
+                                                                     "value":[{"name":"endpoint_url", 
+                                                                                "value":"http://localhost:9000"
+                                                                             }]
+                                                                    }]
+                                                          }]
                                     }})
         
         assert resp.errors is None

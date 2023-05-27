@@ -8,6 +8,7 @@ from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
 from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
 from .logs.logger import logger, PipelineLogStream
+from .utils import merge_dicts
 
 @strawberry.type
 class Query:
@@ -28,7 +29,6 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - fill in missing values from default catalog?
         - is validation against template needed, e.g. check DataSet type or at least check the dataset names?
         """
         if pipeline.tags:
@@ -36,18 +36,19 @@ class Mutation:
         else:
             tags = None
 
-##        ## check for credentials
-##        input_creds = {}
-##        for i in pipeline.inputs:
-##            input_creds[i.name] = i.serialize_credentials()
-##            delattr(i, "credentials")
-##            delattr(i, "credentials_nested")
-##
-##        output_creds = {}
-##        for o in pipeline.outputs:
-##            output_creds[o.name] = o.serialize_credentials()
-##            delattr(o, "credentials")
-##            delattr(o, "credentials_nested")
+        ## check for credentials
+        creds = []
+        if pipeline.credentials:
+            for c in pipeline.credentials:
+                creds.append(c.serialize())
+
+        ## check for credentials
+        if pipeline.credentials_nested:
+            for c in pipeline.credentials_nested:
+                creds.append(c.serialize())
+
+        if len(creds) > 0:
+            creds = merge_dicts(creds)
                 
         p = Pipeline(
             name = pipeline.name,
@@ -60,21 +61,17 @@ class Mutation:
 
         serial = p.serialize()
 
-        print("INPUT", input_creds)
-        print("OUTPUT", output_creds)
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
+        ## NOTE celery result may persist creds in task result?
         for k,v in serial["inputs"].items():
-            if input_creds.get(k, None):
-                v["credentials"] = input_creds[k]
-                
+            if v.get("credentials", None):
+                v["credentials"] = creds[v["credentials"]]
+
         for k,v in serial["outputs"].items():
-            if output_creds.get(k, None):
-                v["credentials"] = output_creds[k]
-
-
-        print("SERIAL", serial)
-
+            if v.get("credentials", None):
+                v["credentials"] = creds[v["credentials"]]
+                
         result = run_pipeline.delay(
             name = serial["name"], 
             inputs = serial["inputs"], 
