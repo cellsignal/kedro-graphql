@@ -71,7 +71,7 @@ class Mutation:
         for k,v in serial["outputs"].items():
             if v.get("credentials", None):
                 v["credentials"] = creds[v["credentials"]]
-                
+
         result = run_pipeline.delay(
             name = serial["name"], 
             inputs = serial["inputs"], 
@@ -81,6 +81,9 @@ class Mutation:
 
         p.task_id = result.id
         p.status = result.status
+
+        ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
+        ## replace with original string
         p.task_kwargs = str(
                 {"name": serial["name"], 
                 "inputs": serial["inputs"], 

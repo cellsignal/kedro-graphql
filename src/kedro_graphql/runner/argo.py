@@ -1,6 +1,6 @@
 from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
 from kedro.pipeline import Pipeline
-from kedro.runner.runner import AbstractRunner
+from kedro.runner.runner import AbstractRunner, run_node
 from pluggy import PluginManager
 
 
@@ -56,6 +56,34 @@ class ArgoWorkflowsRunner(AbstractRunner):
         ]
         if missing_inputs:
             raise KeyError(f"Datasets {missing_inputs} not found.")
+
+        ## SequentialRunner source code below this line:
+        nodes = pipeline.nodes
+        done_nodes = set()
+
+        load_counts = Counter(chain.from_iterable(n.inputs for n in nodes))
+
+        for exec_index, node in enumerate(nodes):
+            try:
+                run_node(node, catalog, hook_manager, self._is_async, session_id)
+                done_nodes.add(node)
+            except Exception:
+                self._suggest_resume_scenario(pipeline, done_nodes, catalog)
+                raise
+
+            # decrement load counts and release any data sets we've finished with
+            for data_set in node.inputs:
+                load_counts[data_set] -= 1
+                if load_counts[data_set] < 1 and data_set not in pipeline.inputs():
+                    catalog.release(data_set)
+            for data_set in node.outputs:
+                if load_counts[data_set] < 1 and data_set not in pipeline.outputs():
+                    catalog.release(data_set)
+
+            self._logger.info(
+                "Completed %d out of %d tasks", exec_index + 1, len(nodes)
+            )
+
         
     def workflow_template(self):
         """

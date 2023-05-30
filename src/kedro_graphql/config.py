@@ -24,8 +24,8 @@ config = {
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
     "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
-    #"KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",
-    "KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
+    "KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",
+    #"KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
     }
 
 load_config = {

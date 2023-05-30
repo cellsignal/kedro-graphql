@@ -129,7 +129,11 @@ class TestSchemaMutations:
                                       "tags": [{"key": "author", "value": "opensean"},
                                                {"key":"package", "value":"kedro-graphql"}],
 
-                                      "credentials":[{"name":"my_creds", "value": [{"name":"username", "value":"opensean"}]}],
+                                      "credentials":[{"name":"my_creds", 
+                                                      "value": [
+                                                          {"name":"key", "value":"admin"},
+                                                          {"name": "secret", "value":"password"}
+                                                      ]}],
                                       "credentialsNested":[{"name":"my_creds", 
                                                            "value": [{"name": "client_kwargs", 
                                                                      "value":[{"name":"endpoint_url", 
