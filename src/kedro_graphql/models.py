@@ -114,8 +114,12 @@ class DataSet:
         temp.pop("name")
         if not temp["save_args"]:
             temp.pop("save_args")
+        else:
+            temp["save_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
         if not temp["load_args"]:
             temp.pop("load_args")
+        else:
+            temp["load_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
         return {self.name: temp}
 
     @staticmethod

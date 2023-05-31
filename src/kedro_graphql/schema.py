@@ -9,6 +9,7 @@ from .tasks import run_pipeline
 from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
 from .logs.logger import logger, PipelineLogStream
 from .utils import merge_dicts
+from fastapi.encoders import jsonable_encoder
 
 @strawberry.type
 class Query:
@@ -29,35 +30,11 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - is validation against template needed, e.g. check DataSet type or at least check the dataset names?
+        - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
-        if pipeline.tags:
-            tags = [Tag(**vars(t)) for t in pipeline.tags]
-        else:
-            tags = None
-
-        ## check for credentials
-        creds = []
-        if pipeline.credentials:
-            for c in pipeline.credentials:
-                creds.append(c.serialize())
-
-        ## check for credentials
-        if pipeline.credentials_nested:
-            for c in pipeline.credentials_nested:
-                creds.append(c.serialize())
-
-        if len(creds) > 0:
-            creds = merge_dicts(creds)
-                
-        p = Pipeline(
-            name = pipeline.name,
-            inputs = [DataSet(**vars(i)) for i in pipeline.inputs],
-            outputs = [DataSet(**vars(o)) for o in pipeline.outputs],
-            parameters = [Parameter(**vars(p)) for p in pipeline.parameters],
-            tags = tags,
-            task_name = str(run_pipeline),
-        )
+        d = jsonable_encoder(pipeline)
+        p = Pipeline.from_dict(d)
+        p.task_name = str(run_pipeline)
 
         serial = p.serialize()
 

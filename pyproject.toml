@@ -3,7 +3,7 @@ name = "kedro-graphql"
 authors = [
     {name = "opensean"}
 ]
-description = "Kedro helps you build production-ready data and analytics pipelines"
+description = "A kedro plugin for serving any kedro project as a GraphQL api"
 requires-python = ">=3.10, <3.11"
 keywords = [
     "pipelines",
@@ -28,11 +28,16 @@ kedro-graphql = "kedro_graphql.commands:commands"
 Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
 
+[project.optional-dependencies]
+TEST = ["pandas~=2.0.2"] 
+
 [tool.setuptools.dynamic]
 readme = {file = "README.md", content-type = "text/markdown"}
 version = {attr = "kedro_graphql.__version__"}
 dependencies = {file = "src/requirements.txt"}
 optional-dependencies = {file = "src/requirements_optional.txt"}
+
+
 
 [tool.kedro]
 package_name = "kedro_graphql"

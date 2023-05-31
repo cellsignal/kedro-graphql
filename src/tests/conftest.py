@@ -79,6 +79,20 @@ def mock_text_out(tmp_path):
     return text_out
 
 @pytest.fixture
+def mock_text_in_tsv(tmp_path):
+    #tmp_path.mkdir()
+    text = tmp_path / "text_in.tsv"
+    text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
+    return text
+
+@pytest.fixture
+def mock_text_out_tsv(tmp_path):
+    #tmp_path.mkdir()
+    text = tmp_path / "text_out.tsv"
+    text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
+    return text
+
+@pytest.fixture
 def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
 
     inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
