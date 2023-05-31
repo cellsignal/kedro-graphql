@@ -8,6 +8,7 @@ from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
 from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
 from .logs.logger import logger, PipelineLogStream
+from fastapi.encoders import jsonable_encoder
 
 @strawberry.type
 class Query:
@@ -28,22 +29,11 @@ class Mutation:
     @strawberry.mutation
     def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
-        - fill in missing values from default catalog?
-        - is validation against template needed, e.g. check DataSet type?
+        - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
-        if pipeline.tags:
-            tags = [Tag(**vars(t)) for t in pipeline.tags]
-        else:
-            tags = None
-
-        p = Pipeline(
-            name = pipeline.name,
-            inputs = [DataSet(**vars(i)) for i in pipeline.inputs],
-            outputs = [DataSet(**vars(o)) for o in pipeline.outputs],
-            parameters = [Parameter(**vars(p)) for p in pipeline.parameters],
-            tags = tags,
-            task_name = str(run_pipeline),
-        )
+        d = jsonable_encoder(pipeline)
+        p = Pipeline.from_dict(d)
+        p.task_name = str(run_pipeline)
 
         serial = p.serialize()
 
