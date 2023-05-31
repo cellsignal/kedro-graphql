@@ -8,13 +8,9 @@ from kedro_graphql.schema import build_schema
 
 schema = build_schema()
 
-@pytest.mark.usefixtures('celery_session_app')
-@pytest.mark.usefixtures('celery_session_worker')
-class TestSchemaMutations:
-    @pytest.mark.asyncio
-    async def test_pipeline(self, mock_info_context, mock_text_in, mock_text_out):
 
-        mutation = """
+class TestSchemaMutations:
+    mutation = """
         mutation TestMutation($pipeline: PipelineInput!) {
           pipeline(pipeline: $pipeline) {
             name
@@ -57,7 +53,12 @@ class TestSchemaMutations:
         }
         """
 
-        resp = await schema.execute(mutation, 
+    @pytest.mark.usefixtures('celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.asyncio
+    async def test_pipeline(self, mock_info_context, mock_text_in, mock_text_out):
+
+        resp = await schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}],
@@ -67,3 +68,37 @@ class TestSchemaMutations:
                                     }})
         
         assert resp.errors is None
+
+    @pytest.mark.usefixtures('celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.asyncio
+    async def test_pipeline2(self, mock_info_context, mock_text_in_tsv, mock_text_out_tsv):
+
+        resp = await schema.execute(self.mutation, 
+                                    variable_values = {"pipeline": {
+                                      "name": "example00",
+                                      "inputs": [{"name": "text_in", 
+                                                  "type": "pandas.CSVDataSet", 
+                                                  "filepath": str(mock_text_in_tsv),
+                                                  "loadArgs":[
+                                                      {"name": "sep", "value": "\t"}
+                                                  ],
+                                                  "saveArgs":[
+                                                      {"name": "sep", "value": "\t"}
+                                                  ]
+                                                }],
+                                      "outputs": [{"name": "text_out", 
+                                                   "type": "pandas.CSVDataSet", 
+                                                   "filepath": str(mock_text_out_tsv),
+                                                   "loadArgs":[
+                                                      {"name": "sep", "value": "\t"}
+                                                  ],
+                                                  "saveArgs":[
+                                                      {"name": "sep", "value": "\t"}
+                                                  ]}],
+                                      "parameters": [{"name":"example", "value":"hello"}],
+                                      "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
+                                    }})
+        
+        assert resp.errors is None
+
