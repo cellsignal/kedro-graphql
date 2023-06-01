@@ -42,8 +42,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest
-        if [ -f src/requirements.txt ]; then pip install -r src/requirements.txt; fi
-        if [ -f src/requirements_optional.txt ]; then pip install -r src/requirements_optional.txt; fi
+        python -m pip install -e .[TEST]
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
