@@ -43,3 +43,148 @@ class TestDataSet:
         output = d.serialize()
         assert output == expected
     
+class TestParameter:
+
+    def test_serialize_string(self):
+        params = {
+                    "name": "delimiter",
+                    "value": "\t",
+                    "type": "string"
+                  }
+
+        expected = {
+                    "delimiter": "\t" 
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+    def test_serialize_int(self):
+        params = {
+                    "name": "delimiter",
+                    "value": "1",
+                    "type": "integer"
+                  }
+
+        expected = {
+                    "delimiter": 1
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+    def test_serialize_int_exception(self):
+        params = {
+                    "name": "delimiter",
+                    "value": "0.1",
+                    "type": "integer"
+                  }
+
+        p = Parameter(**params)
+        try:
+            output = p.serialize()
+        except ValueError as e:
+            assert True
+
+    def test_serialize_float(self):
+        params = {
+                    "name": "delimiter",
+                    "value": "0.1",
+                    "type": "float"
+                  }
+
+        expected = {
+                    "delimiter": 0.1
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+    def test_serialize_float_exception(self):
+        params = {
+                    "name": "delimiter",
+                    "value": "hello",
+                    "type": "float"
+                  }
+
+        p = Parameter(**params)
+        try:
+            output = p.serialize()
+        except ValueError as e:
+            assert True
+ 
+    def test_serialize_bool(self):
+
+        params = {
+                    "name": "delimiter",
+                    "value": "true",
+                    "type": "boolean"
+                  }
+
+        expected = {
+                    "delimiter": True
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+        params = {
+                    "name": "delimiter",
+                    "value": "True",
+                    "type": "boolean"
+                  }
+
+        expected = {
+                    "delimiter": True
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+        params = {
+                    "name": "delimiter",
+                    "value": "false",
+                    "type": "boolean"
+                  }
+
+        expected = {
+                    "delimiter": False
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+        params = {
+                    "name": "delimiter",
+                    "value": "False",
+                    "type": "boolean"
+                  }
+
+        expected = {
+                    "delimiter": False
+                   }
+
+        p = Parameter(**params)
+        output = p.serialize()
+        assert output == expected
+
+    def test_serialize_bool_exception(self):
+
+
+        params = {
+                    "name": "delimiter",
+                    "value": "rue",
+                    "type": "boolean"
+                  }
+
+        p = Parameter(**params)
+        try:
+            output = p.serialize()
+        except ValueError as e:
+            assert True
