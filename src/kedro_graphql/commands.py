@@ -44,5 +44,5 @@ def gql(metadata, app, imports, worker):
         module, class_name = config["KEDRO_GRAPHQL_APP"].rsplit(".", 1)
         module = import_module(module)
         class_inst = getattr(module, class_name)
-       
-        uvicorn.run(class_inst(), port=5000, log_level="info")
+        a = class_inst() 
+        uvicorn.run(a, host="0.0.0.0", port=5000, log_level="info")
