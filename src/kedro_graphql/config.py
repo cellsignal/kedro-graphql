@@ -48,6 +48,6 @@ def discover_plugins():
     for i in imports:
         import_module(i)   
 
-module, class_name = config["KEDRO_GRAPHQL_RUNNER"].rsplit(".", 1)
-module = import_module(module)
-RUNNER = getattr(module, class_name)
+##module, class_name = config["KEDRO_GRAPHQL_RUNNER"].rsplit(".", 1)
+##module = import_module(module)
+##RUNNER = getattr(module, class_name)

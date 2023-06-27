@@ -3,31 +3,7 @@ from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from uuid import uuid4
 from io import BytesIO
-#from kedro_graphql.config import config
-import os
 
-
-@pytest.hookimpl(tryfirst=True)  # type: ignore # untyped decorator
-def pytest_load_initial_conftests(
-    args: list[str], early_config: pytest.Config, parser: pytest.Parser  # noqa: U100
-) -> None:
-    """Load environment variables"""
-    os.environ["KEDRO_GRAPHQL_RUNNER"] = "kedro_graphql.runner.argo.ArgoWorkflowsRunner"
-    
-@pytest.fixture(scope='session')
-def celery_config():
-    return {
-        'broker_url': 'redis://',
-        'result_backend': 'redis://',
-        'result_extened': True,
-        'worker_send_task_events': True,
-        'task_send_sent_event': True,
-        'task_store_eager_result': True,
-        'task_always_eager': False,
-        'task_ignore_result': False,
-        'imports': ["kedro_graphql.config", "kedro_graphql.tasks"]
-
-    }
 
 @pytest.fixture
 def s3_client():
@@ -130,7 +106,8 @@ def mock_pipeline_argo(mock_backend, s3_object, s3_client):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=0.1)
+                                                 "parameters": serial["parameters"],
+                                                 "runner": "kedro_graphql.runner.argo.ArgoWorkflowsRunner"}, countdown=0.1)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(

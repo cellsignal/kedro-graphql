@@ -19,18 +19,6 @@ spec:
     container:
       imagePullPolicy: Always
       image: {{ image }}
-      env:
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              {# Secrets name #}
-              name: aws-secrets
-              key: access_key_id
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: aws-secrets
-              key: secret_access_key
       command: [kedro]{% raw %}
       args: ["run", "-n",  "{{inputs.parameters.kedro_node}}"]
       {% endraw %}
