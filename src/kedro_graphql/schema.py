@@ -75,17 +75,18 @@ class Mutation:
         logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
 
         p = info.context["request"].app.backend.create(p)
-
         return p
 
 
 @strawberry.type
 class Subscription:
     @strawberry.subscription
-    async def pipeline(self, id: str, info: Info) -> AsyncGenerator[PipelineEvent, None]:
+    async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
+        """Subscribe to pipeline events.
+        """
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            async for e in PipelineEventMonitor(app = APP_CELERY, task_id = p.task_id).consume():
+            async for e in PipelineEventMonitor(app = APP_CELERY, task_id = p.task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
 
@@ -93,7 +94,8 @@ class Subscription:
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            async for e in PipelineLogStream(task_id = p.task_id ).consume():
+            stream = await PipelineLogStream().create(task_id = p.task_id )
+            async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)
 

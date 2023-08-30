@@ -13,21 +13,47 @@ class TagInput:
     key: str
     value: str
 
+@strawberry.enum
+class ParameterType(Enum):
+    STRING = "string"
+    BOOLEAN = "boolean"
+    INTEGER = "integer"
+    FLOAT = "float"
+
+
 @strawberry.type
 class Parameter:
     name: str
     value: str
+    type: Optional[ParameterType] = ParameterType.STRING
 
     def serialize(self) -> dict:
         """
         Returns serializable dict in format compatible with kedro.
         """
-        return {self.name: self.value}
+        value = self.value
+        if self.type == "boolean":
+            value = self.value.lower()
+            if value == "true":
+                value = True
+            elif value == "false":
+                value = False
+            else:
+                raise ValueError("Parameter of type BOOL must be one of 'True', 'true', 'False', or 'false'")
+
+        elif self.type == "integer":
+            value = int(self.value)
+
+        elif self.type == "float":
+            value = float(self.value)
+
+        return {self.name: value}
 
 @strawberry.input
 class ParameterInput:
     name: str
     value: str
+    type: Optional[ParameterType] = ParameterType.STRING
 
 
 
