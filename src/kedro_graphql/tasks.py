@@ -1,9 +1,12 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
-from kedro.runner import SequentialRunner
+#from kedro.runner import SequentialRunner
+from kedro_graphql.runner import init_runner
 from celery import shared_task, Task
 from .backends import init_backend
-from fastapi.encoders import jsonable_encoder
+#from .config import RUNNER
+import logging
+logger = logging.getLogger("kedro")
 
 class KedroGraphqlTask(Task):
     _db = None
@@ -98,7 +101,7 @@ class KedroGraphqlTask(Task):
 
 
 @shared_task(bind = True, base = KedroGraphqlTask)
-def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict):
+def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict, runner = None):
     catalog = {**inputs, **outputs}
     io = DataCatalog().from_config(catalog = catalog)
 
@@ -107,6 +110,7 @@ def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict)
     params["parameters"] = parameters
     io.add_feed_dict(params)
 
-    SequentialRunner().run(pipelines[name], catalog = io)
+    runner = init_runner(runner = runner)
+    runner().run(pipelines[name], catalog = io)
     
     return "success"

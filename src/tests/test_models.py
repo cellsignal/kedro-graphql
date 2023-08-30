@@ -35,12 +35,14 @@ class TestDataSet:
                       },
                       "save_args":{
                         "delimiter": "\t"  
-                      }
+                      },
+                      "credentials": None
                     }
                    }
 
         d = DataSet(**params)
         output = d.serialize()
+        print(output)
         assert output == expected
     
 class TestParameter:

@@ -24,6 +24,8 @@ config = {
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
     "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
+    "KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",
+    #"KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
     }
 
 load_config = {
@@ -45,3 +47,7 @@ def discover_plugins():
     imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
     for i in imports:
         import_module(i)   
+
+##module, class_name = config["KEDRO_GRAPHQL_RUNNER"].rsplit(".", 1)
+##module = import_module(module)
+##RUNNER = getattr(module, class_name)

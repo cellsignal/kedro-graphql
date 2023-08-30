@@ -8,6 +8,8 @@ from kedro_graphql.backends import init_backend
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from unittest.mock import patch
+from uuid import uuid4
+from io import BytesIO
 
 
 

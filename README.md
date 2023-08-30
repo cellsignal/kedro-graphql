@@ -404,10 +404,14 @@ Configuration can be supplied via environment variables or a ```.env``` file.
 
 ```
 ## example .env file
-MONGO_URI = 'mongodb://root:example@localhost:27017/'
-MONGO_DB_NAME = 'pipelines'
-KEDRO_GRAPHQL_IMPORTS = "kedro_graphql.plugins.plugins"
-KEDRO_GRAPHQL_APP = "kedro_graphql.asgi.KedroGraphQL"
+MONGO_URI="mongodb://root:example@localhost:27017/"
+MONGO_DB_NAME="pipelines"
+KEDRO_GRAPHQL_IMPORTS="kedro_graphql.plugins.plugins"
+KEDRO_GRAPHQL_APP=kedro_graphql.asgi.KedroGraphQL"
+KEDRO_GRAPHQL_BACKEND="kedro_graphql.backends.mongodb.MongoBackend"
+KEDRO_GRAPHQL_BROKER="redis://localhost"
+KEDRO_GRAPHQL_CELERY_RESULT_BACKEND="redis://localhost"
+KEDRO_GRAPHQL_RUNNER="kedro.runner.SequentialRunner"
 ```
 
 ## How to install dependencies

@@ -1,6 +1,5 @@
 import strawberry
-from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 import uuid
 from .config import conf_catalog, conf_parameters, PIPELINES
 
@@ -56,6 +55,74 @@ class ParameterInput:
     value: str
     type: Optional[ParameterType] = ParameterType.STRING
 
+
+
+@strawberry.input
+class CredentialSetInput:
+    name: str
+    value: str
+
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        return {self.name: self.value}
+
+@strawberry.input
+class CredentialInput:
+    name: str
+    value: List[CredentialSetInput]
+
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        for v in self.value:
+            values.update(v.serialize())
+        return {self.name: values}
+
+
+
+@strawberry.input
+class CredentialNestedInput:
+    name: str
+    value: List[CredentialInput]
+    
+    def serialize(self) -> dict:
+        """
+        Returns serializable dict in format compatible with kedro.
+        """
+        values = {}
+        for v in self.value:
+            values.update(v.serialize())
+        return {self.name: values}
+
+##    def serialize(self) -> dict:
+##        """
+##        Returns serializable dict in format compatible with kedro.
+##        """
+##        values = {}
+##        for v in self.value:
+##            values.update(v.serialize())
+##        return {self.name: values}
+##
+##    def merge(self, a, b, path=None):
+##        "merges nested dictionaries recursively.  Merges b into a."
+##        if path is None: path = []
+##        for key in b:
+##            if key in a:
+##                if isinstance(a[key], dict) and isinstance(b[key], dict):
+##                    self.merge(a[key], b[key], path + [str(key)])
+##                elif a[key] == b[key]:
+##                    pass # same leaf value
+##                else:
+##                    raise Exception('Conflict at %s' % '.'.join(path + [str(key)]))
+##            else:
+##                a[key] = b[key]
+##        return a
+    
+
 @strawberry.type
 class DataSet:
     name: str
@@ -63,6 +130,7 @@ class DataSet:
     filepath: str
     save_args: Optional[List[Parameter]] = None
     load_args: Optional[List[Parameter]] = None
+    credentials: Optional[str] = None
 
     def serialize(self) -> dict:
         """
@@ -117,7 +185,6 @@ class DataSet:
         )
 
 
-
 @strawberry.input
 class DataSetInput:
     name: str
@@ -125,6 +192,8 @@ class DataSetInput:
     filepath: str
     save_args: Optional[List[ParameterInput]] = None
     load_args: Optional[List[ParameterInput]] = None
+    credentials: Optional[str] = None
+        
 
 @strawberry.type
 class Node:
@@ -189,6 +258,8 @@ class PipelineInput:
     inputs: List[DataSetInput]
     outputs: List[DataSetInput]
     tags: Optional[List[TagInput]] = None
+    credentials: Optional[List[CredentialInput]] = None
+    credentials_nested: Optional[List[CredentialNestedInput]] = None
 
 @strawberry.type
 class Pipeline:

@@ -8,8 +8,7 @@ from kedro_graphql.schema import build_schema
 
 schema = build_schema()
 
-@pytest.mark.usefixtures('celery_session_app')
-@pytest.mark.usefixtures('celery_session_worker')
+
 class TestSchemaQuery:
 
     @pytest.mark.asyncio

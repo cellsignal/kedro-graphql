@@ -8,6 +8,7 @@ from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
 from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
 from .logs.logger import logger, PipelineLogStream
+from .utils import merge_dicts
 from fastapi.encoders import jsonable_encoder
 
 @strawberry.type
@@ -37,6 +38,17 @@ class Mutation:
 
         serial = p.serialize()
 
+        ## merge any credentials with inputs and outputs
+        ## credentials are intentionally not persisted
+        ## NOTE celery result may persist creds in task result?
+        for k,v in serial["inputs"].items():
+            if v.get("credentials", None):
+                v["credentials"] = creds[v["credentials"]]
+
+        for k,v in serial["outputs"].items():
+            if v.get("credentials", None):
+                v["credentials"] = creds[v["credentials"]]
+
         result = run_pipeline.delay(
             name = serial["name"], 
             inputs = serial["inputs"], 
@@ -46,6 +58,9 @@ class Mutation:
 
         p.task_id = result.id
         p.status = result.status
+
+        ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
+        ## replace with original string
         p.task_kwargs = str(
                 {"name": serial["name"], 
                 "inputs": serial["inputs"], 
@@ -58,6 +73,7 @@ class Mutation:
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
         logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+
         p = info.context["request"].app.backend.create(p)
         return p
 

@@ -29,7 +29,7 @@ Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
 
 [project.optional-dependencies]
-TEST = ["pandas~=2.0.2"] 
+TEST = ["minio~=7.1.15", "s3fs~=2023.5.0", "pandas~=2.0.2"] 
 
 [tool.setuptools.dynamic]
 readme = {file = "README.md", content-type = "text/markdown"}

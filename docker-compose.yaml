@@ -11,7 +11,7 @@ services:
     # - cache:/data
   redis-commander:
     hostname: redis-commander
-    image: ghcr.io/joeferner/redis-commander:latest
+    image: ghcr.io/joeferner/redis-commander:0.8.1
     restart: always
     environment:
     - REDIS_HOSTS=local:redis:6379
