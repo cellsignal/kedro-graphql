@@ -3,8 +3,8 @@ import redis.asyncio as redis_asyncio
 import logging
 from logging import LogRecord
 from .json_log_formatter import JSONFormatter ## VerboseJSONFormatter also available
-from celery.signals import task_prerun, task_postrun
-from kedro_graphql.config import config
+#from celery.signals import task_prerun, task_postrun
+#from kedro_graphql.asgi import default_config as config
 from typing import AsyncGenerator
 from celery.result import AsyncResult
 from celery.states import READY_STATES
@@ -15,7 +15,7 @@ from inspect import currentframe, getframeinfo
 logger = logging.getLogger("kedro-graphql")
 
 class RedisLogStreamPublisher(object):
-    def __init__(self, topic, broker_url = config["KEDRO_GRAPHQL_BROKER"]):
+    def __init__(self, topic, broker_url = None):
         self.connection = redis.Redis.from_url(broker_url)
         self.topic = topic
         if not self.connection.exists(self.topic):
@@ -29,7 +29,7 @@ class RedisLogStreamPublisher(object):
 class RedisLogStreamSubscriber(object):
         
     @classmethod
-    async def create(cls, topic, broker_url = config["KEDRO_GRAPHQL_BROKER"]):
+    async def create(cls, topic, broker_url = None):
         """Factory method for async instantiation RedisLogStreamSubscriber objects.
         """
         self = RedisLogStreamSubscriber()
@@ -43,11 +43,11 @@ class RedisLogStreamSubscriber(object):
         return r
     
 class KedroGraphQLLogHandler(logging.StreamHandler):
-    def __init__(self, topic, broker_url = config["KEDRO_GRAPHQL_BROKER"]):
+    def __init__(self, topic, broker_url = None):
         logging.StreamHandler.__init__(self)
         self.broker_url = broker_url
         self.topic = topic
-        self.broker = RedisLogStreamPublisher(topic, broker_url)
+        self.broker = RedisLogStreamPublisher(topic, broker_url = broker_url)
         self.setFormatter(JSONFormatter())
 
     def emit(self, record):
@@ -55,30 +55,30 @@ class KedroGraphQLLogHandler(logging.StreamHandler):
         self.broker.publish(json.loads(msg))
 
 
-@task_prerun.connect
-def setup_task_logger(task_id, task, args, **kwargs):
-    logger = logging.getLogger("kedro")
-
-    handler = KedroGraphQLLogHandler(task_id)
-    logger.addHandler(handler)
+##@task_prerun.connect
+##def setup_task_logger(task_id, task, args, **kwargs):
+##    logger = logging.getLogger("kedro")
+##
+##    handler = KedroGraphQLLogHandler(task_id)
+##    logger.addHandler(handler)
     
-@task_postrun.connect
-def cleanup_task_logger(task_id, task, args, **kwargs):
-    logger = logging.getLogger("kedro")
-    logger.info("Closing log stream")
-    for handler in logger.handlers:
-        if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
-            handler.flush()
-            handler.close()
-            handler.broker.connection.delete(task_id) ## delete stream
-            handler.broker.connection.close()
-    logger.handlers = []
+##@task_postrun.connect
+##def cleanup_task_logger(task_id, task, args, **kwargs):
+##    logger = logging.getLogger("kedro")
+##    logger.info("Closing log stream")
+##    for handler in logger.handlers:
+##        if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
+##            handler.flush()
+##            handler.close()
+##            handler.broker.connection.delete(task_id) ## delete stream
+##            handler.broker.connection.close()
+##    logger.handlers = []
 
 
 class PipelineLogStream():
 
     @classmethod
-    async def create(cls, task_id, broker_url = config["KEDRO_GRAPHQL_BROKER"]):
+    async def create(cls, task_id, broker_url = None):
         """Factory method for async instantiation PipelineLogStream objects.
         """
         self = PipelineLogStream()

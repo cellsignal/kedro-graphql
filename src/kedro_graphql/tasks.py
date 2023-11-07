@@ -2,19 +2,22 @@ from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
 #from kedro.runner import SequentialRunner
 from kedro_graphql.runner import init_runner
+from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
-from .backends import init_backend
+
+#from .backends import init_backend
 #from .config import RUNNER
 import logging
 logger = logging.getLogger("kedro")
 
 class KedroGraphqlTask(Task):
+
     _db = None
 
     @property
     def db(self):
         if self._db is None:
-            self._db = init_backend()
+            self._db = self._app.kedro_graphql_backend
         return self._db
 
     def before_start(self, task_id, args, kwargs):
@@ -30,6 +33,9 @@ class KedroGraphqlTask(Task):
         Returns:
             None: The return value of this handler is ignored.
         """
+        handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
+        logger.addHandler(handler)
+ 
         self.db.update(task_id = task_id, values = {"status": "STARTED"})
 
     def on_success(self, retval, task_id, args, kwargs):
@@ -98,10 +104,27 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         self.db.update(task_id = task_id, values = {"status": status, "task_einfo": str(einfo)})
+        logger.info("Closing log stream")
+        for handler in logger.handlers:
+            if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
+                handler.flush()
+                handler.close()
+                handler.broker.connection.delete(task_id) ## delete stream
+                handler.broker.connection.close()
+        logger.handlers = []
+
+
 
 
 @shared_task(bind = True, base = KedroGraphqlTask)
-def run_pipeline(self, name: str, inputs: dict, outputs: dict, parameters: dict, runner = None):
+def run_pipeline(self, 
+                 name: str, 
+                 inputs: dict, 
+                 outputs: dict, 
+                 parameters: dict, 
+                 runner = None):
+
+    ## start
     catalog = {**inputs, **outputs}
     io = DataCatalog().from_config(catalog = catalog)
 

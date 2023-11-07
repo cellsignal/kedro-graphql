@@ -4,10 +4,6 @@
 
 
 import pytest
-from kedro_graphql.schema import build_schema
-
-schema = build_schema()
-
 
 class TestSchemaMutations:
     mutation = """
@@ -53,12 +49,13 @@ class TestSchemaMutations:
         }
         """
 
-    @pytest.mark.usefixtures('celery_session_app')
+    @pytest.mark.usefixtures('mock_celery_session_app')
     @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.usefixtures('depends_on_current_app')
     @pytest.mark.asyncio
-    async def test_pipeline(self, mock_info_context, mock_text_in, mock_text_out):
+    async def test_pipeline(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        resp = await schema.execute(self.mutation, 
+        resp = await mock_app.schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}],
@@ -71,7 +68,7 @@ class TestSchemaMutations:
         assert resp.errors is None
 
     @pytest.mark.asyncio
-    async def test_pipeline_creds(self, mock_info_context, mock_text_in, mock_text_out):
+    async def test_pipeline_creds(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
         mutation = """
         mutation TestMutation($pipeline: PipelineInput!) {
@@ -116,7 +113,7 @@ class TestSchemaMutations:
         }
         """
 
-        resp = await schema.execute(mutation, 
+        resp = await mock_app.schema.execute(mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", 
@@ -146,12 +143,14 @@ class TestSchemaMutations:
                                     }})
         
         assert resp.errors is None
-    @pytest.mark.usefixtures('celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.asyncio
-    async def test_pipeline2(self, mock_info_context, mock_text_in_tsv, mock_text_out_tsv):
 
-        resp = await schema.execute(self.mutation, 
+    @pytest.mark.usefixtures('mock_celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.usefixtures('depends_on_current_app')
+    @pytest.mark.asyncio
+    async def test_pipeline2(self, mock_app, mock_info_context, mock_text_in_tsv, mock_text_out_tsv):
+
+        resp = await mock_app.schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", 

@@ -1,18 +1,13 @@
 """
 
 """
-
-
 import pytest
-from kedro_graphql.schema import build_schema
-
-schema = build_schema()
 
 
 class TestSchemaQuery:
 
     @pytest.mark.asyncio
-    async def test_pipeline(self, mock_info_context, mock_pipeline):
+    async def test_pipeline(self, mock_app, mock_info_context, mock_pipeline):
 
         query = """
         query TestQuery($id: String!) {
@@ -21,11 +16,11 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await schema.execute(query, variable_values = {"id": str(mock_pipeline.id)})
+        resp = await mock_app.schema.execute(query, variable_values = {"id": str(mock_pipeline.id)})
         assert resp.errors is None
 
     @pytest.mark.asyncio
-    async def test_pipeline_templates(self):
+    async def test_pipeline_templates(self, mock_app, mock_info_context):
 
         query = """
         query TestQuery {
@@ -55,6 +50,6 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await schema.execute(query)
+        resp = await mock_app.schema.execute(query)
         
         assert resp.errors is None

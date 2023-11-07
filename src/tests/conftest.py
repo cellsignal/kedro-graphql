@@ -1,31 +1,22 @@
 import pytest
 from pathlib import Path
-from kedro.framework.project import settings
-from kedro.config import ConfigLoader
-from kedro.framework.context import KedroContext
-from kedro.framework.hooks import _create_hook_manager
-from kedro_graphql.backends import init_backend
+
+from kedro.framework.session import KedroSession
+from kedro.framework.startup import bootstrap_project
+from kedro_graphql.asgi import KedroGraphQL
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from unittest.mock import patch
-from uuid import uuid4
-from io import BytesIO
-
 
 
 @pytest.fixture(scope="session")
-def config_loader():
-    return ConfigLoader(conf_source=str(Path.cwd() / settings.CONF_SOURCE))
+def kedro_session():
+    bootstrap_project(Path.cwd())
+    return KedroSession.create()
 
-
-@pytest.fixture(scope='session')
-def project_context(config_loader):
-    return KedroContext(
-        package_name="kedro_graphql",
-        project_path=Path.cwd(),
-        config_loader=config_loader,
-        hook_manager=_create_hook_manager(),
-    )
+@pytest.fixture(scope="session")
+def mock_app(kedro_session):
+    return KedroGraphQL(kedro_session = kedro_session)
 
 @pytest.fixture(scope='session')
 def celery_config():
@@ -38,26 +29,25 @@ def celery_config():
         'task_store_eager_result': True,
         'task_always_eager': False,
         'task_ignore_result': False,
-        'imports': ["kedro_graphql.config", "kedro_graphql.tasks"]
+        'imports': ["kedro_graphql.tasks"]
 
     }
 
+@pytest.fixture(scope='session')
+def mock_celery_session_app(mock_app, celery_session_app):
+    celery_session_app.kedro_graphql_backend = mock_app.backend
+    return celery_session_app
 
 @pytest.fixture(scope="session")
 def celery_worker_parameters():
     return {"without_heartbeat": False}
 
-@pytest.fixture
-def mock_backend():
-    return init_backend()
 
 @pytest.fixture
-def mock_info_context(mock_backend):
-    class App():
-        backend = mock_backend
+def mock_info_context(mock_app):
 
     class Request():
-        app = App()
+        app = mock_app
 
     with patch("strawberry.types.Info.context", {"request": Request()}) as m:
         yield m
@@ -92,8 +82,9 @@ def mock_text_out_tsv(tmp_path):
     text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
 
+
 @pytest.fixture
-def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
+def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
     outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
@@ -114,22 +105,24 @@ def mock_pipeline(mock_backend, tmp_path, mock_text_in, mock_text_out):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=0.1)
+                                                 "parameters": serial["parameters"],
+                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(
             {"name": serial["name"], 
             "inputs": serial["inputs"], 
             "outputs": serial["outputs"], 
-            "parameters": serial["parameters"]}
+            "parameters": serial["parameters"],
+            "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}
     )
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
-    p = mock_backend.create(p)
+    p = mock_app.backend.create(p)
     return p
 
 @pytest.fixture
-def mock_pipeline2(mock_backend, tmp_path, mock_text_in, mock_text_out):
+def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
     outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
@@ -150,16 +143,18 @@ def mock_pipeline2(mock_backend, tmp_path, mock_text_in, mock_text_out):
     result = run_pipeline.apply_async(kwargs = {"name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
-                                                 "parameters": serial["parameters"]}, countdown=0.1)
+                                                 "parameters": serial["parameters"],
+                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
     p.task_id = result.id
     p.status = result.status
     p.task_kwargs = str(
             {"name": serial["name"], 
             "inputs": serial["inputs"], 
             "outputs": serial["outputs"], 
-            "parameters": serial["parameters"]}
+            "parameters": serial["parameters"],
+            "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}
     )
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
-    p = mock_backend.create(p)
+    p = mock_app.backend.create(p)
     return p

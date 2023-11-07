@@ -1,6 +1,19 @@
 import os
-from .config import RESOLVER_PLUGINS
-from .config import TYPE_PLUGINS
+from importlib import import_module
+
+RESOLVER_PLUGINS = {}
+#from .config import RESOLVER_PLUGINS
+TYPE_PLUGINS = {"query":[],
+                "mutation":[],
+                "subscription":[]}
+#from .config import TYPE_PLUGINS
+def discover_plugins(config):
+    ## discover plugins e.g. decorated functions e.g @gql_query, etc...
+    imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
+    for i in imports:
+        import_module(i)
+
+
 
 class NameConflictError(BaseException):
     """Raise for errors in adding plugins do to the same name."""
