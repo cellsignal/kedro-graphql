@@ -23,6 +23,7 @@ from celery.result import AsyncResult
 #@pytest.mark.usefixtures('celery_includes')
 @pytest.mark.usefixtures('depends_on_current_app')
 class TestPipelineEventMonitor:
+
     @pytest.mark.asyncio
     async def test_consume_default(self, mocker, mock_celery_session_app, mock_pipeline):
         """

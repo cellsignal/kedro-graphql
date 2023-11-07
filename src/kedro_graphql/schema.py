@@ -45,16 +45,17 @@ class Mutation:
 
         serial = p.serialize()
 
+        ## credentials not supported yet
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
         ## NOTE celery result may persist creds in task result?
-        for k,v in serial["inputs"].items():
-            if v.get("credentials", None):
-                v["credentials"] = creds[v["credentials"]]
+        ##for k,v in serial["inputs"].items():
+        ##    if v.get("credentials", None):
+        ##        v["credentials"] = creds[v["credentials"]]
 
-        for k,v in serial["outputs"].items():
-            if v.get("credentials", None):
-                v["credentials"] = creds[v["credentials"]]
+        ##for k,v in serial["outputs"].items():
+        ##    if v.get("credentials", None):
+        ##        v["credentials"] = creds[v["credentials"]]
 
         result = run_pipeline.delay(
             name = serial["name"], 

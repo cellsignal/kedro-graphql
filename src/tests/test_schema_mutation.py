@@ -73,6 +73,7 @@ class TestSchemaMutations:
         mutation = """
         mutation TestMutation($pipeline: PipelineInput!) {
           pipeline(pipeline: $pipeline) {
+            id
             name
             describe
             inputs {
@@ -142,6 +143,7 @@ class TestSchemaMutations:
                                                           }]
                                     }})
         
+  
         assert resp.errors is None
 
     @pytest.mark.usefixtures('mock_celery_session_app')
