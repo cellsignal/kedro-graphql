@@ -2,14 +2,13 @@
 
 """
 import pytest
-from kedro_graphql.schema import build_schema
 
-schema = build_schema()
-@pytest.mark.usefixtures('celery_session_app')
+@pytest.mark.usefixtures('mock_celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
+@pytest.mark.usefixtures('depends_on_current_app')
 class TestSchemaSubscriptions:
     @pytest.mark.asyncio
-    async def test_pipeline(self, mock_info_context, mock_pipeline):
+    async def test_pipeline(self, mock_app, mock_info_context, mock_pipeline):
         """Requires Redis to run.
         """
 
@@ -26,13 +25,13 @@ class TestSchemaSubscriptions:
     	  }
         """
 
-        sub = await schema.subscribe(query)
+        sub = await mock_app.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
 
     @pytest.mark.asyncio
-    async def test_pipeline_logs(self, mock_info_context, mock_pipeline, mock_pipeline2):
+    async def test_pipeline_logs(self, mock_app, mock_info_context, mock_pipeline, mock_pipeline2):
         """Requires Redis to run.
         This test runs two pipelines simultaneously to ensure logs messages are scoped
         to the correct pipeline.
@@ -51,7 +50,7 @@ class TestSchemaSubscriptions:
     	  }
         """
 
-        sub = await schema.subscribe(query)
+        sub = await mock_app.schema.subscribe(query)
 
         async for result in sub:
             #print(result)
@@ -72,7 +71,7 @@ class TestSchemaSubscriptions:
     	  }
         """
 
-        sub2 = await schema.subscribe(query2)
+        sub2 = await mock_app.schema.subscribe(query2)
 
         async for result in sub2:
             #print(result)

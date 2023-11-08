@@ -3,7 +3,8 @@
 """
 import pytest
 from celery.result import AsyncResult
-
+IN_DEV = True
+@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
 @pytest.mark.usefixtures('celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
 class TestArgoWorkflowRunner:

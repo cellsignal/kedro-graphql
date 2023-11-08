@@ -1,7 +1,8 @@
 import strawberry
+from enum import Enum
 from typing import List, Optional, Union
 import uuid
-from .config import conf_catalog, conf_parameters, PIPELINES
+#from .config import conf_catalog, conf_parameters, PIPELINES
 
 @strawberry.type
 class Tag:
@@ -205,14 +206,17 @@ class Node:
 @strawberry.type(description = "PipelineTemplates are definitions of Pipelines.  They represent the supported interface for executing a Pipeline.")
 class PipelineTemplate:
     name: str
+    kedro_pipelines: strawberry.Private[dict]
+    kedro_catalog: strawberry.Private[dict]
+    kedro_parameters: strawberry.Private[dict]
 
     @strawberry.field
     def describe(self) -> str:
-        return PIPELINES[self.name].describe()
+        return self.kedro_pipelines[self.name].describe()
 
     @strawberry.field
     def nodes(self) -> List[Node]:
-        nodes = PIPELINES[self.name].nodes
+        nodes = self.kedro_pipelines[self.name].nodes
 
         return [Node(name = n.name, inputs = n.inputs, outputs = n.outputs, tags = n.tags) for n in nodes]
 
@@ -220,14 +224,14 @@ class PipelineTemplate:
     def parameters(self) -> List[Parameter]:
         ## keep track of parameters to avoid returning duplicates    
         params = {}
-        for n in PIPELINES[self.name].inputs():
+        for n in self.kedro_pipelines[self.name].inputs():
             if n.startswith("params:"):
                 name = n.split("params:")[1]
-                value = conf_parameters[name]
+                value = self.kedro_parameters[name]
                 if not params.get(name, False):
                     params[name] = value
             elif n == "parameters":
-                for k,v in conf_parameters.items():
+                for k,v in self.kedro_parameters.items():
                     if not params.get(k, False):
                         params[k] = v
         return [Parameter(name = k, value = v) for k,v in params.items()]
@@ -235,9 +239,9 @@ class PipelineTemplate:
     @strawberry.field
     def inputs(self) -> List[DataSet]:
         inputs_resolved = []
-        for n in PIPELINES[self.name].inputs():
+        for n in self.kedro_pipelines[self.name].inputs():
             if not n.startswith("params:") and n != "parameters":
-                config = conf_catalog[n]
+                config = self.kedro_catalog[n]
                 inputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
             
         return inputs_resolved
@@ -245,8 +249,8 @@ class PipelineTemplate:
     @strawberry.field
     def outputs(self) -> List[DataSet]:
         outputs_resolved = []
-        for n in PIPELINES[self.name].outputs():    
-            config = conf_catalog[n]
+        for n in self.kedro_pipelines[self.name].outputs():    
+            config = self.kedro_catalog[n]
             outputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
  
         return outputs_resolved
@@ -263,6 +267,10 @@ class PipelineInput:
 
 @strawberry.type
 class Pipeline:
+    kedro_pipelines: strawberry.Private[Optional[dict]] = None
+    kedro_catalog: strawberry.Private[Optional[dict]] = None
+    kedro_parameters: strawberry.Private[Optional[dict]] = None
+
     id: Optional[uuid.UUID] = None
     inputs: List[DataSet]
     name: str
@@ -282,7 +290,10 @@ class Pipeline:
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
-        return PipelineTemplate(name = self.name)
+        return PipelineTemplate(name = self.name, 
+                                kedro_catalog = self.kedro_catalog,
+                                kedro_parameters = self.kedro_parameters,
+                                kedro_pipelines = self.kedro_pipelines)
 
     @strawberry.field
     def describe(self) -> str:

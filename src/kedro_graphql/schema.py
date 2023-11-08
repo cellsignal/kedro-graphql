@@ -1,10 +1,10 @@
-from .config import PIPELINES, TYPE_PLUGINS
+#from .config import PIPELINES, TYPE_PLUGINS
 from .events import PipelineEventMonitor
 import strawberry
 from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, List
-from .celeryapp import app as APP_CELERY
+#from .celeryapp import app as APP_CELERY
 from .tasks import run_pipeline
 from .models import Parameter, DataSet, Pipeline, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, Tag
 from .logs.logger import logger, PipelineLogStream
@@ -14,15 +14,22 @@ from fastapi.encoders import jsonable_encoder
 @strawberry.type
 class Query:
     @strawberry.field
-    def pipeline_templates(self) -> List[PipelineTemplate]:
+    def pipeline_templates(self, info: Info) -> List[PipelineTemplate]:
         pipes = []
-        for k,v in PIPELINES.items():
-            pipes.append(PipelineTemplate(name = k))
+        for k,v in info.context["request"].app.kedro_pipelines.items():
+            pipes.append(PipelineTemplate(name = k, 
+                                          kedro_pipelines = info.context["request"].app.kedro_pipelines,
+                                          kedro_catalog = info.context["request"].app.kedro_catalog,
+                                          kedro_parameters = info.context["request"].app.kedro_parameters))
         return pipes
 
     @strawberry.field
     def pipeline(self, id: str, info: Info) -> Pipeline:
-        return info.context["request"].app.backend.load(id)
+        p = info.context["request"].app.backend.load(id)
+        p.kedro_pipelines = info.context["request"].app.kedro_pipelines
+        p.kedro_catalog = info.context["request"].app.kedro_catalog
+        p.kedro_parameters = info.context["request"].app.kedro_parameters
+        return p
 
 
 @strawberry.type
@@ -38,22 +45,24 @@ class Mutation:
 
         serial = p.serialize()
 
+        ## credentials not supported yet
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
         ## NOTE celery result may persist creds in task result?
-        for k,v in serial["inputs"].items():
-            if v.get("credentials", None):
-                v["credentials"] = creds[v["credentials"]]
+        ##for k,v in serial["inputs"].items():
+        ##    if v.get("credentials", None):
+        ##        v["credentials"] = creds[v["credentials"]]
 
-        for k,v in serial["outputs"].items():
-            if v.get("credentials", None):
-                v["credentials"] = creds[v["credentials"]]
+        ##for k,v in serial["outputs"].items():
+        ##    if v.get("credentials", None):
+        ##        v["credentials"] = creds[v["credentials"]]
 
         result = run_pipeline.delay(
             name = serial["name"], 
             inputs = serial["inputs"], 
             outputs = serial["outputs"], 
-            parameters = serial["parameters"]
+            parameters = serial["parameters"],
+            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         )  
 
         p.task_id = result.id
@@ -65,7 +74,8 @@ class Mutation:
                 {"name": serial["name"], 
                 "inputs": serial["inputs"], 
                 "outputs": serial["outputs"], 
-                "parameters": serial["parameters"]}
+                "parameters": serial["parameters"],
+                "runner": info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]}
         )
         
         ## PLACE HOLDER for future reolver plugins
@@ -75,6 +85,10 @@ class Mutation:
         logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
 
         p = info.context["request"].app.backend.create(p)
+        ## add private fields to enable resovling of computed fields e.g. "describe" and "template"
+        p.kedro_pipelines = info.context["request"].app.kedro_pipelines
+        p.kedro_catalog = info.context["request"].app.kedro_catalog
+        p.kedro_parameters = info.context["request"].app.kedro_parameters
         return p
 
 
@@ -86,7 +100,7 @@ class Subscription:
         """
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            async for e in PipelineEventMonitor(app = APP_CELERY, task_id = p.task_id).start(interval=interval):
+            async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
 
@@ -94,15 +108,15 @@ class Subscription:
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            stream = await PipelineLogStream().create(task_id = p.task_id )
+            stream = await PipelineLogStream().create(task_id = p.task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)
 
-
-def build_schema():
-    ComboQuery = merge_types("Query", tuple([Query] + TYPE_PLUGINS["query"]))
-    ComboMutation = merge_types("Mutation", tuple([Mutation] + TYPE_PLUGINS["mutation"]))
-    ComboSubscription = merge_types("Subscription", tuple([Subscription] + TYPE_PLUGINS["subscription"]))
+def build_schema(type_plugins):
+    ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
+    ComboMutation = merge_types("Mutation", tuple([Mutation] + type_plugins["mutation"]))
+    ComboSubscription = merge_types("Subscription", tuple([Subscription] + type_plugins["subscription"]))
     
     return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
+

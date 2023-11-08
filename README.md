@@ -398,21 +398,76 @@ INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
 
 Alternatively, use a ```.env``` file as described in the [General Configuration](#general-configuration) section.
 
+### Auto-reload
+
+The cli interface supports "auto-reloading" in order to make development easier.
+When starting the api server and worker specify the `-r` or `--reload` option
+to turn on auto-reloading.  Any changes to the "src" directory of your kedro
+project will trigger a reload.
+
+Start the api server with auto-reload enabled.
+
+```
+kedro gql --reload
+```
+
+Start a worker (in another terminal) with auto-reload enabled.
+
+```
+kedro gql -w --reload
+```
+
+The path to watch can be further refined using the `--reload-path` option.
+In the following examples a reload will be triggered when changes are 
+made to files in the `src/kedro_graphql/src/runners` directory.
+Start the api server with auto-reload enabled. 
+
+```
+kedro gql --reload --reload-path ./src/kedro_graphql/runners
+```
+
+Start a worker (in another terminal) with auto-reload enabled.
+
+```
+kedro gql -w --reload --reload-path ./src/kedro_graphql/runners
+`````
+
 ## General Configuration
 
 Configuration can be supplied via environment variables or a ```.env``` file.
 
 ```
 ## example .env file
-MONGO_URI="mongodb://root:example@localhost:27017/"
-MONGO_DB_NAME="pipelines"
-KEDRO_GRAPHQL_IMPORTS="kedro_graphql.plugins.plugins"
-KEDRO_GRAPHQL_APP=kedro_graphql.asgi.KedroGraphQL"
-KEDRO_GRAPHQL_BACKEND="kedro_graphql.backends.mongodb.MongoBackend"
-KEDRO_GRAPHQL_BROKER="redis://localhost"
-KEDRO_GRAPHQL_CELERY_RESULT_BACKEND="redis://localhost"
-KEDRO_GRAPHQL_RUNNER="kedro.runner.SequentialRunner"
+MONGO_URI=mongodb://root:example@localhost:27017/
+MONGO_DB_NAME=pipelines
+KEDRO_GRAPHQL_IMPORTS=kedro_graphql.plugins.plugins
+KEDRO_GRAPHQL_APP=kedro_graphql.asgi.KedroGraphQL
+KEDRO_GRAPHQL_BACKEND=kedro_graphql.backends.mongodb.MongoBackend
+KEDRO_GRAPHQL_BROKER=redis://localhost
+KEDRO_GRAPHQL_CELERY_RESULT_BACKEND=redis://localhost
+KEDRO_GRAPHQL_RUNNER=kedro.runner.SequentialRunner
+KEDRO_GRAPHQL_ENV=local
+KEDRO_GRAPHQL_CONF_SOURCE=None
 ```
+
+The configuration can also be provided at startup through the cli interface.
+Configuration values can be mapped to the the appropriate cli option by 
+removing the "KEDRO_GRAPHQL" prefix and using a lower case, hyphen format
+for the remaining string.  For example:
+
+| configuration variable | cli option | example   |
+|------------------------|------------|-----------|
+|MONGO_URI |   --mongo-uri    | mongodb://root:example@localhost:27017/ |
+|MONGO_DB_NAME |   --mongo-db-name    | pipelines |
+|KEDRO_GRAPHQL_IMPORTS |   --imports    | kedro_graphql.plugins.plugins |
+|KEDRO_GRAPHQL_APP |   --app    | kedro_graphql.asgi.KedroGraphQL |
+|KEDRO_GRAPHQL_BACKEND |   --backend    | kedro_graphql.backends.mongodb.MongoBackend |
+|KEDRO_GRAPHQL_BROKER |    --broker   | redis://localhost |
+|KEDRO_GRAPHQL_CELERY_RESULT_BACKEND |  --celery-result-backend    | redis://localhost |
+|KEDRO_GRAPHQL_RUNNER |    --runner   | kedro.runner.SequentialRunner |
+|KEDRO_GRAPHQL_ENV |    --env   | local |
+|KEDRO_GRAPHQL_CONF_SOURCE |   --conf-source    | $HOME/myproject/conf |
+
 
 ## How to install dependencies
 
@@ -452,4 +507,6 @@ After this, if you'd like to update your project requirements, please update `sr
 - support custom runners e.g. Argo Workflows, AWS Batch, etc...
 - document plan for supporting custom IOResolverPlugins 
 - document pipeline tags and implement "search" via tags and/or other fields
+- API paginations e.g. list pipelines and/or search results
+- support passing credentials via api
 

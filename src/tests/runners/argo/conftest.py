@@ -3,8 +3,9 @@ from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from uuid import uuid4
 from io import BytesIO
+IN_DEV = True
 
-
+@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
 @pytest.fixture
 def s3_client():
     from minio import Minio
@@ -16,6 +17,7 @@ def s3_client():
             secure=False
         )
 
+@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
 @pytest.fixture
 def s3_object(s3_client):
     """
@@ -62,8 +64,9 @@ def s3_object(s3_client):
 
 
 
+@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
 @pytest.fixture
-def mock_pipeline_argo(mock_backend, s3_object, s3_client):
+def mock_pipeline_argo(mock_app, s3_object, s3_client):
     """
     
     """
@@ -118,7 +121,7 @@ def mock_pipeline_argo(mock_backend, s3_object, s3_client):
     )
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
-    p = mock_backend.create(p)
+    p = mock_app.backend.create(p)
     yield p
     ## cleanup
     s3_client.remove_object("my-bucket", out_fname)
