@@ -1,7 +1,7 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
 #from kedro.runner import SequentialRunner
-from kedro_graphql.runner import init_runner
+from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
 

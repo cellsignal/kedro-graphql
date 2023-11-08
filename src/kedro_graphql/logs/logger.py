@@ -13,6 +13,7 @@ import os
 from inspect import currentframe, getframeinfo
 
 logger = logging.getLogger("kedro-graphql")
+logger.setLevel(logging.INFO)
 
 class RedisLogStreamPublisher(object):
     def __init__(self, topic, broker_url = None):
