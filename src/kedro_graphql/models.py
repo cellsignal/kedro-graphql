@@ -1,7 +1,8 @@
 import strawberry
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional
 import uuid
+import json
 #from .config import conf_catalog, conf_parameters, PIPELINES
 
 @strawberry.type
@@ -56,7 +57,23 @@ class ParameterInput:
     value: str
     type: Optional[ParameterType] = ParameterType.STRING
 
+    @staticmethod
+    def create(parameters: dict):
+        params =[]
+        for k,v in parameters.items():
+            ptype = type(v)
 
+            if isinstance(ptype, int):
+                ptype = ParameterType.INTEGER
+            elif isinstance(ptype, float):
+                ptype = ParameterType.FLOAT
+            elif isinstance(ptype, bool):
+                ptype = ParameterType.BOOLEAN
+            else:
+                ptype = ParameterType.STRING
+            
+            params.append(ParameterInput(name = k, value = str(v), type = ptype))
+        return params
 
 @strawberry.input
 class CredentialSetInput:
@@ -123,12 +140,12 @@ class CredentialNestedInput:
 ##                a[key] = b[key]
 ##        return a
     
-
 @strawberry.type
 class DataSet:
     name: str
-    type: str
-    filepath: str
+    type: Optional[str] = None
+    config: Optional[str] = None
+    filepath: Optional[str] = None
     save_args: Optional[List[Parameter]] = None
     load_args: Optional[List[Parameter]] = None
     credentials: Optional[str] = None
@@ -139,14 +156,18 @@ class DataSet:
         """
         temp = self.__dict__.copy()
         temp.pop("name")
-        if not temp["save_args"]:
-            temp.pop("save_args")
+        if temp.get("config", None):
+            return {self.name: json.loads(temp['config'])}
         else:
-            temp["save_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
-        if not temp["load_args"]:
-            temp.pop("load_args")
-        else:
-            temp["load_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
+            temp.pop("config")
+            if not temp["save_args"]:
+                temp.pop("save_args")
+            else:
+                temp["save_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
+            if not temp["load_args"]:
+                temp.pop("load_args")
+            else:
+                temp["load_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
         return {self.name: temp}
 
     @staticmethod
@@ -165,36 +186,82 @@ class DataSet:
                   "load_args":[{"name": "say", "value": "hello"}]
                 }
 
+                or
+
+                {
+                  "name": "text_in",
+                  "config":  '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}'
+                }
+
         """
+        if payload.get("config", False):
+            return DataSet(
+                name = payload["name"],
+                config = payload["config"]
+            )
 
-        if payload.get("save_args", False):
-            save_args = [Parameter(**p) for p in payload["save_args"]]
         else:
-            save_args = None
-            
-        if payload.get("load_args", False):
-            load_args = [Parameter(**p) for p in payload["load_args"]]
-        else:
-            load_args = None
+            if payload.get("save_args", False):
+                save_args = [Parameter(**p) for p in payload["save_args"]]
+            else:
+                save_args = None
+                
+            if payload.get("load_args", False):
+                load_args = [Parameter(**p) for p in payload["load_args"]]
+            else:
+                load_args = None
 
-        return DataSet(
-            name = payload["name"],
-            type = payload["type"],
-            filepath = payload["filepath"],
-            save_args = save_args,
-            load_args = load_args
-        )
+            return DataSet(
+                name = payload["name"],
+                type = payload["type"],
+                filepath = payload["filepath"],
+                save_args = save_args,
+                load_args = load_args
+            )
 
 
 @strawberry.input
 class DataSetInput:
     name: str
-    type: str
-    filepath: str
+    config: Optional[str] = None
+    type: Optional[str] = None
+    filepath: Optional[str] = None
     save_args: Optional[List[ParameterInput]] = None
     load_args: Optional[List[ParameterInput]] = None
     credentials: Optional[str] = None
         
+
+class DataCatalog:
+    datasets: List[DataSet]
+
+@strawberry.input
+class DataCatalogInput:
+    datasets: List[DataSetInput]
+
+
+    @staticmethod
+    def create(config):
+        """
+        context.config_loader["catalog"]
+
+        {'text_in': {'type': 'text.TextDataSet',
+                     'filepath': './data/01_raw/text_in.txt'},
+         'text_out': {'type': 'text.TextDataSet',
+                      'filepath': './data/02_intermediate/text_out.txt'}}
+
+        Example usage:
+
+            from kedro_graphql.models import DataCatalogInput
+
+            catalog = DataCatalogInput.create(context.config_loader["catalog"])
+
+            print(catalog)
+
+            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None), 
+             DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
+        
+        """
+        return [DataSetInput(name = k, config = json.dumps(v)) for k,v in config.items()]
 
 @strawberry.type
 class Node:
@@ -242,7 +309,8 @@ class PipelineTemplate:
         for n in self.kedro_pipelines[self.name].inputs():
             if not n.startswith("params:") and n != "parameters":
                 config = self.kedro_catalog[n]
-                inputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
+                #inputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
+                inputs_resolved.append(DataSet(name = n, config = json.dumps(config)))
             
         return inputs_resolved
  
@@ -251,20 +319,95 @@ class PipelineTemplate:
         outputs_resolved = []
         for n in self.kedro_pipelines[self.name].outputs():    
             config = self.kedro_catalog[n]
-            outputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
+            #outputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
+            outputs_resolved.append(DataSet(name = n, config = json.dumps(config)))
  
         return outputs_resolved
 
 @strawberry.input(description = "PipelineInput")
 class PipelineInput:
     name: str
-    parameters: List[ParameterInput]
-    inputs: List[DataSetInput]
-    outputs: List[DataSetInput]
+    parameters: Optional[List[ParameterInput]] = None
+    inputs: Optional[List[DataSetInput]] = None
+    outputs: Optional[List[DataSetInput]] = None
+    data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
     credentials: Optional[List[CredentialInput]] = None
     credentials_nested: Optional[List[CredentialNestedInput]] = None
 
+    @staticmethod
+    def create(name = None, data_catalog = None, parameters = None, tags = None):
+        """
+        Example usage:
+
+            from kedro_graphql.models import PipelineInput
+            from fastapi.encoders import jsonable_encoder
+            
+            p = PipelineInput(name = "example00",
+                         data_catalog = context.config_loader["catalog"],
+                         parameters = context.config_loader["parameters"],
+                         tags = [{""owner":"person"}])
+
+            print(p)
+
+            PipelineInput(name='example00', 
+                          parameters=[
+                            ParameterInput(name='example', 
+                                           value='hello', 
+                                           type=<ParameterType.STRING: 'string'>), 
+                            ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
+                          ], 
+                          inputs=None, 
+                          outputs=None, 
+                          data_catalog=[
+                            DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None), 
+                            DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)
+                          ], 
+                          tags=[TagInput(key='owner', value='sean')])
+
+            print(jsonable_encoder(p))
+
+            ## this can be used as the PipelineInput parameter when calleing the pipeline mutation via the API
+            {'name': 'example00',
+            'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
+             {'name': 'duration', 'value': '1', 'type': 'string'}],
+            'inputs': None,
+            'outputs': None,
+            'data_catalog': [{'name': 'text_in',
+              'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}',
+              'type': None,
+              'filepath': None,
+              'save_args': None,
+              'load_args': None,
+              'credentials': None},
+             {'name': 'text_out',
+              'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}',
+              'type': None,
+              'filepath': None,
+              'save_args': None,
+              'load_args': None,
+              'credentials': None}],
+            'tags': [{'key': 'owner', 'value': 'sean'}],
+            'credentials': None,
+            'credentials_nested': None}
+
+        """
+        if tags:
+            tags = [TagInput(key = k, value = v) for t in tags for k,v in t.items()]
+         
+        if data_catalog:
+            data_catalog = DataCatalogInput.create(data_catalog)
+
+        if parameters:
+            parameters = ParameterInput.create(parameters)
+
+        return PipelineInput(name = name,
+                             parameters = parameters,
+                             data_catalog = data_catalog,
+                             tags = tags)
+
+
+## Should expand pipeline type to include pipeline version
 @strawberry.type
 class Pipeline:
     kedro_pipelines: strawberry.Private[Optional[dict]] = None
@@ -272,9 +415,10 @@ class Pipeline:
     kedro_parameters: strawberry.Private[Optional[dict]] = None
 
     id: Optional[uuid.UUID] = None
-    inputs: List[DataSet]
+    inputs: Optional[List[DataSet]]
     name: str
-    outputs: List[DataSet]
+    outputs: Optional[List[DataSet]]
+    data_catalog: Optional[List[DataSet]] = None
     parameters: List[Parameter]
     status: Optional[str] = None
     tags: Optional[List[Tag]] = None
@@ -307,38 +451,66 @@ class Pipeline:
         inputs = {}
         outputs = {}
         parameters = {}
-        for i in self.inputs:
-            s = i.serialize()
-            inputs.update(s)
+        data_catalog = {}
+        if self.inputs:
+             for i in self.inputs:
+                 s = i.serialize()
+                 inputs.update(s)
 
-        for o in self.outputs:
-            s = o.serialize()
-            outputs.update(s)
+        if self.outputs:
+            for o in self.outputs:
+                s = o.serialize()
+                outputs.update(s)
 
-        for p in self.parameters:
-            s = p.serialize()
-            parameters.update(s)
+        if self.parameters:
+            for p in self.parameters:
+                s = p.serialize()
+                parameters.update(s)
+
+        if self.data_catalog:
+            for d in self.data_catalog:
+                s = d.serialize()
+                data_catalog.update(s)
+
+
 
         return {
             "id": self.id,
             "name": self.name,
             "inputs": inputs,
             "outputs": outputs,
+            "data_catalog": data_catalog,
             "parameters": parameters,
         }
 
     @staticmethod
     def from_dict(payload):
-        if payload["tags"]:
+        if payload.get("tags", None):
             tags = [Tag(**t) for t in payload["tags"]]
         else:
             tags = None
+         
+        if payload.get("data_catalog", None):
+            data_catalog = [DataSet.from_dict(d) for d in payload["data_catalog"]]
+        else:
+            data_catalog = None
+
+        if payload.get("inputs", None):
+            inputs = [DataSet.from_dict(i) for i in payload["inputs"]]
+        else:
+            inputs = None
+
+        if payload.get("outputs", None):
+            outputs = [DataSet.from_dict(o) for o in payload["outputs"]]
+        else:
+            outputs = None
 
         return Pipeline(
             id = payload.get("id", None),
             name = payload["name"],
-            inputs = [DataSet.from_dict(i) for i in payload["inputs"]],
-            outputs = [DataSet.from_dict(o) for o in payload["outputs"]],
+            inputs = inputs,
+            outputs = outputs,
+            data_catalog = data_catalog,
             parameters = [Parameter(**p) for p in payload["parameters"]],
             status = payload.get("status", None),
             tags = tags,

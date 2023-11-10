@@ -44,7 +44,6 @@ class Mutation:
         p.task_name = str(run_pipeline)
 
         serial = p.serialize()
-
         ## credentials not supported yet
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
@@ -61,6 +60,7 @@ class Mutation:
             name = serial["name"], 
             inputs = serial["inputs"], 
             outputs = serial["outputs"], 
+            data_catalog = serial["data_catalog"],
             parameters = serial["parameters"],
             runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         )  
@@ -74,6 +74,7 @@ class Mutation:
                 {"name": serial["name"], 
                 "inputs": serial["inputs"], 
                 "outputs": serial["outputs"], 
+                "data_catalog": serial["data_catalog"],
                 "parameters": serial["parameters"],
                 "runner": info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]}
         )

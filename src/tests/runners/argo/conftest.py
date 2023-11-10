@@ -4,8 +4,9 @@ from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
 from uuid import uuid4
 from io import BytesIO
 IN_DEV = True
+REASON = "Argo runner in development"
 
-@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
+@pytest.mark.skipif(IN_DEV, reason=REASON)
 @pytest.fixture
 def s3_client():
     from minio import Minio
@@ -17,7 +18,7 @@ def s3_client():
             secure=False
         )
 
-@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
+@pytest.mark.skipif(IN_DEV, reason=REASON)
 @pytest.fixture
 def s3_object(s3_client):
     """
@@ -64,7 +65,7 @@ def s3_object(s3_client):
 
 
 
-@pytest.mark.skipif(IN_DEV, reason="not generally available, in development")
+@pytest.mark.skipif(IN_DEV, reason=REASON)
 @pytest.fixture
 def mock_pipeline_argo(mock_app, s3_object, s3_client):
     """

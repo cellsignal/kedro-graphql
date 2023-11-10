@@ -118,15 +118,23 @@ class KedroGraphqlTask(Task):
 
 @shared_task(bind = True, base = KedroGraphqlTask)
 def run_pipeline(self, 
-                 name: str, 
-                 inputs: dict, 
-                 outputs: dict, 
-                 parameters: dict, 
-                 runner = None):
+                 name: str = None, 
+                 inputs: dict = None, 
+                 outputs: dict = None, 
+                 parameters: dict = None, 
+                 data_catalog: dict = None,
+                 runner: str = None):
 
     ## start
-    catalog = {**inputs, **outputs}
-    io = DataCatalog().from_config(catalog = catalog)
+    if data_catalog:
+        logger.info("using data_catalog parameter to build data catalog")
+        io = DataCatalog().from_config(catalog = data_catalog)
+    else:
+        logger.info("using inputs and outputs parameters to build data catalog")
+        logger.info("inputs: " + str(inputs))
+        logger.info("outputs: " + str(outputs))
+        catalog = {**inputs, **outputs}
+        io = DataCatalog().from_config(catalog = catalog)
 
     ## add parameters to DataCatalog e.g. {"params:myparam":"value"}
     params = {"params:"+k:v for k,v in parameters.items()}
