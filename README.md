@@ -510,3 +510,93 @@ After this, if you'd like to update your project requirements, please update `sr
 - API paginations e.g. list pipelines and/or search results
 - support passing credentials via api
 
+
+## Deprecations
+
+### v0.5.0
+
+
+#### DataSet and DataSetInput types
+
+The following fields of the `DataSet` and `DataSetInput` types are marked for
+ deprecation and will be removed in a future release:
+
+- `filepath`
+- `load_args`
+- `save_args`
+- `type`
+
+```
+@strawberry.type
+class DataSet:
+    name: str
+    config: Optional[str] = None
+    type: Optional[str] = mark_deprecated(default = None)
+    filepath: Optional[str] = mark_deprecated(default = None)
+    save_args: Optional[List[Parameter]] = mark_deprecated(default = None)
+    load_args: Optional[List[Parameter]] = mark_deprecated(default = None)
+    credentials: Optional[str] = None
+```
+
+```
+@strawberry.input
+class DataSetInput:
+    name: str
+    config: Optional[str] = None
+    type: Optional[str] = mark_deprecated(default = None)
+    filepath: Optional[str] = mark_deprecated(default = None)
+    save_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
+    load_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
+    credentials: Optional[str] = None
+```
+
+The `config` field should be used instead to specify a dataset configuration as a JSON 
+string.  The `config` field approach supports all dataset implementations. 
+
+#### Pipeline and PipelineInput types
+
+The following fields of the `DataSet` and `DataSetInput` types are marked for
+ deprecation and will be removed in a future release:
+
+- `inputs`
+- `outputs`
+
+
+```
+@strawberry.type
+class Pipeline:
+    kedro_pipelines: strawberry.Private[Optional[dict]] = None
+    kedro_catalog: strawberry.Private[Optional[dict]] = None
+    kedro_parameters: strawberry.Private[Optional[dict]] = None
+
+    id: Optional[uuid.UUID] = None
+    inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
+    name: str
+    outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
+    data_catalog: Optional[List[DataSet]] = None
+    parameters: List[Parameter]
+    status: Optional[str] = None
+    tags: Optional[List[Tag]] = None
+    task_id: Optional[str] = None
+    task_name: Optional[str] = None
+    task_args: Optional[str] = None
+    task_kwargs: Optional[str] = None
+    task_request: Optional[str] = None
+    task_exception: Optional[str] = None
+    task_traceback: Optional[str] = None
+    task_einfo: Optional[str] = None
+    task_result: Optional[str] = None
+```
+
+```
+@strawberry.input(description = "PipelineInput")
+class PipelineInput:
+    name: str
+    parameters: Optional[List[ParameterInput]] = None
+    inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
+    outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
+    data_catalog: Optional[List[DataSetInput]] = None
+    tags: Optional[List[TagInput]] = None
+```
+
+The `data_catalog` field should be used instead.

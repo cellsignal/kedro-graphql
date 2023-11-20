@@ -3,7 +3,10 @@ from enum import Enum
 from typing import List, Optional
 import uuid
 import json
-#from .config import conf_catalog, conf_parameters, PIPELINES
+from .config import config as CONFIG
+
+def mark_deprecated(default = None):
+    return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
 
 @strawberry.type
 class Tag:
@@ -143,11 +146,11 @@ class CredentialNestedInput:
 @strawberry.type
 class DataSet:
     name: str
-    type: Optional[str] = None
     config: Optional[str] = None
-    filepath: Optional[str] = None
-    save_args: Optional[List[Parameter]] = None
-    load_args: Optional[List[Parameter]] = None
+    type: Optional[str] = mark_deprecated(default = None)
+    filepath: Optional[str] = mark_deprecated(default = None)
+    save_args: Optional[List[Parameter]] = mark_deprecated(default = None)
+    load_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
 
     def serialize(self) -> dict:
@@ -224,10 +227,10 @@ class DataSet:
 class DataSetInput:
     name: str
     config: Optional[str] = None
-    type: Optional[str] = None
-    filepath: Optional[str] = None
-    save_args: Optional[List[ParameterInput]] = None
-    load_args: Optional[List[ParameterInput]] = None
+    type: Optional[str] = mark_deprecated(default = None)
+    filepath: Optional[str] = mark_deprecated(default = None)
+    save_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
+    load_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
         
 
@@ -328,12 +331,12 @@ class PipelineTemplate:
 class PipelineInput:
     name: str
     parameters: Optional[List[ParameterInput]] = None
-    inputs: Optional[List[DataSetInput]] = None
-    outputs: Optional[List[DataSetInput]] = None
+    inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
+    outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
-    credentials: Optional[List[CredentialInput]] = None
-    credentials_nested: Optional[List[CredentialNestedInput]] = None
+    #credentials: Optional[List[CredentialInput]] = None
+    #credentials_nested: Optional[List[CredentialNestedInput]] = None
 
     @staticmethod
     def create(name = None, data_catalog = None, parameters = None, tags = None):
@@ -415,9 +418,9 @@ class Pipeline:
     kedro_parameters: strawberry.Private[Optional[dict]] = None
 
     id: Optional[uuid.UUID] = None
-    inputs: Optional[List[DataSet]]
+    inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     name: str
-    outputs: Optional[List[DataSet]]
+    outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     data_catalog: Optional[List[DataSet]] = None
     parameters: List[Parameter]
     status: Optional[str] = None
