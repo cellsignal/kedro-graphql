@@ -4,6 +4,7 @@ from kedro_graphql.models import Pipeline
 import uuid
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
+import json
 
 
 class MongoBackend(BaseBackend):
@@ -23,6 +24,21 @@ class MongoBackend(BaseBackend):
     def shutdown(self, **kwargs):
         """Shutdown hook."""
         self.client.close()
+
+    def list(self, cursor: uuid.UUID = None, limit = 10, filter = ""):
+        query = {'_id': { '$gte': ObjectId(cursor)}}
+        if len(filter) > 0:
+            filter = json.loads(filter)
+            query.update(filter)
+        
+        raw = self.db["pipelines"].find(query).limit(limit)
+        results = []
+        for r in raw:
+            id = r.pop("_id")
+            p = Pipeline.from_dict(r)
+            p.id = str(id)
+            results.append(p)
+        return results
 
     def load(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id or task_id"""
