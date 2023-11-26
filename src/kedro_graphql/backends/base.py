@@ -20,6 +20,11 @@ class BaseBackend(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def list(self, cursor: uuid.UUID = None, limit: int = None, filter: str = None):
+        """List pipelines using cursor pagination"""
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def create(self, pipeline: Pipeline):
         """Save a pipeline"""
         raise NotImplementedError

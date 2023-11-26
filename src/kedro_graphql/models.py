@@ -4,6 +4,7 @@ from typing import List, Optional
 import uuid
 import json
 from .config import config as CONFIG
+from bson.objectid import ObjectId
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -275,6 +276,7 @@ class Node:
 
 @strawberry.type(description = "PipelineTemplates are definitions of Pipelines.  They represent the supported interface for executing a Pipeline.")
 class PipelineTemplate:
+    id: str = strawberry.field(description="ID of the pipeline template.")
     name: str
     kedro_pipelines: strawberry.Private[dict]
     kedro_catalog: strawberry.Private[dict]
@@ -326,6 +328,37 @@ class PipelineTemplate:
             outputs_resolved.append(DataSet(name = n, config = json.dumps(config)))
  
         return outputs_resolved
+    
+
+@strawberry.type
+class PageMeta:
+    next_cursor: Optional[str] = strawberry.field(
+        description="The next cursor to continue with."
+    )
+
+@strawberry.type
+class PipelineTemplates:
+    pipeline_templates: List[PipelineTemplate] = strawberry.field(description="The list of pipeline templates.")
+
+    page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
+
+    @staticmethod
+    def _build_pipeline_index(kedro_pipelines, kedro_catalog, kedro_parameters):
+        """
+        """
+        pipes = []
+        count = 100000000000000000000000
+        for k,v in kedro_pipelines.items():
+            pipes.append(PipelineTemplate(name = k,
+                                          id = ObjectId(str(count)), 
+                                          kedro_pipelines = kedro_pipelines,
+                                          kedro_catalog = kedro_catalog,
+                                          kedro_parameters = kedro_parameters))
+            count +=1
+
+        return pipes
+
+
 
 @strawberry.input(description = "PipelineInput")
 class PipelineInput:
@@ -413,9 +446,10 @@ class PipelineInput:
 ## Should expand pipeline type to include pipeline version
 @strawberry.type
 class Pipeline:
-    kedro_pipelines: strawberry.Private[Optional[dict]] = None
-    kedro_catalog: strawberry.Private[Optional[dict]] = None
-    kedro_parameters: strawberry.Private[Optional[dict]] = None
+    #kedro_pipelines: strawberry.Private[Optional[dict]] = None
+    #kedro_catalog: strawberry.Private[Optional[dict]] = None
+    #kedro_parameters: strawberry.Private[Optional[dict]] = None
+    kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
 
     id: Optional[uuid.UUID] = None
     inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
@@ -437,11 +471,10 @@ class Pipeline:
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
-        return PipelineTemplate(name = self.name, 
-                                kedro_catalog = self.kedro_catalog,
-                                kedro_parameters = self.kedro_parameters,
-                                kedro_pipelines = self.kedro_pipelines)
-
+        for p in self.kedro_pipelines_index:
+            if p.name == self.name:
+                return p
+                
     @strawberry.field
     def describe(self) -> str:
         return self.template().describe()
@@ -527,6 +560,11 @@ class Pipeline:
             task_einfo = payload.get("task_einfo", None),
         )
 
+@strawberry.type
+class Pipelines:
+    pipelines: List[Pipeline] = strawberry.field(description="The list of pipeline instances.")
+
+    page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
 @strawberry.type
 class PipelineEvent:
     id: str

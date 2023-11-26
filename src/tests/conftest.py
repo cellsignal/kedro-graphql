@@ -82,7 +82,9 @@ def mock_text_out_tsv(tmp_path):
     text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
 
-
+@pytest.mark.usefixtures('mock_celery_session_app')
+@pytest.mark.usefixtures('celery_session_worker')
+@pytest.mark.usefixtures('depends_on_current_app')
 @pytest.fixture
 def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 

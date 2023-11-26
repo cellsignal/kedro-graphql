@@ -5,9 +5,11 @@ import os
 #from .schema import build_schema       
 from .decorators import TYPE_PLUGINS, RESOLVER_PLUGINS, discover_plugins
 from .backends import init_backend
+from .models import PipelineTemplate
 from .schema import build_schema
 from .celeryapp import celery_app
 from .config import config
+from .models import PipelineTemplates
 
 
 
@@ -26,6 +28,7 @@ class KedroGraphQL(FastAPI):
         self.kedro_parameters = self.kedro_context.config_loader["parameters"]
         from kedro.framework.project import pipelines
         self.kedro_pipelines = pipelines
+        self.kedro_pipelines_index = PipelineTemplates._build_pipeline_index(self.kedro_pipelines, self.kedro_catalog, self.kedro_parameters)
 
 
         self.config = config
@@ -48,4 +51,3 @@ class KedroGraphQL(FastAPI):
         @self.on_event("shutdown")
         def shutdown_backend():
             self.backend.shutdown()
-    
