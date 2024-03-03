@@ -1,5 +1,7 @@
 # kedro-graphql
 
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/opensean/kedro-graphql)
+
 ## Overview
 
 Kedro-graphql is a [kedro-plugin](https://docs.kedro.org/en/stable/extend_kedro/plugins.html) 
