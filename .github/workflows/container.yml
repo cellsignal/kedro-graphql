@@ -51,5 +51,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }} , ${{ github.sha }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            type=sha,format=long
           labels: ${{ steps.meta.outputs.labels }}
