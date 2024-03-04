@@ -45,13 +45,15 @@ jobs:
         with:
           images: |
             labmesh/kedro-graphql
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=long
 
       - name: Build and push Docker images
         uses: docker/build-push-action@v5.1.0
         with:
           context: .
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            type=sha,format=long
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
