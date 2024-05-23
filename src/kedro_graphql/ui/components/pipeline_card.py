@@ -13,7 +13,7 @@ def pipeline_card(title = "Pipeline", description = "A simple pipeline card layo
                         dcc.Markdown(description),
                         className="card-text",
                     ),
-                    dbc.Button("Run", color="primary", href="/run/submit/"+title),
+                    dbc.Button("Run", color="primary", href="/run/form/"+title),
                 ]
             ),
         ],

@@ -1,0 +1,6 @@
+name,config
+example00,'{"filepath": "s3://example/dataset.csv"}'
+example01,'{"filepath": "s3://example/dataset.csv"}'
+example02,'{"filepath": "s3://example/dataset.csv"}'
+example03,'{"filepath": "s3://example/dataset.csv"}'
+example04,'{"filepath": "s3://example/dataset.csv"}'

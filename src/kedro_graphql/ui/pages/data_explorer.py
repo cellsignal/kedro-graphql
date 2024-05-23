@@ -1,7 +1,7 @@
 from dash import html, Input, Output, callback
 import dash
 import requests
-from components.data_catalog import data_catalog
+from components.data_catalog_table import data_catalog_table
 import dash_bootstrap_components as dbc
 
 
@@ -33,5 +33,5 @@ def get_pipeline(input_value):
     #print("response status code: ", response.status_code) 
     if response.status_code == 200: 
         data = response.json()["data"]
-        return dbc.Row(dbc.Col(data_catalog(title = data["pipeline"]["id"], pipeline_id = data["pipeline"]["id"], description = data["pipeline"]["id"]), md="4"))
+        return dbc.Row(dbc.Col(data_catalog_table(title = data["pipeline"]["id"], pipeline_id = data["pipeline"]["id"], description = data["pipeline"]["id"]), md="4"))
 

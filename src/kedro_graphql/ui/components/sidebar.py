@@ -25,7 +25,7 @@ def sidebar(title = "Sidebar", description = "A simple sidebar layout with navig
             ##),
             dbc.Nav(
                 [
-                    dbc.NavLink(f"{page['name']}", href=page["relative_path"]) for page in dash.page_registry.values() if page["name"] not in ["Run", "Progress", "Submit", "Data explorer"]
+                    dbc.NavLink(f"{page['name']}", href=page["relative_path"]) for page in dash.page_registry.values() if page["name"] not in ["Run", "Progress", "Form", "Data explorer"]
                 ],
                 vertical=True,
                 pills=True,

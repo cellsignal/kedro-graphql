@@ -2,7 +2,7 @@ from dash import html, callback, Input, Output
 import dash
 from components.form_loader import form_loader
 
-dash.register_page(__name__, path_template="/run/submit/<pipeline_name>")
+dash.register_page(__name__, path_template="/run/form/<pipeline_name>")
 
 def layout(pipeline_name=None, **kwargs):
     return html.Div([
