@@ -21,8 +21,8 @@ def mock_app(kedro_session):
 @pytest.fixture(scope='session')
 def celery_config():
     return {
-        'broker_url': 'redis://',
-        'result_backend': 'redis://',
+        'broker_url': 'redis://localhost',
+        'result_backend': 'redis://localhost',
         'result_extened': True,
         'worker_send_task_events': True,
         'task_send_sent_event': True,

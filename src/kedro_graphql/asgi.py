@@ -10,7 +10,7 @@ from .schema import build_schema
 from .celeryapp import celery_app
 from .config import config
 from .models import PipelineTemplates
-
+from fastapi.middleware.cors import CORSMiddleware
 
 
 
@@ -43,6 +43,19 @@ class KedroGraphQL(FastAPI):
         self.include_router(self.graphql_app, prefix = "/graphql")
         self.add_websocket_route("/graphql", self.graphql_app)
         self.celery_app = celery_app(self.config, self.backend)
+        
+        origins = [
+            "http://localhost",
+            "http://localhost:3000",
+        ]
+        self.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        print("added CORSMiddleware")
 
         @self.on_event("startup")
         def startup_backend():
