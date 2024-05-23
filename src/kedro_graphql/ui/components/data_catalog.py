@@ -17,6 +17,7 @@ DATA_CATALOG_STYLE = {
     Output("offcanvas", "is_open"),
     Input("open-offcanvas", "n_clicks"),
     [State("offcanvas", "is_open")],
+    prevent_initial_call=True,
     suppress_callback_exceptions=True
 )
 def toggle_offcanvas(n1, is_open):
@@ -24,8 +25,11 @@ def toggle_offcanvas(n1, is_open):
         return not is_open
     return is_open
 
-@callback(Output("output", "children"), [Input("input", "value"), Input("datasets", "children")])
-def output_text(value):
+@callback(Output("output", "children"), 
+          [Input("input", "value"), Input("datasets", "children")],
+          prevent_initial_call=True,
+          suppress_callback_exceptions=True)
+def output_text(value, children):
     print(value, children)
     return value
 

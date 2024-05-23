@@ -296,7 +296,7 @@ class PipelineTemplate:
     def parameters(self) -> List[Parameter]:
         ## keep track of parameters to avoid returning duplicates    
         params = {}
-        for n in self.kedro_pipelines[self.name].inputs():
+        for n in self.kedro_pipelines[self.name].all_inputs():
             if n.startswith("params:"):
                 name = n.split("params:")[1]
                 value = self.kedro_parameters[name]
@@ -311,7 +311,7 @@ class PipelineTemplate:
     @strawberry.field
     def inputs(self) -> List[DataSet]:
         inputs_resolved = []
-        for n in self.kedro_pipelines[self.name].inputs():
+        for n in self.kedro_pipelines[self.name].all_inputs():
             if not n.startswith("params:") and n != "parameters":
                 config = self.kedro_catalog[n]
                 #inputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
@@ -322,7 +322,7 @@ class PipelineTemplate:
     @strawberry.field
     def outputs(self) -> List[DataSet]:
         outputs_resolved = []
-        for n in self.kedro_pipelines[self.name].outputs():    
+        for n in self.kedro_pipelines[self.name].all_outputs():    
             config = self.kedro_catalog[n]
             #outputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
             outputs_resolved.append(DataSet(name = n, config = json.dumps(config)))

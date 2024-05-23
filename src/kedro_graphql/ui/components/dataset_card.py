@@ -8,14 +8,14 @@ def dataset_card(name = "Pipeline", config = "A simple pipeline card layout with
             dbc.CardBody(
                 [
                     html.H5(name, className="card-title"),
-                    html.H6(
-                        "config:",
-                        className="card-text",
-                    ),
-                    html.P(
-                        config,
-                        className="card-text",
-                    ),
+                    ##html.H6(
+                    ##    "config:",
+                    ##    className="card-text",
+                    ##),
+                    ##html.P(
+                    ##    config,
+                    ##    className="card-text",
+                    ##),
                     dbc.Button("Open", color="primary"),
                 ]
             ),

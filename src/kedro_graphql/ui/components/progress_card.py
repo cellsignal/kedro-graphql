@@ -27,7 +27,7 @@ def update_location(progress):
     if progress is None or progress < 100:
         
         return dash.no_update
-    return f"/data_explorer/664e9ee0d5ab14a983377321"
+    return f"/data_explorer/664c918070223f0ef0b7ad14"
 
 def progress_card(pipeline_name =None, description = "A simple pipeline card layout with navigation links"):
     return html.Div(

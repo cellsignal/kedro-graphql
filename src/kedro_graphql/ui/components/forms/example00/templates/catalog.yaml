@@ -1,0 +1,7 @@
+text_in:
+  type: text.TextDataSet
+  filepath: ./data/01_raw/{{ timestamp }}-text_in.txt
+
+text_out:
+  type: text.TextDataSet
+  filepath: ./data/02_intermediate/{{ timestamp }}-text_out.txt
