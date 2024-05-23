@@ -8,7 +8,7 @@ SIDEBAR_STYLE = {
     "top": 0,
     "left": 0,
     "bottom": 0,
-    "width": "16rem",
+    "width": "12rem",
     "padding": "2rem 1rem",
     "backgroundColor": "#f8f9fa",
 }
@@ -18,14 +18,14 @@ SIDEBAR_STYLE = {
 def sidebar(title = "Sidebar", description = "A simple sidebar layout with navigation links"):
     return html.Div(
         [
-            html.H2(title, className="display-4"),
+            html.H2(title, className="display-9"),
             html.Hr(),
-            html.P(
-                description, className="lead"
-            ),
+            ##html.P(
+            ##    description, className="lead"
+            ##),
             dbc.Nav(
                 [
-                    dbc.NavLink(f"{page['name']}", href=page["relative_path"]) for page in dash.page_registry.values() if page["name"] not in ["Run", "Progress", "Submit"]
+                    dbc.NavLink(f"{page['name']}", href=page["relative_path"]) for page in dash.page_registry.values() if page["name"] not in ["Run", "Progress", "Submit", "Data explorer"]
                 ],
                 vertical=True,
                 pills=True,

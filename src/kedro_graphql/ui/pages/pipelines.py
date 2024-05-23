@@ -10,7 +10,7 @@ dash.register_page(__name__)
 def layout(**kwargs):
     return html.Div([
         html.H1('Pipelines'),
-        html.Div(id="pipelines")
+        dbc.Container(id="pipelines", fluid = True)
     ])
 
 @callback(
@@ -18,7 +18,7 @@ def layout(**kwargs):
     Input(component_id='pipelines', component_property='children'),
     suppress_callback_exceptions=True
 )
-def get_pipelines(input_value):
+def get_pipeline_templates(input_value):
     url = "http://localhost:5000/graphql"
     query = """
     {
@@ -54,7 +54,7 @@ def get_pipelines(input_value):
     }
     """
     response = requests.post(url=url, json={"query": query}) 
-    print("response status code: ", response.status_code) 
+    #print("response status code: ", response.status_code) 
     if response.status_code == 200: 
         data = response.json()
         return dbc.Row([dbc.Col(pipeline_card(title = pipeline["name"], description = pipeline["describe"]), md="4") for pipeline in data["data"]["pipelineTemplates"]["pipelineTemplates"]])
