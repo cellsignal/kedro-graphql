@@ -1,9 +1,0 @@
-batch_airr_record:
-  type: partitions.IncrementalDataset
-  path: s3://example/record/
-  dataset: pandas.CSVDataset
-{% for d in datasets %}
-ab1_{{ loop.index }}:
-  type: example.extras.datasets.biosequence.Ab1SequenceDataSet
-  filepath: s3://example/year={{ year }}/month={{ month }}/day={{ day }}/timestamp={{ timestamp }}/{{ d }}
-{% endfor %}

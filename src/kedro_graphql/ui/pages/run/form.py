@@ -4,6 +4,10 @@ from components.form_loader import form_loader
 import json
 from urllib.parse import unquote
 import dash_bootstrap_components as dbc
+import importlib
+
+forms = [importlib.import_module(f"kedro_graphql.ui.components.forms.example00.example00")]
+
 
 dash.register_page(__name__, path_template="/run/form")
 

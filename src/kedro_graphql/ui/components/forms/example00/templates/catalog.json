@@ -1,0 +1,26 @@
+{
+  "inputs": [
+    {
+      "config": "{\"type\": \"text.TextDataSet\", \"filepath\": \"./data/01_raw/text_in.txt\"}",
+      "name": "text_in"
+    }
+  ],
+  "outputs": [
+    {
+      "config": "{\"type\": \"text.TextDataSet\", \"filepath\": \"./data/02_intermediate/year={{ year }}/month={{ month }}/day={{ day }}/{{ timestamp }}-text_out.txt\"}",
+      "name": "text_out"
+    }
+  ],
+  "parameters": [
+    {
+      "name": "example",
+      "type": "STRING",
+      "value": "hello"
+    },
+    {
+      "name": "duration",
+      "type": "STRING",
+      "value": "{{ duration }}"
+    }
+  ]
+}
