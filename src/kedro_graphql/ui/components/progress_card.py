@@ -18,7 +18,7 @@ def update_progress(n):
 
 
 @callback(
-    Output("url", "href"),
+    Output("url", "href", allow_duplicate=True),
     Input("progress-interval", "n_intervals"),
     prevent_initial_call=True,
     suppress_callback_exceptions=True

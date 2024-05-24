@@ -1,4 +1,5 @@
 {
+  "name": "example00",
   "inputs": [
     {
       "config": "{\"type\": \"text.TextDataSet\", \"filepath\": \"./data/01_raw/text_in.txt\"}",

@@ -19,7 +19,6 @@ def layout(**kwargs):
     suppress_callback_exceptions=True
 )
 def get_pipeline_templates(input_value):
-    url = "http://localhost:5000/graphql"
     query = gql(
     """
     query getPipelineTemplates {

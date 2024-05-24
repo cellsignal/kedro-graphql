@@ -10,6 +10,7 @@ DATA_CATALOG_STYLE = {
     "top": 0,
     "right": 0,
     "padding": "2rem 1rem",
+    "margin": "1rem 1rem",
 }
 
 
@@ -63,7 +64,7 @@ def data_catalog(title = "Data Catalog", pipeline_id = None, description = "A si
                 id="offcanvas",
                 title="Data Catalog",
                 placement="end",
-                is_open=False,
+                is_open=True,
                 scrollable=True
             ),
         ]

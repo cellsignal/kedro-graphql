@@ -2,8 +2,14 @@ import dash
 from dash import Dash, html, dcc, clientside_callback, Input, Output
 import dash_bootstrap_components as dbc
 from components.sidebar import sidebar
+from dash_extensions.enrich import DashProxy
 
-app = dash.Dash(
+##app = dash.Dash(
+##    __name__,
+##    external_stylesheets=[dbc.themes.SANDSTONE],
+##    use_pages=True
+##)
+app = DashProxy(
     __name__,
     external_stylesheets=[dbc.themes.SANDSTONE],
     use_pages=True
@@ -22,12 +28,15 @@ CONTENT_STYLE = {
 app.layout =  dbc.Container(
     [
         sidebar(title = "Kedro GraphQL", description = "A simple sidebar layout with navigation links"),
+        dcc.Location(id="url", refresh="callback-nav"),
         html.Div(id="page-content", style=CONTENT_STYLE, children=[
             dash.page_container
         ]),
     ],
     fluid=True
 )
+
+app.config.suppress_callback_exceptions = True
 
 
 if __name__ == '__main__':

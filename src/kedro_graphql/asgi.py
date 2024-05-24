@@ -20,6 +20,10 @@ class KedroGraphQL(FastAPI):
     ##def __init__(self, gql_conf = {}, package_name = None, project_path = None,
     ##             conf_source = None, env = None):
     def __init__(self, kedro_session = None, config = config):
+        self.resolver_plugins = RESOLVER_PLUGINS
+        self.type_plugins = TYPE_PLUGINS
+        self.schema = build_schema(self.type_plugins)
+        self.graphql_app = GraphQLRouter(self.schema)
         super(KedroGraphQL, self).__init__()
 
         self.kedro_session = kedro_session
@@ -33,21 +37,13 @@ class KedroGraphQL(FastAPI):
 
         self.config = config
 
-        self.resolver_plugins = RESOLVER_PLUGINS
-        self.type_plugins = TYPE_PLUGINS
-
         discover_plugins(self.config)
-        self.schema = build_schema(self.type_plugins)
         self.backend = init_backend(self.config)
-        self.graphql_app = GraphQLRouter(self.schema)
         self.include_router(self.graphql_app, prefix = "/graphql")
-        self.add_websocket_route("/graphql", self.graphql_app)
+        #self.add_websocket_route("/graphql", self.graphql_app)
         self.celery_app = celery_app(self.config, self.backend)
         
-        origins = [
-            "http://localhost",
-            "http://localhost:3000",
-        ]
+        origins = ["*"]
         self.add_middleware(
             CORSMiddleware,
             allow_origins=origins,
@@ -56,6 +52,7 @@ class KedroGraphQL(FastAPI):
             allow_headers=["*"],
         )
         print("added CORSMiddleware")
+
 
         @self.on_event("startup")
         def startup_backend():

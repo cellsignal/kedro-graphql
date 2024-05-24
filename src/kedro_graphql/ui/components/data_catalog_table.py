@@ -81,9 +81,3 @@ def data_catalog_table(title = "Data Catalog", pipeline_id = None, description =
             ),
         ]
     )
-
-    
-    
-    html.Div([
-
-    ]) 
