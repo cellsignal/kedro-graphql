@@ -1,11 +1,11 @@
 import dash
-from dash import Dash, html, dcc
+from dash import Dash, html, dcc, clientside_callback, Input, Output
 import dash_bootstrap_components as dbc
 from components.sidebar import sidebar
 
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    external_stylesheets=[dbc.themes.SANDSTONE],
     use_pages=True
 )
 
@@ -17,6 +17,7 @@ CONTENT_STYLE = {
     "marginRight": "2rem",
     "padding": "2rem 1rem",
 }
+
 
 app.layout =  dbc.Container(
     [
