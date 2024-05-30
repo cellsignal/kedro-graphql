@@ -60,8 +60,8 @@ class TestSchemaMutations:
         resp = await mock_app.schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
-                                      "inputs": [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}],
-                                      "outputs": [{"name": "text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}],
+                                      "inputs": [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}],
+                                      "outputs": [{"name": "text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}],
                                       "parameters": [{"name":"example", "value":"hello"},
                                                      {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                       "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
@@ -121,12 +121,12 @@ class TestSchemaMutations:
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", 
-                                                  "type": "text.TextDataSet", 
+                                                  "type": "text.TextDataset", 
                                                   "filepath": str(mock_text_in),
                                                   "credentials": "my_creds"
                                       }],
                                       "outputs": [{"name": "text_out", 
-                                                   "type": "text.TextDataSet", 
+                                                   "type": "text.TextDataset", 
                                                    "filepath": str(mock_text_out)}],
                                       "parameters": [{"name":"example", "value":"hello"}],
                                       "tags": [{"key": "author", "value": "opensean"},
@@ -234,8 +234,8 @@ class TestSchemaMutations:
 
 
         import json
-        input_dict = {"type": "text.TextDataSet", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataSet", "filepath": str(mock_text_out)}
+        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
+        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         resp = await mock_app.schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
@@ -300,8 +300,8 @@ class TestSchemaMutations:
 
 
         import json
-        input_dict = {"type": "text.TextDataSet", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataSet", "filepath": str(mock_text_out)}
+        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
+        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         resp = await mock_app.schema.execute(self.mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",

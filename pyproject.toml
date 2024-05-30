@@ -4,7 +4,7 @@ authors = [
     {name = "opensean"}
 ]
 description = "A kedro plugin for serving any kedro project as a GraphQL api"
-requires-python = ">=3.10, <3.11"
+requires-python = ">=3.10, <3.12"
 keywords = [
     "pipelines",
     "machine learning",
@@ -41,7 +41,7 @@ dependencies = {file = "src/requirements.txt"}
 [tool.kedro]
 package_name = "kedro_graphql"
 project_name = "kedro-graphql"
-kedro_init_version = "0.18.4"
+kedro_init_version = "0.19.6"
 
 [tool.isort]
 profile = "black"

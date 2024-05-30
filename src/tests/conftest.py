@@ -88,8 +88,8 @@ def mock_text_out_tsv(tmp_path):
 @pytest.fixture
 def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
-    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
+    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
@@ -126,8 +126,8 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 @pytest.fixture
 def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "type": "text.TextDataSet", "filepath": str(mock_text_in)}]
-    outputs = [{"name":"text_out", "type": "text.TextDataSet", "filepath": str(mock_text_out)}]
+    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
