@@ -18,14 +18,14 @@ def init_app(app, config, session):
 
 def start_app(app, config, conf_source, env, package_name, project_path):
     bootstrap_project(project_path) 
-    with KedroSession.create(package_name, project_path = project_path, env = env, conf_source = conf_source) as session:
+    with KedroSession.create(project_path = project_path, env = env, conf_source = conf_source) as session:
         a = init_app(app, config, session)
         uvicorn.run(a, host="0.0.0.0", port=5000, log_level="info")
 
 def start_worker(app, config, conf_source, env, package_name, project_path):
 
     bootstrap_project(project_path) 
-    with KedroSession.create(package_name, project_path = project_path, env = env, conf_source = conf_source) as session:
+    with KedroSession.create(project_path = project_path, env = env, conf_source = conf_source) as session:
         a = init_app(app, config, session)
         from .celeryapp import celery_app
         capp = celery_app(a.config, a.backend)
