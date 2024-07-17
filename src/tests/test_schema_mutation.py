@@ -159,7 +159,7 @@ class TestSchemaMutations:
                                     variable_values = {"pipeline": {
                                       "name": "example00",
                                       "inputs": [{"name": "text_in", 
-                                                  "type": "pandas.CSVDataSet", 
+                                                  "type": "pandas.CSVDataset", 
                                                   "filepath": str(mock_text_in_tsv),
                                                   "loadArgs":[
                                                       {"name": "sep", "value": "\t"}
@@ -169,7 +169,7 @@ class TestSchemaMutations:
                                                   ]
                                                 }],
                                       "outputs": [{"name": "text_out", 
-                                                   "type": "pandas.CSVDataSet", 
+                                                   "type": "pandas.CSVDataset", 
                                                    "filepath": str(mock_text_out_tsv),
                                                    "loadArgs":[
                                                       {"name": "sep", "value": "\t"}
