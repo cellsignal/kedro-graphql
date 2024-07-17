@@ -17,7 +17,8 @@ class KedroGraphqlTask(Task):
     @property
     def db(self):
         if self._db is None:
-            self._db = self._app.kedro_graphql_backend
+            #self._db = self._app.kedro_graphql_backend
+            self._db = self.app.kedro_graphql_backend
         return self._db
 
     def before_start(self, task_id, args, kwargs):

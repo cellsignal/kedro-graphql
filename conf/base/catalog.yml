@@ -3,9 +3,9 @@
 # Documentation for this file format can be found in "The Data Catalog"
 # Link: https://kedro.readthedocs.io/en/stable/data/data_catalog.html
 text_in:
-  type: text.TextDataSet
+  type: text.TextDataset
   filepath: ./data/01_raw/text_in.txt
 
 text_out:
-  type: text.TextDataSet
+  type: text.TextDataset
   filepath: ./data/02_intermediate/text_out.txt

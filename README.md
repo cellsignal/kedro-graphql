@@ -513,10 +513,14 @@ After this, if you'd like to update your project requirements, please update `sr
 - support passing credentials via api
 
 
-## Deprecations
+## Changelog
+
+
 
 ### v0.5.0
 
+- support python3.11
+- support kedro ~=0.19.6
 
 #### DataSet and DataSetInput types
 

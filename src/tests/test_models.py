@@ -16,7 +16,7 @@ class TestDataSet:
 
     def test_serialize(self):
         params = {"name": "text_in", 
-                  "type": "text.TextDataSet", 
+                  "type": "text.TextDataset", 
                   "filepath": "/tmp/test_in.csv",
                   "load_args":[Parameter(**{
                     "name": "delimiter",
@@ -28,7 +28,7 @@ class TestDataSet:
                   })]}
 
         expected = {"text_in":{ 
-                      "type": "text.TextDataSet", 
+                      "type": "text.TextDataset", 
                       "filepath": "/tmp/test_in.csv",
                       "load_args":{
                         "delimiter" :"\t" 

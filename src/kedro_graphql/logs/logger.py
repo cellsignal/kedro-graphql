@@ -25,6 +25,8 @@ class RedisLogStreamPublisher(object):
             self.connection.expire(self.topic, 86400)
 
     def publish(self, data):
+        data = {k:(str(v) if isinstance(v, bool) else v) for k,v in data.items()}
+        #print("PUBLISHING", type(data), data)
         self.connection.xadd(self.topic, data)
 
 class RedisLogStreamSubscriber(object):
