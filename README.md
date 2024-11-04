@@ -1,4 +1,10 @@
-# kedro-graphql
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/light-logo.png">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/dark-logo.png">
+    <img src="docs/light-logo.png" alt="KedroGraphQL Light Logo">
+  </picture>
+</p>
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/opensean/kedro-graphql)
 
