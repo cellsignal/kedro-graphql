@@ -30,6 +30,7 @@ class PipelineCards(pn.viewable.Viewer):
 
 
     def __panel__(self):
+
         plugins =  self._get_gql_forms()
         cards = []
         for pipeline, forms in plugins.items():

@@ -8,7 +8,14 @@ import numpy as np
 pn.extension('tabulator')
 
 class PipelineSearch(pn.viewable.Viewer):
-    #client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
+  
+    def navigate(self, event, df):
+            ## event.column and event.row are accessible
+            print("EVENT", event)
+            if event.column == "Open":
+                pn.state.location.pathname = "/pipelines/data/" + df.loc[event.row, "name"]
+                pn.state.location.search = "?id=" + df.loc[event.row, "id"]
+                pn.state.location.reload = True
 
     def __panel__(self):
 
@@ -17,28 +24,33 @@ class PipelineSearch(pn.viewable.Viewer):
         ## logic to build form here
 
         ## an example
+
         df = pd.DataFrame({
-            'int': [1, 2, 3],
-            'float': [3.14, 6.28, 9.42],
-            'str': ['A', 'B', 'C'],
-            'bool': [True, False, True],
-            'date': [dt.date(2019, 1, 1), dt.date(2020, 1, 1), dt.date(2020, 1, 10)],
-            'datetime': [dt.datetime(2019, 1, 1, 10), dt.datetime(2020, 1, 1, 12), dt.datetime(2020, 1, 10, 13)]
-        }, index=[1, 2, 3])
-        
-        
-        df_widget = pn.widgets.Tabulator(df, buttons={'Open': "<i class='fa fa-folder-open'></i>"})
+            'name': ["example00", "example01", "example00"],
+            'id': ["0000000000001", "0000000000002", "0000000000003"],
+            'status': ['RUNNING', "SUCCESS" , "FAILED"],
+            'created': [dt.date(2019, 1, 1), dt.date(2020, 1, 1), dt.date(2020, 1, 10)],
+            'tag:submitted by': ["username", "username", "username"],
+        }, index=[0, 1, 2])
+ 
+        df_widget = pn.widgets.Tabulator(df, 
+                                         buttons={'Open': "<i class='fa fa-folder-open'></i>"}, 
+                                         theme='materialize', 
+                                         show_index=False)
+
+        df_widget.on_click(
+            lambda e: self.navigate(e, df)
+        )
+ 
         
         return pn.Row(
             pn.Card("Search for a pipeline", 
                     pn.Row(
                       pn.widgets.TextInput(name='Text Input', placeholder='Enter a string here...'),
+                      pn.widgets.Button(name='Search', button_type='success'), 
                     ),
                     pn.Row(
                       df_widget
-                    ),
-                    pn.Row(
-                      pn.widgets.Button(name='Open', button_type='success'), 
                     ),
                     sizing_mode = "stretch_width",
                     title='Search'),

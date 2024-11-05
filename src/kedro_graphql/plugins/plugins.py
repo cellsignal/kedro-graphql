@@ -61,25 +61,46 @@ import param
 import panel as pn
 from kedro_graphql.models import Pipeline
 from kedro_graphql.config import config
-from kedro_graphql.viz.decorators import gql_form
-from kedro_graphql.viz.components.template import KedroGraphqlMaterialTemplate
+from kedro_graphql.viz.decorators import viz_data, viz_form
+from kedro_graphql.viz.client import KedroGraphqlClient
+from kedro_graphql.models import PipelineInput
+import json
 
-@gql_form(pipeline = "example00")
+@viz_form(pipeline = "example00")
 class Example00PipelineFormV1(pn.viewable.Viewer):
-#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
-    config = param.Dict()
-    pipeline_name = param.String()
-    monitor_pathname = param.String()
+    name = param.String()
     form = param.String()
+    monitor_pathname = "/pipelines/monitor"
+    client = KedroGraphqlClient()
 
-    def navigate(self, event):
-            ## NEEDS WORK 
-            pn.state.location.pathname = self.monitor_pathname
-            pn.state.location.reload = True
+    async def run(self, event):
+
+        input_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/01_raw/text_in.txt"}
+        output_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/02_intermediate/text_out.txt"}
+        
+        ## PipelineInput object
+        p = PipelineInput(**{
+                          "name": "example00",
+                          "data_catalog":[{"name": "text_in", "config": json.dumps(input_dict)},
+                                          {"name": "text_out", "config": json.dumps(output_dict)}],
+                          "parameters": [{"name":"example", "value":"hello"},
+                                         {"name": "duration", "value": "3", "type": "FLOAT"}],
+                          "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
+                         })
+        
+        
+        
+        result = await self.client.createPipeline(p)
+        self.navigate(result.id)
+
+    def navigate(self, pipeline_id: str):
+        pn.state.location.pathname = self.monitor_pathname
+        pn.state.location.search = "?pipeline="+self.name+"&id="+ pipeline_id
+        pn.state.location.reload = True
     
     def __panel__(self):
         run_button = pn.widgets.Button(name='Run', button_type='success')
-        pn.bind(self.navigate, run_button, watch=True)
+        pn.bind(self.run, run_button, watch=True)
         return pn.Card("An example pipeline form.", 
             pn.Row(
               pn.widgets.TextInput(name='Text Input', placeholder='Enter a string here...'),
@@ -90,23 +111,41 @@ class Example00PipelineFormV1(pn.viewable.Viewer):
             sizing_mode = "stretch_width",
             title='Form')
         
-@gql_form(pipeline = "example00")
+@viz_form(pipeline = "example01")
 class Example00PipelineFormV2(pn.viewable.Viewer):
-#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
-    config = param.Dict()
-    pipeline_name = param.String()
-    monitor_pathname = param.String()
+    name = param.String()
     form = param.String()
+    monitor_pathname = "/pipelines/monitor"
+    client = KedroGraphqlClient()
 
-    def navigate(self, event):
-        ## NEEDS WORK 
+    def navigate(self, pipeline_id):
         pn.state.location.pathname = self.monitor_pathname
+        pn.state.location.search = "?pipeline="+self.name+"&id="+ pipeline_id
         pn.state.location.reload = True
- 
-    
+
+    async def run(self, event):
+        
+        input_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/01_raw/text_in.txt"}
+        output_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/02_intermediate/text_out.txt"}
+        
+        ## PipelineInput object
+        p = PipelineInput(**{
+                          "name": "example00",
+                          "data_catalog":[{"name": "text_in", "config": json.dumps(input_dict)},
+                                          {"name": "text_out", "config": json.dumps(output_dict)}],
+                          "parameters": [{"name":"example", "value":"hello"},
+                                         {"name": "duration", "value": "3", "type": "FLOAT"}],
+                          "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
+                         })
+        
+        
+        
+        result = await self.client.createPipeline(p)
+        self.navigate(result.id)
+
     def __panel__(self):
         run_button = pn.widgets.Button(name='Run', button_type='success')
-        pn.bind(self.navigate, run_button, watch=True)
+        pn.bind(self.run, run_button, watch=True)
         return pn.Card("Another example pipeline form.", 
             pn.Row(
               pn.widgets.TextInput(name='Text Input', placeholder='Enter a string here...'),
@@ -122,4 +161,72 @@ class Example00PipelineFormV2(pn.viewable.Viewer):
             ),
             sizing_mode = "stretch_width",
             title='Form')
+ 
+
+from bokeh.plotting import figure
+import datetime as dt
+import pandas as pd
+
+@viz_data(pipeline = "example00")
+class Example00DataV0(pn.viewable.Viewer):
+#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
+    config = param.Dict()
+    pipeline_name = param.String()
+    pipeline_id = param.String()
+    display_name = "Summary"
+
+    def __panel__(self):
+
+        
+        df = pd.DataFrame({
+            'name': ["example00"],
+            'id': ["0000000000001"],
+            'status': ['RUNNING'],
+            'created': [dt.date(2019, 1, 1)],
+            'tag:submitted by': ["username"],
+        }, index=[0])
+        
+        
+        df_widget = pn.widgets.Tabulator(df, 
+                                         theme='materialize',
+                                         show_index=False)
+        
+        return df_widget
+ 
+
+@viz_data(pipeline = "example00")
+class Example00DataV1(pn.viewable.Viewer):
+#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
+    config = param.Dict()
+    pipeline_name = param.String()
+    pipeline_id = param.String()
+    display_name = "Analysis 1"
+
+    def __panel__(self):
+
+        p1 = figure(height=250, sizing_mode='stretch_width', margin=5)
+        p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
+        
+        p1.line([1, 2, 3], [1, 2, 3])
+        p2.circle([1, 2, 3], [1, 2, 3])
+        
+        return pn.Card(p1, pn.layout.Divider(), p2, title="An example pipeline dashboard", sizing_mode='stretch_width')
+       
+@viz_data(pipeline = "example00")
+class Example00DataV2(pn.viewable.Viewer):
+#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
+    config = param.Dict()
+    pipeline_name = param.String()
+    pipeline_id = param.String()
+    display_name = "Analysis 2"
+
+    def __panel__(self):
+
+        p1 = figure(height=250, sizing_mode='stretch_width', margin=5)
+        p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
+        
+        p1.line([1, 2, 3], [1, 2, 3])
+        p2.circle([1, 2, 3], [1, 2, 3])
+        
+        return pn.Card(p1, pn.layout.Divider(), p2, title="Another example pipeline dashboard", sizing_mode='stretch_width')
  

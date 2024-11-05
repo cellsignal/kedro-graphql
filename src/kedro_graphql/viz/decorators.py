@@ -2,7 +2,7 @@ from importlib import import_module
 from kedro_graphql.logs.logger import logger
 
 VIZ_PLUGINS = {"FORMS":{},
-               "DATA_EXPLORERS":{}
+               "DATA":{}
               }
 
 def discover_plugins(config):
@@ -12,7 +12,7 @@ def discover_plugins(config):
     for i in imports:
         import_module(i)
 
-def gql_form(pipeline):
+def viz_form(pipeline):
     """
     Args:
         pipeline (str): name of pipeline.
@@ -22,22 +22,22 @@ def gql_form(pipeline):
             VIZ_PLUGINS["FORMS"][pipeline].append(plugin_class)
         else:
             VIZ_PLUGINS["FORMS"][pipeline] = [plugin_class]
-        logger.info("registered 'gql_form' plugin: " + str(plugin_class))
+        logger.info("registered 'viz_form' plugin: " + str(plugin_class))
         return plugin_class
 
     return register_plugin
 
-def gql_data_explorer(pipeline):
+def viz_data(pipeline):
     """
     Args:
         pipeline (str): name of pipeline
     """
     def register_plugin(plugin_class):
-        if VIZ_PLUGINS["DATA_EXPLORERS"].get(pipeline, False):
-            VIZ_PLUGINS["DATA_EXPLORERS"][pipeline].append(plugin_class)
+        if VIZ_PLUGINS["DATA"].get(pipeline, False):
+            VIZ_PLUGINS["DATA"][pipeline].append(plugin_class)
         else:
-            VIZ_PLUGINS["DATA_EXPLORERS"][pipeline] = [plugin_class]
-        logger.info("registered 'gql_data_explorer' plugin: " + str(plugin_class))
+            VIZ_PLUGINS["DATA"][pipeline] = [plugin_class]
+        logger.info("registered 'viz_data' plugin: " + str(plugin_class))
         return plugin_class
 
     return register_plugin
