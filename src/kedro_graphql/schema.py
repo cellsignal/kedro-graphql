@@ -162,6 +162,17 @@ class Mutation:
         #p.kedro_catalog = info.context["request"].app.kedro_catalog
         #p.kedro_parameters = info.context["request"].app.kedro_parameters
         return p
+    
+    @strawberry.mutation(description = "Update a pipeline.")
+    def updatePipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
+
+        pipeline_input_dict = jsonable_encoder(pipeline)
+        # Only update the keys in PipelineInput that have been supplied
+        # The key "name" is immutable and should never been updated
+        p = info.context["request"].app.backend.update(id=id, values={k: v for k, v in pipeline_input_dict.items() if k != "name" and v is not None})
+
+        return  p
+
 
 
 @strawberry.type
