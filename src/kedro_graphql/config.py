@@ -15,6 +15,8 @@ config = {
             "KEDRO_GRAPHQL_ENV": "local",
             "KEDRO_GRAPHQL_CONF_SOURCE": None,
             "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
+            "KEDRO_GRAPHQL_VIZ_API_ENDPOINT": "http://localhost:5000/graphql",
+            "KEDRO_GRAPHQL_VIZ_WS_ENDPOINT": "ws://localhost:5000/graphql",
             #"KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
             }
 

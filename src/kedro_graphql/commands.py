@@ -107,6 +107,13 @@ def commands():
     help="Path to watch for file changes, defaults to <project path>/src"
 )
 @click.option(
+    "--viz",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Start a viz app."
+)
+@click.option(
     "--worker",
     "-w",
     is_flag=True,
@@ -115,7 +122,7 @@ def commands():
 )
 
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source, 
-        env, imports, mongo_uri, mongo_db_name, runner, reload, reload_path, worker):
+        env, imports, mongo_uri, mongo_db_name, runner, reload, reload_path, viz, worker):
     """Commands for working with kedro-graphql."""
 
     config.update({
@@ -136,7 +143,14 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
     if reload:
         logger.info("AUTO-RELOAD ACTIVATED, watching '" + str(reload_path) + "' for changes")
 
-    if worker:
+    if viz:
+        from .viz.app import start_viz
+        if reload:
+            run_process(str(reload_path), target = start_viz)
+        else:
+            start_viz()
+
+    elif worker:
         if reload:
             run_process(str(reload_path), target = start_worker, args = (app, config, conf_source, env, metadata.package_name, metadata.project_path))
         else:
@@ -147,21 +161,4 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
             run_process(reload_path, target = start_app, args = (app, config, conf_source, env, metadata.package_name, metadata.project_path))
         else:
             start_app(app, config, conf_source, env, metadata.package_name, metadata.project_path)
-
-    ##with KedroSession.create(metadata.package_name, project_path=metadata.project_path, env = env, conf_source = conf_source) as session:
-    ##    ## create app instance
-    ##    module, class_name = app.rsplit(".", 1)
-    ##    module = import_module(module)
-    ##    class_inst = getattr(module, class_name)
-    ##    a = class_inst(kedro_session = session, config = config) 
-  
-    ##    if worker:
-    ##        from .celeryapp import celery_app
-    ##        capp = celery_app(a.config, a.backend)
-    ##        worker = capp.Worker()
-    ##        worker.start()
-    ##    else:
-
-    ##        uvicorn.run(a, host="0.0.0.0", port=5000, log_level="info")
-                
 

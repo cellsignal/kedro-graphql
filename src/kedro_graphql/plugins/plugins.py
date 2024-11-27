@@ -75,8 +75,8 @@ class Example00PipelineFormV1(pn.viewable.Viewer):
 
     async def run(self, event):
 
-        input_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/01_raw/text_in.txt"}
-        output_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/02_intermediate/text_out.txt"}
+        input_dict = {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.txt"}
+        output_dict = {"type": "text.TextDataset", "filepath": "./data/02_intermediate/text_out.txt"}
         
         ## PipelineInput object
         p = PipelineInput(**{
@@ -125,8 +125,8 @@ class Example00PipelineFormV2(pn.viewable.Viewer):
 
     async def run(self, event):
         
-        input_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/01_raw/text_in.txt"}
-        output_dict = {"type": "text.TextDataset", "filepath": "/home/seanlandry/dev/kgql-client/kedro-graphql/data/02_intermediate/text_out.txt"}
+        input_dict = {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.txt"}
+        output_dict = {"type": "text.TextDataset", "filepath": "./data/02_intermediate/text_out.txt"}
         
         ## PipelineInput object
         p = PipelineInput(**{

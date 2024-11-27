@@ -1,0 +1,76 @@
+version: '3.8'
+services:
+  gql-viz:
+    image: kedro-graphql:latest
+    restart: always
+    ports:
+      - '5006:5006'
+    command: "kedro gql --viz"
+    build:
+      context: .
+    environment:
+      KEDRO_GRAPHQL_VIZ_API_ENDPOINT: "http://gql-api:5000/graphql"
+      KEDRO_GRAPHQL_VIZ_WS_ENDPOINT: "ws://gql-api:5000/graphql"
+  gql-api:
+    image: kedro-graphql:latest
+    restart: always
+    ports:
+      - '5000:5000'
+    command: "kedro gql"
+    build:
+      context: .
+    environment:
+      KEDRO_GRAPHQL_BROKER: "redis://redis"
+      KEDRO_GRAPHQL_CELERY_RESULT_BACKEND: "redis://redis"
+      MONGO_URI: "mongodb://root:example@mongo:27017/"
+  gql-worker:
+    image: kedro-graphql:latest
+    restart: always
+    command: "kedro gql -w"
+    build:
+      context: .
+    volumes:
+      - ./data:/opt/kedro-graphql/data
+    environment:
+      KEDRO_GRAPHQL_BROKER: "redis://redis"
+      KEDRO_GRAPHQL_CELERY_RESULT_BACKEND: "redis://redis"
+      MONGO_URI: "mongodb://root:example@mongo:27017/"
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning 
+    #volumes: 
+    # - cache:/data
+  redis-commander:
+    hostname: redis-commander
+    image: ghcr.io/joeferner/redis-commander:0.8.1
+    restart: always
+    environment:
+    - REDIS_HOSTS=local:redis:6379
+    ports:
+    - "8081:8081"
+  mongo:
+    image: mongo:4.2.24
+    restart: always
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+  
+  mongo-express:
+    image: mongo-express:0.54.0
+    restart: always
+    ports:
+      - 8082:8081
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+    depends_on:
+      - mongo
+volumes:
+  cache:
+    driver: local

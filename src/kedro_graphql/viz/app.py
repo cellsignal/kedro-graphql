@@ -24,11 +24,12 @@ def pipeline_monitor():
     template.main.append(PipelineMonitor())
     return template
 
-apps = {
-    '/pipelines/cards': pipeline_cards,
-    '/pipelines/search': pipeline_search,
-    '/pipelines/monitor': pipeline_monitor
-}
+def app_factory():
+    return {
+        '/pipelines/cards': pipeline_cards,
+        '/pipelines/search': pipeline_search,
+        '/pipelines/monitor': pipeline_monitor
+    }
 
 def build_form_plugin(form, name = None):
    template = KedroGraphqlMaterialTemplate().__panel__()
@@ -59,12 +60,15 @@ def discover_apps(apps):
         apps["pipelines/data/"+k] = build_data_plugin(v, pipeline_name = k)
     return apps
 
-if __name__ == "__main__":
+def start_viz():
     #pn.config.reuse_sessions = True
     pn.config.admin = True
     #pn.config.global_loading_spinner = True
 
 
-    apps = discover_apps(apps)
+    apps = discover_apps(app_factory())
     #apps.servable()
     pn.serve(apps, admin = True, port=5006)
+
+if __name__ == "__main__":
+    start_viz()

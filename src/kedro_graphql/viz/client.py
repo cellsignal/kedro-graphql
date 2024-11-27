@@ -4,6 +4,7 @@ from gql.transport.websockets import WebsocketsTransport
 from kedro_graphql.models import PipelineInput, Pipeline, PipelineEvent, PipelineLogMessage
 from fastapi.encoders import jsonable_encoder
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
+from kedro_graphql.config import config
 
 class KedroGraphqlClient():
 
@@ -13,8 +14,10 @@ class KedroGraphqlClient():
             url (str): Url to api [default: http://localhost:5000/graphql]
         
         """
-        self.url = url or "http://localhost:5000/graphql"
-        self.ws = ws or "ws://localhost:5000/graphql"
+        ##self.url = url or "http://localhost:5000/graphql" config["KEDRO_GRAPHQL_VIZ_API_ENDPOINT"]
+        ##self.ws = ws or "ws://localhost:5000/graphql" config["KEDRO_GRAPHQL_VIZ_WS_ENDPOINT"]
+        self.url = url or config["KEDRO_GRAPHQL_VIZ_API_ENDPOINT"]
+        self.ws = ws or config["KEDRO_GRAPHQL_VIZ_WS_ENDPOINT"]
         self._aio_transport = AIOHTTPTransport(url=self.url) 
         self._web_transport = WebsocketsTransport(url=self.ws) 
         self._aio_client = Client(transport=self._aio_transport)
