@@ -217,8 +217,8 @@ class DataSet:
 
             return DataSet(
                 name = payload["name"],
-                type = payload["type"],
-                filepath = payload["filepath"],
+                type = payload.get("type", None),
+                filepath = payload.get("filepath", None),
                 save_args = save_args,
                 load_args = load_args
             )
@@ -363,6 +363,7 @@ class PipelineTemplates:
 @strawberry.input(description = "PipelineInput")
 class PipelineInput:
     name: str
+    parent: Optional[uuid.UUID] = None
     parameters: Optional[List[ParameterInput]] = None
     inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
@@ -372,7 +373,7 @@ class PipelineInput:
     #credentials_nested: Optional[List[CredentialNestedInput]] = None
 
     @staticmethod
-    def create(name = None, data_catalog = None, parameters = None, tags = None):
+    def create(name = None, parent = None, data_catalog = None, parameters = None, tags = None):
         """
         Example usage:
 
@@ -438,6 +439,7 @@ class PipelineInput:
             parameters = ParameterInput.create(parameters)
 
         return PipelineInput(name = name,
+                             parent = parent,
                              parameters = parameters,
                              data_catalog = data_catalog,
                              tags = tags)
@@ -452,6 +454,7 @@ class Pipeline:
     kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
 
     id: Optional[uuid.UUID] = None
+    parent: Optional[uuid.UUID] = None
     inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     name: str
     outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
@@ -543,6 +546,7 @@ class Pipeline:
 
         return Pipeline(
             id = payload.get("id", None),
+            parent = payload.get("parent", None),
             name = payload["name"],
             inputs = inputs,
             outputs = outputs,
@@ -563,8 +567,8 @@ class Pipeline:
 @strawberry.type
 class Pipelines:
     pipelines: List[Pipeline] = strawberry.field(description="The list of pipeline instances.")
-
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
+
 @strawberry.type
 class PipelineEvent:
     id: str

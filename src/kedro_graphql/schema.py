@@ -48,7 +48,6 @@ class Query:
     @strawberry.field(description="Get a list of pipeline templates.")
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
         if cursor is not None:
-            # decode the user ID from the given cursor.
             pipe_id = ObjectId(decode_cursor(cursor=cursor))
         else:
             pipe_id = ObjectId("100000000000000000000000") ## unix epoch Jan 1, 1970 as objectId

@@ -1,16 +1,16 @@
 version: '3.8'
 services:
-  gql-viz:
-    image: kedro-graphql:latest
-    restart: always
-    ports:
-      - '5006:5006'
-    command: "kedro gql --viz"
-    build:
-      context: .
-    environment:
-      KEDRO_GRAPHQL_VIZ_API_ENDPOINT: "http://gql-api:5000/graphql"
-      KEDRO_GRAPHQL_VIZ_WS_ENDPOINT: "ws://gql-api:5000/graphql"
+##  gql-viz:
+##    image: kedro-graphql:latest
+##    restart: always
+##    ports:
+##      - '5006:5006'
+##    command: "kedro gql --viz"
+##    build:
+##      context: .
+##    environment:
+##      KEDRO_GRAPHQL_VIZ_API_ENDPOINT: "http://gql-api:5000/graphql"
+##      KEDRO_GRAPHQL_VIZ_WS_ENDPOINT: "ws://gql-api:5000/graphql"
   gql-api:
     image: kedro-graphql:latest
     restart: always

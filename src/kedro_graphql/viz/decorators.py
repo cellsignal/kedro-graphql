@@ -34,9 +34,11 @@ def viz_data(pipeline):
     """
     def register_plugin(plugin_class):
         if VIZ_PLUGINS["DATA"].get(pipeline, False):
-            VIZ_PLUGINS["DATA"][pipeline].append(plugin_class)
+            #VIZ_PLUGINS["DATA"][pipeline].append(plugin_class)
+            VIZ_PLUGINS["DATA"][pipeline] = plugin_class
         else:
-            VIZ_PLUGINS["DATA"][pipeline] = [plugin_class]
+            #VIZ_PLUGINS["DATA"][pipeline] = [plugin_class]
+            VIZ_PLUGINS["DATA"][pipeline] = plugin_class
         logger.info("registered 'viz_data' plugin: " + str(plugin_class))
         return plugin_class
 

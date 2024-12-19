@@ -1,7 +1,7 @@
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.websockets import WebsocketsTransport
-from kedro_graphql.models import PipelineInput, Pipeline, PipelineEvent, PipelineLogMessage
+from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PageMeta, PipelineEvent, PipelineLogMessage
 from fastapi.encoders import jsonable_encoder
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 from kedro_graphql.config import config
@@ -159,6 +159,66 @@ class KedroGraphqlClient():
             result = await gql_session.execute(query, variable_values={"pipeline":pipeline})
             result = {to_snake_case(k):v for k,v in result["pipeline"].items()}
             return Pipeline.from_dict(result)
+
+    async def readPipelines(self, limit: int, cursor: str = None, filter: str = None):
+    
+        # Using `async with` on the client will start a connection on the transport
+        # and provide a `session` variable to execute queries on this connection
+        async with Client(
+            transport=self._aio_transport,
+        ) as gql_session: 
+            # Execute query
+            query = gql(
+                """
+                query readPipelines($limit: Int!, $cursor: String, $filter: String!) {
+                  pipelines(limit: $limit, cursor: $cursor, filter: $filter) { 
+                    pageMeta {
+                      nextCursor
+                    }
+                    pipelines {
+                      id
+                      parent
+                      name
+                      dataCatalog {
+                        name
+                        config
+                      }
+                      inputs {
+                        name
+                        config
+                      }
+                      outputs {
+                        name
+                        config
+                      }
+                      parameters {
+                        name
+                        value
+                      }
+                      status
+                      tags {
+                        key
+                        value
+                      }
+                      taskId
+                      taskName
+                      taskArgs
+                      taskKwargs
+                      taskRequest
+                      taskException
+                      taskTraceback
+                      taskEinfo
+                      taskResult
+                    }
+                  }
+                }
+            """
+            )
+            result = await gql_session.execute(query, variable_values={"limit":limit, "cursor":cursor, "filter":filter})
+            meta = {to_snake_case(k):v for k,v in result["pipelines"]["pageMeta"].items()}
+            pipelines = [{to_snake_case(k):v for k,v in p.items()} for p in result["pipelines"]["pipelines"]]
+            return Pipelines(page_meta = PageMeta(**meta),
+                             pipelines = [Pipeline.from_dict(p) for p in pipelines])
 
     async def pipelineEvents(self, pipeline: str):
     

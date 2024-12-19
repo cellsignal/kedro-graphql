@@ -4,12 +4,22 @@ import param
 
 
 
-class KedroGraphqlMaterialTemplate(pn.viewable.Viewer):
+class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
     config = param.Dict()
     pipelines_pathname = param.String(default = "/pipelines/cards")
     search_pathname = param.String(default = "/pipelines/search")
     monitor_pathname = param.String(default = "/pipelines/monitor")
 
+    def __init__(self):
+        pipelines_button = pn.widgets.Button(name='Pipelines', button_type='primary', sizing_mode="stretch_width")
+        search_button = pn.widgets.Button(name='Search', button_type='primary', sizing_mode="stretch_width")
+        pn.bind(self.navigate, pipelines_button, name = "pipelines", watch=True),
+        pn.bind(self.navigate, search_button, name = "search", watch=True),
+        sidebar = [
+          pipelines_button,
+          search_button,
+        ]
+        super().__init__(title = "kedro-graphql", sidebar = sidebar)
 
     def navigate(self, event, name = None):
         if name == "pipelines":
@@ -20,26 +30,3 @@ class KedroGraphqlMaterialTemplate(pn.viewable.Viewer):
             pn.state.location.pathname = self.search_pathname
             pn.state.location.search = ''
             pn.state.location.reload = True
-
-
-
-
-
-
-
-    def __panel__(self):
-
-        pipelines_button = pn.widgets.Button(name='Pipelines', button_type='primary', sizing_mode="stretch_width")
-        search_button = pn.widgets.Button(name='Search', button_type='primary', sizing_mode="stretch_width")
-        pn.bind(self.navigate, pipelines_button, name = "pipelines", watch=True),
-        pn.bind(self.navigate, search_button, name = "search", watch=True),
-        sidebar = [
-          pipelines_button,
-          search_button,
-        ]
-        
-        template = pn.template.MaterialTemplate(
-            title='kedro-graphql',
-            sidebar=sidebar
-        )
-        return template
