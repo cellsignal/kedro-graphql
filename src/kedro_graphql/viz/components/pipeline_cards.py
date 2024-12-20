@@ -2,15 +2,13 @@
 import param
 #from kedro_graphql.client import KedroGraphqlClient
 import panel as pn
-from kedro_graphql.models import Pipeline
 from kedro_graphql.viz.decorators import discover_plugins, VIZ_PLUGINS
 from kedro_graphql.config import config
-from kedro_graphql.logs.logger import logger
 
 class PipelineCards(pn.viewable.Viewer):
 #    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
     config = param.Dict()
-    form_pathname = param.String(default = "/pipelines/forms")
+    pathname_form = param.String(default = "/pipeline/form")
 
     def _get_gql_forms(self):
         """
@@ -25,7 +23,8 @@ class PipelineCards(pn.viewable.Viewer):
         return VIZ_PLUGINS["FORMS"]
     
     def navigate(self, event, pipeline = None, form = None):
-            pn.state.location.pathname = self.form_pathname + "/" + pipeline + "/" + form.__name__
+            pn.state.location.pathname = self.pathname_form
+            pn.state.location.search = "?pipeline=" + pipeline + "&form=" + form.__name__
             pn.state.location.reload = True
 
 

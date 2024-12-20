@@ -2,18 +2,14 @@
 import panel as pn
 import param
 import pandas as pd
-import datetime as dt
-import numpy as np
 from kedro_graphql.viz.client import KedroGraphqlClient
-from kedro_graphql.models import Pipeline
+from kedro_graphql.config import config
 from fastapi.encoders import jsonable_encoder
 import json
-from bson.objectid import ObjectId
 
-pn.extension('tabulator')
+pn.extension('tabulator', css_files=["https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"])
 
 class PipelineSearch(pn.viewable.Viewer):
-  
     limit = param.Integer(default = 10)
     cursor = param.String(default = None)
     filter = param.String(default = "")
@@ -29,8 +25,8 @@ class PipelineSearch(pn.viewable.Viewer):
             ## event.column and event.row are accessible
             print("EVENT", event)
             if event.column == "Open":
-                pn.state.location.pathname = "/pipelines/data/" + df.loc[event.row, "name"]
-                pn.state.location.search = "?id=" + df.loc[event.row, "id"]
+                pn.state.location.pathname = config['KEDRO_GRAPHQL_VIZ_BASEPATH'] + "/data"
+                pn.state.location.search = "?pipeline=" + df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
                 pn.state.location.reload = True
 
     def build_filter(self, raw):
@@ -67,6 +63,7 @@ class PipelineSearch(pn.viewable.Viewer):
             return json.dumps(filter)
 
     async def build_table(self, limit, filter, load_more, load_prev, show_lineage):
+        ## TO DO enable switching to a searchable dataset view grouped by pipeline
         client = KedroGraphqlClient()
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         f = self.build_filter(filter)
@@ -110,8 +107,6 @@ class PipelineSearch(pn.viewable.Viewer):
             df = pd.DataFrame.from_records([jsonable_encoder(p) for p in result.pipelines]
                                            )
             
-            ## NEED TO HANDLE BATCH VIEW?
-
             ## flatten tags into seperate columns
             tags = []
             for index, row in df.iterrows():
@@ -178,6 +173,6 @@ class PipelineSearch(pn.viewable.Viewer):
                    pn.Row(
                         load_prev, load_more
                    ),
-                   styles ={"background": "white"},
+                   styles ={"background": None},
                    sizing_mode = "stretch_width"
                    )

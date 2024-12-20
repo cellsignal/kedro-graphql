@@ -2,32 +2,27 @@
 import panel as pn
 import param
 import pandas as pd
-import datetime as dt
-import numpy as np
-from kedro_graphql.viz.client import KedroGraphqlClient
 import json
 from fastapi.encoders import jsonable_encoder
+from kedro_graphql.models import Pipeline
 
 pn.extension('tabulator', 'ace', 'jsoneditor')
 
 
 
 class PipelineDetail(pn.viewable.Viewer):
-    id = param.String(default = '')
+    pipeline = param.ClassSelector(class_=Pipeline)
 
     async def build_detail(self, raw):
-        client = KedroGraphqlClient()
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        result = await client.readPipeline(self.id)
         ## NEED TO HANDLE BATCH VIEW
         ## MAYBE add Dataset browser for bulk select and download
         if "json" in raw:
-            yield pn.Row(pn.widgets.JSONEditor(value=jsonable_encoder(result), mode = "view", width=600))
+            yield pn.Row(pn.widgets.JSONEditor(value=jsonable_encoder(self.pipeline), mode = "view", width=600))
         else:
             param_df = pd.DataFrame({
-                        'name': [i.name for i in result.parameters],
-                        'value': [i.value for i in result.parameters],
-                    }, index=[i for i in range(len(result.parameters))])
+                        'name': [i.name for i in self.pipeline.parameters],
+                        'value': [i.value for i in self.pipeline.parameters],
+                    }, index=[i for i in range(len(self.pipeline.parameters))])
         
             param_widget = pn.widgets.Tabulator(param_df,
                                              disabled=True,
@@ -35,9 +30,9 @@ class PipelineDetail(pn.viewable.Viewer):
                                              show_index=False)
 
             tags_df = pd.DataFrame({
-                        'key': [i.key for i in result.tags],
-                        'value': [i.value for i in result.tags],
-                    }, index=[i for i in range(len(result.tags))])
+                        'key': [i.key for i in self.pipeline.tags],
+                        'value': [i.value for i in self.pipeline.tags],
+                    }, index=[i for i in range(len(self.pipeline.tags))])
         
             tags_widget = pn.widgets.Tabulator(tags_df,
                                              disabled=True,
@@ -46,9 +41,9 @@ class PipelineDetail(pn.viewable.Viewer):
 
 
             ds_df = pd.DataFrame({
-                        'name': [i.name for i in result.data_catalog],
-                        'type': [json.loads(i.config)["type"] for i in result.data_catalog],
-                    }, index=[i for i in range(len(result.data_catalog))])
+                        'name': [i.name for i in self.pipeline.data_catalog],
+                        'type': [json.loads(i.config)["type"] for i in self.pipeline.data_catalog],
+                    }, index=[i for i in range(len(self.pipeline.data_catalog))])
 
             ds_widget = pn.widgets.Tabulator(ds_df, 
                                              buttons={'Download': "<i class='fa fa-download'></i>"}, 
@@ -59,8 +54,8 @@ class PipelineDetail(pn.viewable.Viewer):
             ## in the future this be a list of PipelineStatus objects
             ## for now we grab each attribute from Pipeline object
 
-            keys = ["status","task_id", "task_name", "task_args", "task_kwargs", "task_request","task_excpetion", "task_traceback", "task_einfo", "task_result"]
-            values = [result.status, result.task_id, result.task_name, result.task_args, result.task_kwargs, result.task_request, result.task_exception, result.task_traceback, result.task_einfo, result.task_result]
+            keys = ["status","task_id", "task_name", "task_args", "task_kwargs", "task_request","task_excpetion", "task_traceback", "task_einfo", "task_self.pipeline"]
+            values = [self.pipeline.status, self.pipeline.task_id, self.pipeline.task_name, self.pipeline.task_args, self.pipeline.task_kwargs, self.pipeline.task_request, self.pipeline.task_exception, self.pipeline.task_traceback, self.pipeline.task_einfo, self.pipeline.task_result]
             status_df = pd.DataFrame({
                         'key': keys,
                         'value': values,

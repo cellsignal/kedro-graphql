@@ -1,24 +1,24 @@
-## some code commented out because it has not been implemented
 import panel as pn
 import param
 import pandas as pd
 import datetime as dt
-import numpy as np
 from kedro_graphql.viz.client import KedroGraphqlClient
+from kedro_graphql.config import config
+
 pn.extension('tabulator', css_files=["https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"])
 pn.extension('terminal')
 
 
 class PipelineMonitor(pn.viewable.Viewer):
-    pipeline = param.String()
     id = param.String()
+    pipeline = param.String()
 
     def navigate(self, event, df):
             ## event.column and event.row are accessible
             print("EVENT", event)
             if event.column == "Open":
-                pn.state.location.pathname = "/pipelines/data/" + df.loc[event.row, "name"]
-                pn.state.location.search = "?id=" + df.loc[event.row, "id"]
+                pn.state.location.pathname = config["KEDRO_GRAPHQL_VIZ_BASEPATH"] + "/data"
+                pn.state.location.search = "?pipeline=" + df.loc[event.row, "name"] + "&id=" + df.loc[event.row, "id"]
                 pn.state.location.reload = True
     
     async def build_table(self):

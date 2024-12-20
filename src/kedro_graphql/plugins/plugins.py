@@ -53,26 +53,20 @@ class ExampleSubscriptionTypePlugin():
             await asyncio.sleep(0.5)
 
 
-## viz plugin example
+## viz plugin examples
 
-## some code commented out because it has not been implemented
 import param
-#from kedro_graphql.client import KedroGraphqlClient
 import panel as pn
 from kedro_graphql.models import Pipeline
-from kedro_graphql.config import config
 from kedro_graphql.viz.decorators import viz_data, viz_form
 from kedro_graphql.viz.client import KedroGraphqlClient
-from kedro_graphql.viz.components.template import KedroGraphqlMaterialTemplate
 from kedro_graphql.models import PipelineInput
 import json
 
 @viz_form(pipeline = "example00")
 class Example00PipelineFormV1(pn.viewable.Viewer):
-    name = param.String()
-    form = param.String()
-    monitor_pathname = "/pipelines/monitor"
     client = KedroGraphqlClient()
+    pathname_monitor = param.String()
 
     async def run(self, event):
 
@@ -95,14 +89,13 @@ class Example00PipelineFormV1(pn.viewable.Viewer):
         self.navigate(result.id)
 
     def navigate(self, pipeline_id: str):
-        pn.state.location.pathname = self.monitor_pathname
+        pn.state.location.pathname = self.pathname_monitor
         pn.state.location.search = "?pipeline="+self.name+"&id="+ pipeline_id
         pn.state.location.reload = True
     
     def __panel__(self):
         run_button = pn.widgets.Button(name='Run', button_type='success')
         pn.bind(self.run, run_button, watch=True)
-        template = KedroGraphqlMaterialTemplate()
 
         form = pn.Card("An example pipeline form.", 
                pn.Row(
@@ -114,18 +107,16 @@ class Example00PipelineFormV1(pn.viewable.Viewer):
                sizing_mode = "stretch_width",
                title='Form')
 
-        template.main.append(form)
-        return template
+        return form
+
         
-@viz_form(pipeline = "example01")
+@viz_form(pipeline = "example00")
 class Example00PipelineFormV2(pn.viewable.Viewer):
-    name = param.String()
-    form = param.String()
-    monitor_pathname = "/pipelines/monitor"
     client = KedroGraphqlClient()
+    pathname_monitor = param.String()
 
     def navigate(self, pipeline_id):
-        pn.state.location.pathname = self.monitor_pathname
+        pn.state.location.pathname = self.pathname_monitor
         pn.state.location.search = "?pipeline="+self.name+"&id="+ pipeline_id
         pn.state.location.reload = True
 
@@ -133,8 +124,7 @@ class Example00PipelineFormV2(pn.viewable.Viewer):
         
         input_dict = {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.txt"}
         output_dict = {"type": "text.TextDataset", "filepath": "./data/02_intermediate/text_out.txt"}
-        
-        ## PipelineInput object
+
         p = PipelineInput(**{
                           "name": "example00",
                           "data_catalog":[{"name": "text_in", "config": json.dumps(input_dict)},
@@ -168,33 +158,21 @@ class Example00PipelineFormV2(pn.viewable.Viewer):
             sizing_mode = "stretch_width",
             title='Form')
 
-        template = KedroGraphqlMaterialTemplate()
-
-        template.main.append(form) 
-        return template
+        return form
  
  
 
 from bokeh.plotting import figure
 import datetime as dt
 import pandas as pd
-from kedro_graphql.viz.components.pipeline_detail import PipelineDetail
 
 @viz_data(pipeline = "example00")
-class Example00DataV1(pn.viewable.Viewer):
-#    client = param.ClassSelector(default=KedroGraphqlClient(), class_=KedroGraphqlClient)
-    config = param.Dict()
-    pipeline_name = param.String()
-    pipeline_id = param.String()
+class Example00Data00(pn.viewable.Viewer):
+    id = param.String(default = "")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    title = param.String(default = "Table 1")
 
     def __panel__(self):
-        template = KedroGraphqlMaterialTemplate()
-        tabs = pn.Tabs(dynamic=False)
-     
-        ## append data catalog tab first
-        catalog = PipelineDetail()
-        pn.state.location.sync(catalog, {"id": "id"})
-        tabs.append(("Pipeline Detail", catalog))
 
         df = pd.DataFrame({
             'name': ["example00"],
@@ -208,9 +186,17 @@ class Example00DataV1(pn.viewable.Viewer):
         df_widget = pn.widgets.Tabulator(df, 
                                          theme='materialize',
                                          show_index=False)
+        return pn.Card(df_widget, self.pipeline)
 
-        tabs.append(("Summary", df_widget)) 
- 
+
+@viz_data(pipeline = "example00")
+class Example00Data01(pn.viewable.Viewer):
+    id = param.String(default = "")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    title = param.String(default = "Plot 1")
+
+    def __panel__(self):
+
         p1 = figure(height=250, sizing_mode='stretch_width', margin=5)
         p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
         
@@ -218,7 +204,17 @@ class Example00DataV1(pn.viewable.Viewer):
         p2.circle([1, 2, 3], [1, 2, 3])
         
         c1 = pn.Card(p1, pn.layout.Divider(), p2, title="An example pipeline dashboard", sizing_mode='stretch_width')
-        tabs.append(("Analysis 1", c1))
+        return c1
+
+
+@viz_data(pipeline = "example00")
+class Example00Data01(pn.viewable.Viewer):
+    id = param.String(default = "")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    title = param.String(default = "Plot 2")
+
+    def __panel__(self):
+
 
         p3 = figure(height=250, sizing_mode='stretch_width', margin=5)
         p4 = figure(height=250, sizing_mode='stretch_width', margin=5)
@@ -227,7 +223,4 @@ class Example00DataV1(pn.viewable.Viewer):
         p4.circle([1, 2, 3], [1, 2, 3])
         
         c2 = pn.Card(p3, pn.layout.Divider(), p4, title="Another example pipeline dashboard", sizing_mode='stretch_width')
-        tabs.append(("Analysis 2", c2))
-
-        template.main.append(tabs) 
-        return template
+        return c2
