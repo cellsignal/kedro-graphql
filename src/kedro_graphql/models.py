@@ -5,6 +5,7 @@ import uuid
 import json
 from .config import config as CONFIG
 from bson.objectid import ObjectId
+from datetime import datetime
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -468,6 +469,7 @@ class Pipeline:
     task_traceback: Optional[str] = None
     task_einfo: Optional[str] = None
     task_result: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
@@ -558,6 +560,7 @@ class Pipeline:
             task_exception = payload.get("task_exception", None),
             task_traceback = payload.get("task_traceback", None),
             task_einfo = payload.get("task_einfo", None),
+            created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None
         )
 
 @strawberry.type

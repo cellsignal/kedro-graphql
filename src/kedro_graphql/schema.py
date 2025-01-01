@@ -10,6 +10,7 @@ from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
+from datetime import datetime
 
 
 def encode_cursor(id: int) -> str:
@@ -112,6 +113,7 @@ class Mutation:
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
         p.task_name = str(run_pipeline)
+        p.created_at = datetime.now()
 
         serial = p.serialize()
         ## credentials not supported yet
