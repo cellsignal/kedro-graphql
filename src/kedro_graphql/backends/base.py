@@ -20,7 +20,7 @@ class BaseBackend(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def list(self, cursor: uuid.UUID = None, limit: int = None, filter: str = None):
+    def list(self, cursor: uuid.UUID = None, limit: int = None, filter: str = None, sort: str = None):
         """List pipelines using cursor pagination"""
         raise NotImplementedError
 

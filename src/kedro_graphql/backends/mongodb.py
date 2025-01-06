@@ -5,6 +5,7 @@ import uuid
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 import json
+import ast
 
 
 class MongoBackend(BaseBackend):
@@ -25,13 +26,25 @@ class MongoBackend(BaseBackend):
         """Shutdown hook."""
         self.client.close()
 
-    def list(self, cursor: uuid.UUID = None, limit = 10, filter = ""):
+    def list(self, cursor: uuid.UUID = None, limit = 10, filter = "", sort = ""):
         query = {'_id': { '$gte': ObjectId(cursor)}}
         if len(filter) > 0:
             filter = json.loads(filter)
             query.update(filter)
         
-        raw = self.db["pipelines"].find(query).limit(limit)
+        if sort:
+            try:
+                sort = ast.literal_eval(sort)
+                # Validate that sort is a list of tuples like [('created_at', -1)]
+                if isinstance(sort, list) and all(isinstance(i, tuple) and len(i) == 2 for i in sort):
+                    raw = self.db["pipelines"].find(query).sort(sort).limit(limit)
+                else:
+                    raise ValueError("Sort parameter should be a list of tuples like [('field', order)]")
+            except (ValueError, SyntaxError) as e:
+                raise ValueError(f"Invalid sort parameter format: {e}")
+        else:
+            raw = self.db["pipelines"].find(query).limit(limit)
+
         results = []
         for r in raw:
             id = r.pop("_id")

@@ -10,6 +10,7 @@ from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
+from datetime import datetime
 
 
 def encode_cursor(id: int) -> str:
@@ -80,14 +81,14 @@ class Query:
         return p
 
     @strawberry.field(description = "Get a list of pipeline instances.")
-    def pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "") -> Pipelines:
+    def pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)
         else:
             pipe_id = "000000000000000000000000" ## unix epoch Jan 1, 1970 as objectId
 
-        results = info.context["request"].app.backend.list(cursor = pipe_id, limit = limit + 1, filter = filter)
+        results = info.context["request"].app.backend.list(cursor = pipe_id, limit = limit + 1, filter = filter, sort = sort)
 
         if len(results) > limit:
             # calculate the client's next cursor.
@@ -112,6 +113,7 @@ class Mutation:
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
         p.task_name = str(run_pipeline)
+        p.created_at = datetime.now()
 
         serial = p.serialize()
         ## credentials not supported yet
