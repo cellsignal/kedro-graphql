@@ -164,12 +164,8 @@ class DataSet:
         """
         Generate a presigned URL S3 to upload a file.
 
-        Args:
-            bucket_name (str): S3 bucket name.
-            s3_key (str): S3 object key.
-
         Returns:
-            Optional[dict]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+            Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
 
             Example:
                 {
@@ -215,6 +211,55 @@ class DataSet:
             print(f"Failed to generate presigned URL: {e}")
             return None
 
+        return response
+
+    @strawberry.field
+    def pre_signed_url_read(self) -> Optional[str]:
+        """
+        Generate a presigned URL S3 to download a file.
+
+        Returns:
+            Optional[str]: download url with query parameters
+            
+            Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
+        """
+        if self.config:
+            try:
+                dataset_dict = json.loads(self.config)
+                filepath = dataset_dict.get("filepath")
+                if not filepath:
+                    raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in config: {e}")
+        elif self.filepath:
+            filepath = self.filepath
+        else:
+            raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+
+        if not filepath.startswith("s3://"):
+            raise ValueError("Invalid S3 path. Must start with 's3://'")
+        
+        parsed = urlparse(filepath)
+        bucket_name = parsed.netloc
+        s3_key = parsed.path.lstrip("/")
+
+
+        try:
+            s3_client = boto3.client('s3')
+            params = {
+                'Bucket': bucket_name,
+                'Key': s3_key
+            }
+
+            response = s3_client.generate_presigned_url(
+                'get_object',
+                Params=params,
+                ExpiresIn=3600
+            )
+        except ClientError as e:
+            print(f"Failed to generate presigned URL: {e}")
+            return None
+        
         return response
 
     def serialize(self) -> dict:

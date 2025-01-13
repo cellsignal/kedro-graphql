@@ -183,6 +183,13 @@ class Mutation:
     
         return dataset.pre_signed_url_create()
 
+    @strawberry.mutation(description= "Download a dataset.")
+    def download_dataset(self, dataset_input: DataSetInput) -> Optional[str]:
+
+        dataset = DataSet.from_dict(jsonable_encoder(dataset_input))
+    
+        return dataset.pre_signed_url_read()
+
 
 
 
