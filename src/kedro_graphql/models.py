@@ -9,7 +9,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
-from urllib.parse import urlparse
+from .utils import parse_filepath_for_s3
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -180,30 +180,7 @@ class DataSet:
                 }
         """
 
-        if self.config:
-            try:
-                dataset_dict = json.loads(self.config)
-                filepath = dataset_dict.get("filepath")
-                if not filepath:
-                    raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in config: {e}")
-        elif self.filepath:
-            filepath = self.filepath
-        else:
-            raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-
-        if not filepath.startswith("s3://"):
-            raise ValueError("Invalid S3 path. Must start with 's3://'")
-        
-        parsed = urlparse(filepath)
-        bucket_name = parsed.netloc
-        s3_key = parsed.path.lstrip("/")
-
-        if not bucket_name:
-            raise ValueError("Invalid S3 path. Bucket name is missing.")
-        if not s3_key:
-            raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
+        bucket_name, s3_key = parse_filepath_for_s3(self.config, self.filepath)
 
         try:
             s3_client = boto3.client('s3')
@@ -228,30 +205,8 @@ class DataSet:
             
             Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
         """
-        if self.config:
-            try:
-                dataset_dict = json.loads(self.config)
-                filepath = dataset_dict.get("filepath")
-                if not filepath:
-                    raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in config: {e}")
-        elif self.filepath:
-            filepath = self.filepath
-        else:
-            raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
 
-        if not filepath.startswith("s3://"):
-            raise ValueError("Invalid S3 path. Must start with 's3://'")
-        
-        parsed = urlparse(filepath)
-        bucket_name = parsed.netloc
-        s3_key = parsed.path.lstrip("/")
-
-        if not bucket_name:
-            raise ValueError("Invalid S3 path. Bucket name is missing.")
-        if not s3_key:
-            raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
+        bucket_name, s3_key = parse_filepath_for_s3(self.config, self.filepath)
 
         try:
             s3_client = boto3.client('s3')
