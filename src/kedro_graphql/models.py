@@ -6,6 +6,10 @@ import json
 from .config import config as CONFIG
 from bson.objectid import ObjectId
 from datetime import datetime
+import boto3
+from botocore.exceptions import ClientError
+from strawberry.scalars import JSON
+from urllib.parse import urlparse
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -154,6 +158,64 @@ class DataSet:
     save_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     load_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
+
+    @strawberry.field
+    def pre_signed_url_create(self) -> Optional[JSON]:
+        """
+        Generate a presigned URL S3 to upload a file.
+
+        Args:
+            bucket_name (str): S3 bucket name.
+            s3_key (str): S3 object key.
+
+        Returns:
+            Optional[dict]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+
+            Example:
+                {
+                    "url": "https://your-bucket-name.s3.amazonaws.com/",
+                    "fields": {
+                        "key": "your-object-key",
+                        "AWSAccessKeyId": "your-access-key-id",
+                        "x-amz-security-token": "your-security-token",
+                        "policy": "your-policy",
+                        "signature": "your-signature"
+                    }
+                }
+        """
+
+        if self.config:
+            try:
+                dataset_dict = json.loads(self.config)
+                filepath = dataset_dict.get("filepath")
+                if not filepath:
+                    raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in config: {e}")
+        elif self.filepath:
+            filepath = self.filepath
+        else:
+            raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+
+        if not filepath.startswith("s3://"):
+            raise ValueError("Invalid S3 path. Must start with 's3://'")
+        
+        parsed = urlparse(filepath)
+        bucket_name = parsed.netloc
+        s3_key = parsed.path.lstrip("/")
+
+        try:
+            s3_client = boto3.client('s3')
+            response = s3_client.generate_presigned_post(bucket_name,
+                                                        f"{uuid.uuid4()}/{s3_key}",
+                                                        Fields=None,
+                                                        Conditions=None,
+                                                        ExpiresIn=3600)
+        except ClientError as e:
+            print(f"Failed to generate presigned URL: {e}")
+            return None
+
+        return response
 
     def serialize(self) -> dict:
         """

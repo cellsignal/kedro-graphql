@@ -5,12 +5,13 @@ from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, Optional
 from .tasks import run_pipeline
-from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta
+from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, DataSetInput, DataSet
 from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
 from datetime import datetime
+from strawberry.scalars import JSON
 
 
 def encode_cursor(id: int) -> str:
@@ -166,7 +167,7 @@ class Mutation:
         return p
     
     @strawberry.mutation(description = "Update a pipeline.")
-    def updatePipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
+    def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
         # Only update the keys in PipelineInput that have been supplied
@@ -174,6 +175,14 @@ class Mutation:
         p = info.context["request"].app.backend.update(id=id, values={k: v for k, v in pipeline_input_dict.items() if k != "name" and v is not None})
 
         return  p
+    
+    @strawberry.mutation(description = "Upload a dataset.")
+    def upload_dataset(self, dataset_input: DataSetInput) ->  Optional[JSON]:
+
+        dataset = DataSet.from_dict(jsonable_encoder(dataset_input))
+    
+        return dataset.pre_signed_url_create()
+
 
 
 
