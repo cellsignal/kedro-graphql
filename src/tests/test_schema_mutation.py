@@ -313,3 +313,58 @@ class TestSchemaMutations:
                                     }})
         
         assert resp.errors is None
+    
+
+    @pytest.mark.asyncio
+    async def test_upload_dataset(self, mock_app, mocker):
+
+        mutation = """
+                  mutation uploadDataset {
+                    uploadDataset(datasetInput: {name: "text_in", config: "{\\"type\\": \\"text.TextDataset\\",\\"filepath\\": \\"s3://test-bucket/test_upload.txt\\"}"})
+                  }
+                  """
+
+        mock_presigned_url_create = mocker.patch("kedro_graphql.models.DataSet.pre_signed_url_create",
+                                                  return_value={
+                                                      "url": "https://your-bucket-name.s3.amazonaws.com/",
+                                                      "fields": {
+                                                          "key": "your-object-key",
+                                                          "AWSAccessKeyId": "your-access-key-id",
+                                                          "x-amz-security-token": "your-security-token",
+                                                          "policy": "your-policy",
+                                                          "signature": "your-signature"
+                                                      }
+                                                  })
+
+        resp = await mock_app.schema.execute(mutation)
+
+        assert resp.data == {'uploadDataset': {'url': 'https://your-bucket-name.s3.amazonaws.com/', 
+                                               'fields': {
+                                                   'key': 'your-object-key',
+                                                    'AWSAccessKeyId': 'your-access-key-id',
+                                                    'x-amz-security-token': 'your-security-token', 
+                                                    'policy': 'your-policy', 
+                                                    'signature': 'your-signature'
+                                                  }
+                                              }
+                                            }
+        mock_presigned_url_create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_download_dataset(self, mock_app, mocker):
+
+        mutation = """
+                  mutation downloadDataset {
+                      downloadDataset(datasetInput: {
+                            name: "test_dataset",
+                            config: "{\\"type\\":\\"text.TextDataset\\",\\"filepath\\":\\"s3://your-bucket-name/your-object-key\\"}"
+                          })
+                    }
+                  """
+
+        mock_presigned_url_create = mocker.patch("kedro_graphql.models.DataSet.pre_signed_url_read",
+                                                  return_value="https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time")
+
+        resp = await mock_app.schema.execute(mutation)
+        assert resp.data == {'downloadDataset': "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"}
+        mock_presigned_url_create.assert_called_once()
