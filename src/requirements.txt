@@ -1,6 +1,6 @@
 asyncio~=3.4.3
 black~=24.4.2
-boto3~=1.35.96
+boto3~=1.26.160
 flake8~=7.0.0
 ipython~=8.24.0
 isort~=5.13.2
@@ -15,7 +15,7 @@ celery[pytest]~=5.4.0
 click~=8.1.7
 uvicorn[standard]~=0.30.0
 strawberry-graphql~=0.233.0
-s3fs~=0.4.2
+s3fs~=2023.5.0
 fastapi~=0.111.0
 pymongo~=4.7.2
 python-dotenv~=1.0.1
