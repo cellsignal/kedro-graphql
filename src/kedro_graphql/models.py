@@ -200,6 +200,11 @@ class DataSet:
         bucket_name = parsed.netloc
         s3_key = parsed.path.lstrip("/")
 
+        if not bucket_name:
+            raise ValueError("Invalid S3 path. Bucket name is missing.")
+        if not s3_key:
+            raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
+
         try:
             s3_client = boto3.client('s3')
             response = s3_client.generate_presigned_post(bucket_name,
@@ -243,6 +248,10 @@ class DataSet:
         bucket_name = parsed.netloc
         s3_key = parsed.path.lstrip("/")
 
+        if not bucket_name:
+            raise ValueError("Invalid S3 path. Bucket name is missing.")
+        if not s3_key:
+            raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
 
         try:
             s3_client = boto3.client('s3')
