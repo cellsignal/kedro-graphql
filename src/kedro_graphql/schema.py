@@ -175,22 +175,6 @@ class Mutation:
         p = info.context["request"].app.backend.update(id=id, values={k: v for k, v in pipeline_input_dict.items() if k != "name" and v is not None})
 
         return  p
-    
-    @strawberry.mutation(description = "Upload a dataset.")
-    def upload_dataset(self, dataset_input: DataSetInput) ->  Optional[JSON]:
-
-        dataset = DataSet.from_dict(jsonable_encoder(dataset_input))
-    
-        return dataset.pre_signed_url_create()
-
-    @strawberry.mutation(description= "Download a dataset.")
-    def download_dataset(self, dataset_input: DataSetInput) -> Optional[str]:
-
-        dataset = DataSet.from_dict(jsonable_encoder(dataset_input))
-    
-        return dataset.pre_signed_url_read()
-
-
 
 
 @strawberry.type
