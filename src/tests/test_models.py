@@ -45,6 +45,88 @@ class TestDataSet:
         print(output)
         assert output == expected
     
+    def test_pre_signed_url_create_config_no_filepath(self):
+        d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
+
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_create()
+    
+    def test_pre_signed_url_create_no_filepath(self):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset",
+          "load_args":[Parameter(**{
+            "name": "delimiter",
+            "value": "\t" 
+          })],
+          "save_args":[Parameter(**{
+            "name":"delimiter",
+            "value": "\t"  
+          })]}
+        
+        d = DataSet(**params)
+        
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_create()
+    
+    def test_pre_signed_url_create_no_s3_filepath(self):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset",
+          "filepath": "/tmp/test_in.csv", 
+          "load_args":[Parameter(**{
+            "name": "delimiter",
+            "value": "\t" 
+          })],
+          "save_args":[Parameter(**{
+            "name":"delimiter",
+            "value": "\t"  
+          })]}
+        
+        d = DataSet(**params)
+        
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_create()
+    
+    def test_pre_signed_url_read_config_no_filepath(self):
+        d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
+
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_create()
+    
+    def test_pre_signed_url_read_no_filepath(self):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset", 
+          "load_args":[Parameter(**{
+            "name": "delimiter",
+            "value": "\t" 
+          })],
+          "save_args":[Parameter(**{
+            "name":"delimiter",
+            "value": "\t"  
+          })]}
+        
+        d = DataSet(**params)
+        
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_read()
+    
+    def test_pre_signed_url_read_no_s3_filepath(self):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset",
+          "filepath": "/tmp/test_in.csv",  
+          "load_args":[Parameter(**{
+            "name": "delimiter",
+            "value": "\t" 
+          })],
+          "save_args":[Parameter(**{
+            "name":"delimiter",
+            "value": "\t"  
+          })]}
+        
+        d = DataSet(**params)
+        
+        with pytest.raises(ValueError):
+          output = d.pre_signed_url_read()
+    
 class TestParameter:
 
     def test_serialize_string(self):
