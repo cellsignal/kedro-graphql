@@ -313,3 +313,4 @@ class TestSchemaMutations:
                                     }})
         
         assert resp.errors is None
+    
