@@ -237,6 +237,7 @@ class DataSet:
             return {self.name: json.loads(temp['config'])}
         else:
             temp.pop("config")
+            temp.pop("tags")
             if not temp["save_args"]:
                 temp.pop("save_args")
             else:
