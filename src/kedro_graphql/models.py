@@ -158,6 +158,7 @@ class DataSet:
     save_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     load_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
+    tags: Optional[List[Tag]] = None
 
     @strawberry.field
     def pre_signed_url_create(self) -> Optional[JSON]:
@@ -236,6 +237,7 @@ class DataSet:
             return {self.name: json.loads(temp['config'])}
         else:
             temp.pop("config")
+            temp.pop("tags")
             if not temp["save_args"]:
                 temp.pop("save_args")
             else:
@@ -259,21 +261,29 @@ class DataSet:
                   "filepath": "./data/01_raw/text_in.txt",
                   "type": "text.TextDataSet",
                   "save_args":[{"name": "say", "value": "hello"}],
-                  "load_args":[{"name": "say", "value": "hello"}]
+                  "load_args":[{"name": "say", "value": "hello"}],
+                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
                 }
 
                 or
 
                 {
                   "name": "text_in",
-                  "config":  '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}'
+                  "config": '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
+                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
                 }
 
         """
+        if payload.get("tags", False):
+            tags = [Tag(**t) for t in payload["tags"]]
+        else:
+            tags = None
+
         if payload.get("config", False):
             return DataSet(
                 name = payload["name"],
-                config = payload["config"]
+                config = payload["config"],
+                tags = tags
             )
 
         else:
@@ -292,7 +302,8 @@ class DataSet:
                 type = payload["type"],
                 filepath = payload["filepath"],
                 save_args = save_args,
-                load_args = load_args
+                load_args = load_args,
+                tags = tags
             )
 
 
@@ -305,6 +316,7 @@ class DataSetInput:
     save_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
     load_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
+    tags: Optional[List[TagInput]] = None
         
 
 class DataCatalog:
@@ -637,8 +649,8 @@ class Pipeline:
 @strawberry.type
 class Pipelines:
     pipelines: List[Pipeline] = strawberry.field(description="The list of pipeline instances.")
-
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
+
 @strawberry.type
 class PipelineEvent:
     id: str
