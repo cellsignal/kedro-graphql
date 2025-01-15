@@ -262,7 +262,7 @@ class DataSet:
                   "type": "text.TextDataSet",
                   "save_args":[{"name": "say", "value": "hello"}],
                   "load_args":[{"name": "say", "value": "hello"}],
-                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "harin.lee@cellsignal.com"}]
+                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
                 }
 
                 or
@@ -270,7 +270,7 @@ class DataSet:
                 {
                   "name": "text_in",
                   "config": '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
-                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "harin.lee@cellsignal.com"}]
+                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
                 }
 
         """
