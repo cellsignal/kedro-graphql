@@ -127,6 +127,43 @@ class TestDataSet:
         with pytest.raises(ValueError):
           output = d.pre_signed_url_read()
     
+    def test_does_exist_with_filepath(self, mock_text_in):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset",
+          "filepath": str(mock_text_in)}
+        
+        d = DataSet(**params)
+        
+        assert d.exists() == True
+    
+    def test_does_not_exist_with_filepath(self):
+        params = {"name": "text_in", 
+          "type": "text.TextDataset",
+          "filepath": "/tmp/does_not_exist.csv"}
+        
+        d = DataSet(**params)
+        
+        assert d.exists() == False
+    
+    def test_does_exist_with_config(self, mock_text_in):
+        params = {
+            "name": "text_in",
+            "config": f'{{"type": "text.TextDataset", "filepath": "{str(mock_text_in)}"}}'
+        }
+        print(params)
+
+        d = DataSet(**params)
+        assert d.exists() == True
+    
+    def test_does_not_exist_with_config(self):
+        params = {
+            "name": "text_in",
+            "config": '{"type": "text.TextDataset", "filepath": "/tmp/does_not_exist.csv"}'
+        }
+
+        d = DataSet(**params)
+        assert d.exists() == False
+    
 class TestParameter:
 
     def test_serialize_string(self):
