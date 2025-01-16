@@ -10,6 +10,7 @@ import boto3
 from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
 from .utils import parse_filepath_for_s3
+from kedro.io import AbstractDataset
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -226,6 +227,17 @@ class DataSet:
             return None
         
         return response
+    
+    @strawberry.field
+    def exists(self) -> bool:
+        if self.config:
+            return AbstractDataset.from_config(self.name, json.loads(self.config)).exists()
+        elif self.filepath and self.type and self.load_args and self.save_args:
+            return AbstractDataset.from_config(self.name, {"filepath": self.filepath, "type": self.type, "load_args": self.load_args, "save_args": self.save_args}).exists()
+        elif self.filepath and self.type:
+            return AbstractDataset.from_config(self.name, {"filepath": self.filepath, "type": self.type}).exists()
+        else:
+            return False
 
     def serialize(self) -> dict:
         """
