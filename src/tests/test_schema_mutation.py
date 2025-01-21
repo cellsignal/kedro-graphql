@@ -47,6 +47,8 @@ class TestSchemaMutations:
             taskTraceback
             taskEinfo
             taskResult
+            parent
+            runner
           }
         }
         """
@@ -113,6 +115,8 @@ class TestSchemaMutations:
             taskTraceback
             taskEinfo
             taskResult
+            parent
+            runner
           }
         }
         """
@@ -227,6 +231,8 @@ class TestSchemaMutations:
                 taskTraceback
                 taskEinfo
                 taskResult
+                parent
+                runner
               }
             }
             """
@@ -293,6 +299,8 @@ class TestSchemaMutations:
                 taskTraceback
                 taskEinfo
                 taskResult
+                parent
+                runner
               }
             }
             """

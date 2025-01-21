@@ -466,6 +466,8 @@ class PipelineInput:
     tags: Optional[List[TagInput]] = None
     #credentials: Optional[List[CredentialInput]] = None
     #credentials_nested: Optional[List[CredentialNestedInput]] = None
+    parent: Optional[uuid.UUID] = None
+    runner: str = "kedro.runner.SequentialRunner"
 
     @staticmethod
     def create(name = None, data_catalog = None, parameters = None, tags = None):
@@ -565,6 +567,8 @@ class Pipeline:
     task_einfo: Optional[str] = None
     task_result: Optional[str] = None
     created_at: Optional[datetime] = None
+    parent: Optional[uuid.UUID] = None
+    runner: str = "kedro.runner.SequentialRunner"
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
