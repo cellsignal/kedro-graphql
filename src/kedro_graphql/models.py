@@ -539,6 +539,37 @@ class PipelineInput:
                              tags = tags)
 
 
+@strawberry.enum
+class Phase(Enum):
+    READY = 'READY'
+    STAGED = 'STAGED'
+    STARTED = 'STARTED'
+    RETRY = 'RETRY'
+    FAILURE = 'FAILURE'
+    SUCCESS = 'SUCCESS'
+    REVOKED = 'REVOKED'
+    PENDING = 'PENDING'
+    RECIEVED = 'RECIEVED'
+
+
+@strawberry.type
+class PipelineStatus:
+    phase: Phase
+    session: str ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
+    runner: str = "kedro.runner.SequentialRunner"
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    task_id: Optional[str] = None
+    task_name: Optional[str] = None
+    task_args: Optional[str] = None
+    task_kwargs: Optional[str] = None
+    task_request: Optional[str] = None
+    task_exception: Optional[str] = None
+    task_traceback: Optional[str] = None
+    task_einfo: Optional[str] = None
+    task_result: Optional[str] = None
+
+
 ## Should expand pipeline type to include pipeline version
 @strawberry.type
 class Pipeline:
@@ -553,7 +584,7 @@ class Pipeline:
     outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     data_catalog: Optional[List[DataSet]] = None
     parameters: List[Parameter]
-    status: Optional[str] = None
+    status: List[PipelineStatus] = []
     tags: Optional[List[Tag]] = None
     task_id: Optional[str] = None
     task_name: Optional[str] = None

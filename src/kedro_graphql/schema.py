@@ -5,13 +5,12 @@ from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, Optional
 from .tasks import run_pipeline
-from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, DataSetInput, DataSet
+from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, PipelineStatus
 from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
 from datetime import datetime
-from strawberry.scalars import JSON
 
 
 def encode_cursor(id: int) -> str:
