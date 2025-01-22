@@ -56,7 +56,7 @@ class TestSchemaSubscriptions:
             #print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline.id)
-            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline.task_id)
+            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline.status[-1].task_id)
 
 
         query2 = """
@@ -77,4 +77,4 @@ class TestSchemaSubscriptions:
             #print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline2.id)
-            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline2.task_id)
+            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline2.status[-1].task_id)
