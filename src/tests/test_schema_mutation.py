@@ -35,7 +35,7 @@ class TestSchemaMutations:
             }
             status {
               finishedAt
-              phase
+              state
               runner
               session
               startedAt
@@ -108,7 +108,7 @@ class TestSchemaMutations:
             }
             status {
               finishedAt
-              phase
+              state
               runner
               session
               startedAt
@@ -229,7 +229,7 @@ class TestSchemaMutations:
                 }
                 status {
                   finishedAt
-                  phase
+                  state
                   runner
                   session
                   startedAt
@@ -302,7 +302,7 @@ class TestSchemaMutations:
                 }
                 status {
                   finishedAt
-                  phase
+                  state
                   runner
                   session
                   startedAt

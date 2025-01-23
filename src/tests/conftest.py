@@ -5,7 +5,7 @@ from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from kedro_graphql.asgi import KedroGraphQL
 from kedro_graphql.tasks import run_pipeline
-from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag, Phase, PipelineStatus
+from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag, State, PipelineStatus
 from unittest.mock import patch
 
 
@@ -109,7 +109,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
     
-    pipeline_status = PipelineStatus(phase=Phase[result.status],
+    pipeline_status = PipelineStatus(state=State[result.status],
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=None,
@@ -147,7 +147,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
 
-    pipeline_status = PipelineStatus(phase=Phase[result.status],
+    pipeline_status = PipelineStatus(state=State[result.status],
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=None,

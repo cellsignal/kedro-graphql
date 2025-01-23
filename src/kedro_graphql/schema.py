@@ -5,7 +5,7 @@ from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, Optional
 from .tasks import run_pipeline
-from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, PipelineStatus, Phase
+from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, PipelineStatus, State
 from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
@@ -139,7 +139,7 @@ class Mutation:
             runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         )
 
-        pipeline_status = PipelineStatus(phase=Phase[result.status],
+        pipeline_status = PipelineStatus(state=State[result.status],
                                          runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                          session=info.context["request"].app.kedro_session.session_id,
                                          started_at=started_at,

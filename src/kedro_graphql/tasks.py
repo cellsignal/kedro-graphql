@@ -4,7 +4,7 @@ from kedro.io import DataCatalog
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
-from .models import Phase
+from .models import State
 from datetime import datetime
 
 #from .backends import init_backend
@@ -39,7 +39,7 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        self.db.update(task_id=task_id, values = {"phase": Phase.STARTED})
+        self.db.update(task_id=task_id, values = {"state": State.STARTED})
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
@@ -56,7 +56,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"phase": Phase.SUCCESS})
+        self.db.update(task_id=task_id, values = {"state": State.SUCCESS})
 
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -75,7 +75,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"phase": Phase.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)})
+        self.db.update(task_id=task_id, values = {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)})
    
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -93,7 +93,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"phase": Phase.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)})
+        self.db.update(task_id=task_id, values = {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)})
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
