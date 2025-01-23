@@ -541,22 +541,26 @@ class PipelineInput:
                              tags = tags)
 
 
-## Should expand pipeline type to include pipeline version
-@strawberry.type
-class Pipeline:
-    #kedro_pipelines: strawberry.Private[Optional[dict]] = None
-    #kedro_catalog: strawberry.Private[Optional[dict]] = None
-    #kedro_parameters: strawberry.Private[Optional[dict]] = None
-    kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
+@strawberry.enum
+class State(Enum):
+    READY = 'READY'
+    STAGED = 'STAGED'
+    STARTED = 'STARTED'
+    RETRY = 'RETRY'
+    FAILURE = 'FAILURE'
+    SUCCESS = 'SUCCESS'
+    REVOKED = 'REVOKED'
+    PENDING = 'PENDING'
+    RECIEVED = 'RECIEVED'
 
-    id: Optional[uuid.UUID] = None
-    inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
-    name: str
-    outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
-    data_catalog: Optional[List[DataSet]] = None
-    parameters: List[Parameter]
-    status: Optional[str] = None
-    tags: Optional[List[Tag]] = None
+
+@strawberry.type
+class PipelineStatus:
+    state: State
+    session: str ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
+    runner: str = "kedro.runner.SequentialRunner"
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
     task_id: Optional[str] = None
     task_name: Optional[str] = None
     task_args: Optional[str] = None
@@ -566,9 +570,25 @@ class Pipeline:
     task_traceback: Optional[str] = None
     task_einfo: Optional[str] = None
     task_result: Optional[str] = None
+
+
+## Should expand pipeline type to include pipeline version
+@strawberry.type
+class Pipeline:
+    #kedro_pipelines: strawberry.Private[Optional[dict]] = None
+    #kedro_catalog: strawberry.Private[Optional[dict]] = None
+    #kedro_parameters: strawberry.Private[Optional[dict]] = None
+    kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
+    id: Optional[uuid.UUID] = None
+    inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
+    name: str
+    outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
+    data_catalog: Optional[List[DataSet]] = None
+    parameters: List[Parameter]
+    status: List[PipelineStatus] = strawberry.field(default_factory=list)
+    tags: Optional[List[Tag]] = None
     created_at: Optional[datetime] = None
     parent: Optional[uuid.UUID] = None
-    runner: str = "kedro.runner.SequentialRunner"
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
@@ -641,6 +661,26 @@ class Pipeline:
             outputs = [DataSet.from_dict(o) for o in payload["outputs"]]
         else:
             outputs = None
+        
+        if payload.get("status", None):
+            status = [PipelineStatus(
+                state=s["state"],
+                session=s["session"],
+                runner=s.get("runner", "kedro.runner.SequentialRunner"),
+                started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,
+                finished_at=datetime.fromisoformat(s["finished_at"]) if s.get("finished_at") else None,
+                task_name=s.get("task_name"),
+                task_id=s.get("task_id"),
+                task_args=s.get("task_args"),
+                task_kwargs=s.get("task_kwargs"),
+                task_request=s.get("task_request"),
+                task_exception=s.get("task_exception"),
+                task_traceback=s.get("task_traceback"),
+                task_einfo=s.get("task_einfo"),
+                task_result=s.get("task_result")
+            ) for s in payload["status"]]
+        else:
+            status = []
 
         return Pipeline(
             id = payload.get("id", None),
@@ -649,17 +689,9 @@ class Pipeline:
             outputs = outputs,
             data_catalog = data_catalog,
             parameters = [Parameter(**p) for p in payload["parameters"]],
-            status = payload.get("status", None),
+            status = status,
             tags = tags,
-            task_id = payload.get("task_id", None),
-            task_name = payload.get("task_name", None),
-            task_args = payload.get("task_args", None),
-            task_kwargs = payload.get("task_kwargs", None),
-            task_request = payload.get("task_request", None),
-            task_exception = payload.get("task_exception", None),
-            task_traceback = payload.get("task_traceback", None),
-            task_einfo = payload.get("task_einfo", None),
-            created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None
+            created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,
         )
 
 @strawberry.type

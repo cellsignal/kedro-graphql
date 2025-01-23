@@ -12,7 +12,7 @@ class TestPipelineLogStream:
     async def test_consume(self, mock_app, mock_pipeline):
         """Requires Redis to run.
         """
-        task_id = mock_pipeline.task_id
+        task_id = mock_pipeline.status[-1].task_id
         subscriber = await PipelineLogStream().create(task_id=task_id, broker_url = mock_app.config["KEDRO_GRAPHQL_BROKER"])
         async for e in subscriber.consume():
             assert set(e.keys()) == set(["task_id", "message_id", "message", "time"])

@@ -11,8 +11,6 @@ To run the tests, run ``kedro test`` from the project root directory.
 
 import pytest
 from kedro_graphql.events import PipelineEventMonitor
-from kedro_graphql.tasks import run_pipeline
-import time
 from celery.states import ALL_STATES
 from celery.result import AsyncResult 
 
@@ -35,7 +33,7 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.on_failure")
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.task_id).start():
+        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id).start():
             print(e)
             assert e["status"] in ALL_STATES
 
@@ -52,7 +50,7 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.on_failure")
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.task_id, timeout = 0.01).start():
+        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id, timeout = 0.01).start():
             print(e)
             assert e["status"] in ALL_STATES
         
@@ -69,7 +67,7 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.on_failure")
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
-        result = AsyncResult(mock_pipeline.task_id).wait()
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.task_id).start():
+        result = AsyncResult(mock_pipeline.status[-1].task_id).wait()
+        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id).start():
             print(e)
             assert e["status"] in ALL_STATES

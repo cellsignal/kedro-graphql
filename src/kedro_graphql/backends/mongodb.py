@@ -56,7 +56,7 @@ class MongoBackend(BaseBackend):
     def load(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id or task_id"""
         if task_id:
-            r = self.db["pipelines"].find_one({"task_id": task_id})
+            r = self.db["pipelines"].find_one({"status": {"$elemMatch": {"task_id": task_id}}})
         else:
             r = self.db["pipelines"].find_one({"_id": ObjectId(id)})
 
@@ -79,12 +79,15 @@ class MongoBackend(BaseBackend):
     def update(self, id: uuid.UUID = None, task_id: str = None, values = {}):
         """Update a pipeline using id or task id"""
         if task_id:
-            filter = {'task_id': task_id }
+            filter = {"status": {"$elemMatch": {"task_id": task_id}}}
         else:
             filter = {'_id': ObjectId(id)}
-
-        newvalues = { "$set": values }
-        self.db["pipelines"].update_one(filter, newvalues)
+        
+        # Update the last object in the "status" array
+        pipeline = self.db["pipelines"].find_one(filter, {'status': 1})
+        last_index = len(pipeline['status']) - 1
+        status_updates = {f"status.{last_index}.{key}": jsonable_encoder(value) for key, value in values.items()}
+        self.db["pipelines"].update_one(filter, {"$set": status_updates})
 
         if task_id:
             p = self.load(task_id = task_id)

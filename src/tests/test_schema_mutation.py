@@ -33,22 +33,27 @@ class TestSchemaMutations:
               name
               value
             }
-            status
+            status {
+              finishedAt
+              state
+              runner
+              session
+              startedAt
+              taskArgs
+              taskEinfo
+              taskException
+              taskId
+              taskKwargs
+              taskName
+              taskRequest
+              taskResult
+              taskTraceback
+            }
             tags {
               key
               value
             }
-            taskId
-            taskName
-            taskArgs
-            taskKwargs
-            taskRequest
-            taskException
-            taskTraceback
-            taskEinfo
-            taskResult
             parent
-            runner
           }
         }
         """
@@ -101,22 +106,27 @@ class TestSchemaMutations:
               name
               value
             }
-            status
+            status {
+              finishedAt
+              state
+              runner
+              session
+              startedAt
+              taskArgs
+              taskEinfo
+              taskException
+              taskId
+              taskKwargs
+              taskName
+              taskRequest
+              taskResult
+              taskTraceback
+            }
             tags {
               key
               value
             }
-            taskId
-            taskName
-            taskArgs
-            taskKwargs
-            taskRequest
-            taskException
-            taskTraceback
-            taskEinfo
-            taskResult
             parent
-            runner
           }
         }
         """
@@ -217,22 +227,27 @@ class TestSchemaMutations:
                   name
                   value
                 }
-                status
+                status {
+                  finishedAt
+                  state
+                  runner
+                  session
+                  startedAt
+                  taskArgs
+                  taskEinfo
+                  taskException
+                  taskId
+                  taskKwargs
+                  taskName
+                  taskRequest
+                  taskResult
+                  taskTraceback
+                }
                 tags {
                   key
                   value
                 }
-                taskId
-                taskName
-                taskArgs
-                taskKwargs
-                taskRequest
-                taskException
-                taskTraceback
-                taskEinfo
-                taskResult
                 parent
-                runner
               }
             }
             """
@@ -285,22 +300,27 @@ class TestSchemaMutations:
                   name
                   value
                 }
-                status
+                status {
+                  finishedAt
+                  state
+                  runner
+                  session
+                  startedAt
+                  taskArgs
+                  taskEinfo
+                  taskException
+                  taskId
+                  taskKwargs
+                  taskName
+                  taskRequest
+                  taskResult
+                  taskTraceback
+                }
                 tags {
                   key
                   value
                 }
-                taskId
-                taskName
-                taskArgs
-                taskKwargs
-                taskRequest
-                taskException
-                taskTraceback
-                taskEinfo
-                taskResult
                 parent
-                runner
               }
             }
             """

@@ -5,7 +5,7 @@ from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from kedro_graphql.asgi import KedroGraphQL
 from kedro_graphql.tasks import run_pipeline
-from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag
+from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag, State, PipelineStatus
 from unittest.mock import patch
 
 
@@ -98,8 +98,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
         inputs = [DataSet(**i) for i in inputs],
         outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags],
-        task_name = str(run_pipeline),
+        tags = [Tag(**p) for p in tags]
     )
 
     serial = p.serialize()
@@ -109,17 +108,18 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
-    p.task_id = result.id
-    p.status = result.status
-    p.task_kwargs = str(
-            {"name": serial["name"], 
-            "inputs": serial["inputs"], 
-            "outputs": serial["outputs"], 
-            "parameters": serial["parameters"],
-            "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}
-    )
+    
+    pipeline_status = PipelineStatus(state=State[result.status],
+                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                                        session=mock_app.kedro_session.session_id,
+                                        started_at=None,
+                                        finished_at=None,
+                                        task_id=result.id,
+                                        task_name=str(run_pipeline))
 
-    print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+    p.status.append(pipeline_status)
+
+    print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p = mock_app.backend.create(p)
     return p
 
@@ -136,8 +136,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
         inputs = [DataSet(**i) for i in inputs],
         outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags],
-        task_name = str(run_pipeline),
+        tags = [Tag(**p) for p in tags]
     )
 
     serial = p.serialize()
@@ -147,16 +146,17 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
-    p.task_id = result.id
-    p.status = result.status
-    p.task_kwargs = str(
-            {"name": serial["name"], 
-            "inputs": serial["inputs"], 
-            "outputs": serial["outputs"], 
-            "parameters": serial["parameters"],
-            "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}
-    )
 
-    print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+    pipeline_status = PipelineStatus(state=State[result.status],
+                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                                        session=mock_app.kedro_session.session_id,
+                                        started_at=None,
+                                        finished_at=None,
+                                        task_id=result.id,
+                                        task_name=str(run_pipeline))
+
+    p.status.append(pipeline_status)
+
+    print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p = mock_app.backend.create(p)
     return p

@@ -5,13 +5,12 @@ from strawberry.tools import merge_types
 from strawberry.types import Info
 from typing import AsyncGenerator, Optional
 from .tasks import run_pipeline
-from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, DataSetInput, DataSet
+from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, PipelineStatus, State
 from .logs.logger import logger, PipelineLogStream
 from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
 from datetime import datetime
-from strawberry.scalars import JSON
 
 
 def encode_cursor(id: int) -> str:
@@ -129,6 +128,8 @@ class Mutation:
         ##    if v.get("credentials", None):
         ##        v["credentials"] = creds[v["credentials"]]
 
+        started_at = datetime.now()
+
         result = run_pipeline.delay(
             name = serial["name"], 
             inputs = serial["inputs"], 
@@ -136,27 +137,26 @@ class Mutation:
             data_catalog = serial["data_catalog"],
             parameters = serial["parameters"],
             runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
-        )  
+        )
 
-        p.task_id = result.id
-        p.status = result.status
+        pipeline_status = PipelineStatus(state=State[result.status],
+                                         runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                         session=info.context["request"].app.kedro_session.session_id,
+                                         started_at=started_at,
+                                         finished_at=None,
+                                         task_id=result.id,
+                                         task_name=str(run_pipeline))
+    
+        p.status.append(pipeline_status)
 
         ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
         ## replace with original string
-        p.task_kwargs = str(
-                {"name": serial["name"], 
-                "inputs": serial["inputs"], 
-                "outputs": serial["outputs"], 
-                "data_catalog": serial["data_catalog"],
-                "parameters": serial["parameters"],
-                "runner": info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]}
-        )
-        
+
         ## PLACE HOLDER for future reolver plugins
         ## testing plugin_resolvers, 
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
 
-        logger.info(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
+        logger.info(f'Starting {p.name} pipeline with task_id: ' + str(result.task_id))
 
         p = info.context["request"].app.backend.create(p)
         ## add private fields to enable resovling of computed fields e.g. "describe" and "template"
@@ -185,7 +185,7 @@ class Subscription:
         """
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.task_id).start(interval=interval):
+            async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
 
@@ -193,7 +193,7 @@ class Subscription:
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         p  = info.context["request"].app.backend.load(id=id)
         if p:
-            stream = await PipelineLogStream().create(task_id = p.task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
+            stream = await PipelineLogStream().create(task_id = p.status[-1].task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)
