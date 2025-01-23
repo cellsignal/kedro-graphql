@@ -106,7 +106,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description = "Execute a pipeline.")
-    def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
+    def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """

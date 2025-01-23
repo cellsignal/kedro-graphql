@@ -10,7 +10,7 @@ IN_DEV = True
 class TestSchemaMutations:
     mutation = """
         mutation TestMutation($pipeline: PipelineInput!) {
-          pipeline(pipeline: $pipeline) {
+          createPipeline(pipeline: $pipeline) {
             name
             describe
             inputs {
@@ -82,7 +82,7 @@ class TestSchemaMutations:
 
         mutation = """
         mutation TestMutation($pipeline: PipelineInput!) {
-          pipeline(pipeline: $pipeline) {
+          createPipeline(pipeline: $pipeline) {
             id
             name
             describe
@@ -206,7 +206,7 @@ class TestSchemaMutations:
 
         mutation = """
             mutation TestMutation($pipeline: PipelineInput!) {
-              pipeline(pipeline: $pipeline) {
+              createPipeline(pipeline: $pipeline) {
                 name
                 describe
                 inputs {
@@ -278,7 +278,7 @@ class TestSchemaMutations:
 
         mutation = """
             mutation TestMutation($pipeline: PipelineInput!) {
-              pipeline(pipeline: $pipeline) {
+              createPipeline(pipeline: $pipeline) {
                 name
                 describe
                 dataCatalog
