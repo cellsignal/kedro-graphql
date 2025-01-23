@@ -81,7 +81,7 @@ class Query:
         return p
 
     @strawberry.field(description = "Get a list of pipeline instances.")
-    def pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
+    def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)

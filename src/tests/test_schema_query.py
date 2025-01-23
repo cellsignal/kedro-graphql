@@ -24,7 +24,7 @@ class TestSchemaQuery:
 
         query = """
         query TestQuery($limit: Int!, $filter: String!) {
-          pipelines(limit: $limit, filter: $filter) {
+          readPipelines(limit: $limit, filter: $filter) {
             pageMeta {
               nextCursor
             }
