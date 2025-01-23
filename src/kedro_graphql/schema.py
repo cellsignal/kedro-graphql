@@ -75,7 +75,7 @@ class Query:
         )
 
     @strawberry.field(description = "Get a pipeline instance.")
-    def pipeline(self, id: str, info: Info) -> Pipeline:
+    def read_pipeline(self, id: str, info: Info) -> Pipeline:
         p = info.context["request"].app.backend.load(id)
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p

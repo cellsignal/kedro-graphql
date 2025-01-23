@@ -11,7 +11,7 @@ class TestSchemaQuery:
 
         query = """
         query TestQuery($id: String!) {
-          pipeline(id: $id){
+          readPipeline(id: $id){
             id
           }
         }
