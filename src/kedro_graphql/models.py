@@ -454,24 +454,16 @@ class PipelineTemplates:
 
         return pipes
 
-
 @strawberry.enum
-class State(Enum):
-    READY = 'READY'
-    STAGED = 'STAGED'
-    STARTED = 'STARTED'
-    RETRY = 'RETRY'
-    FAILURE = 'FAILURE'
-    SUCCESS = 'SUCCESS'
-    REVOKED = 'REVOKED'
-    PENDING = 'PENDING'
-    RECIEVED = 'RECIEVED'
+class PipelineInputStatus(Enum):
+    STAGED = "STAGED"
+    READY = "READY"
 
 
 @strawberry.input(description = "PipelineInput")
 class PipelineInput:
     name: str
-    state: State = State.STAGED
+    state: PipelineInputStatus = PipelineInputStatus.STAGED
     parameters: Optional[List[ParameterInput]] = None
     inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
@@ -552,6 +544,19 @@ class PipelineInput:
                              parameters = parameters,
                              data_catalog = data_catalog,
                              tags = tags)
+
+
+@strawberry.enum
+class State(Enum):
+    READY = 'READY'
+    STAGED = 'STAGED'
+    STARTED = 'STARTED'
+    RETRY = 'RETRY'
+    FAILURE = 'FAILURE'
+    SUCCESS = 'SUCCESS'
+    REVOKED = 'REVOKED'
+    PENDING = 'PENDING'
+    RECIEVED = 'RECIEVED'
 
 
 @strawberry.type

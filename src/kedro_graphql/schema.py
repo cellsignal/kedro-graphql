@@ -112,8 +112,9 @@ class Mutation:
         """
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
+        print(d)
+        print(p)
         p.task_name = str(run_pipeline)
-        p.created_at = datetime.now()
 
         serial = p.serialize()
         ## credentials not supported yet
@@ -129,25 +130,37 @@ class Mutation:
         ##        v["credentials"] = creds[v["credentials"]]
 
         started_at = datetime.now()
+        p.created_at = started_at
 
-        result = run_pipeline.delay(
-            name = serial["name"], 
-            inputs = serial["inputs"], 
-            outputs = serial["outputs"], 
-            data_catalog = serial["data_catalog"],
-            parameters = serial["parameters"],
-            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
-        )
+        if d["state"] == "STAGED":
+            print("PIPELINE STAGED")
+            p.status.append(PipelineStatus(state=State.STAGED,
+                                           runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                           session=info.context["request"].app.kedro_session.session_id,
+                                           started_at=started_at,
+                                           finished_at=None,
+                                           task_id=None,
+                                           task_name=str(run_pipeline)))
+        else:
+            print("PIPELINE READY AND ATTEMPTING TO RUN")
+            result = run_pipeline.delay(
+                name = serial["name"], 
+                inputs = serial["inputs"], 
+                outputs = serial["outputs"], 
+                data_catalog = serial["data_catalog"],
+                parameters = serial["parameters"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                session_id = info.context["request"].app.kedro_session.session_id
+            )
 
-        pipeline_status = PipelineStatus(state=State[result.status],
-                                         runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                         session=info.context["request"].app.kedro_session.session_id,
-                                         started_at=started_at,
-                                         finished_at=None,
-                                         task_id=result.id,
-                                         task_name=str(run_pipeline))
-    
-        p.status.append(pipeline_status)
+            p.status.append(PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=started_at,
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline)))
+            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
         ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
         ## replace with original string
@@ -155,8 +168,6 @@ class Mutation:
         ## PLACE HOLDER for future reolver plugins
         ## testing plugin_resolvers, 
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
-
-        logger.info(f'Starting {p.name} pipeline with task_id: ' + str(result.task_id))
 
         p = info.context["request"].app.backend.create(p)
         ## add private fields to enable resovling of computed fields e.g. "describe" and "template"
