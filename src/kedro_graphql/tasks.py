@@ -41,7 +41,7 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        self.db.update(task_id=task_id, values = {"state": State.STARTED})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
@@ -58,7 +58,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"state": State.SUCCESS})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.SUCCESS, "task_exception": None, "task_einfo": None}})
 
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -77,7 +77,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)}})
    
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -96,9 +96,10 @@ class KedroGraphqlTask(Task):
         """
         # If the exception is of type InvalidPipeline, then return to STAGED state
         if type(exc).__name__ == "InvalidPipeline":
-            self.db.update(task_id=task_id, values = {"state": State.STAGED, "task_exception": str(exc), "task_einfo": str(einfo)})
+            logger.info(f'Staging pipeline {kwargs["name"]}')
+            self.db.update(task_id=task_id, values = {"status": {"state": State.STAGED, "task_exception": str(exc), "task_einfo": str(einfo)}})
         else:
-            self.db.update(task_id=task_id, values = {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)})
+            self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -116,7 +117,7 @@ class KedroGraphqlTask(Task):
         """
 
         finished_at = datetime.now()
-        self.db.update(task_id=task_id, values = {"finished_at": finished_at, "task_result": str(retval)})
+        self.db.update(task_id=task_id, values = {"status": {"finished_at": finished_at, "task_result": str(retval)}})
 
         logger.info("Closing log stream")
         for handler in logger.handlers:

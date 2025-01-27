@@ -133,7 +133,6 @@ class Mutation:
         p.created_at = started_at
 
         if d["state"] == "STAGED":
-            print("PIPELINE STAGED")
             p.status.append(PipelineStatus(state=State.STAGED,
                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                            session=info.context["request"].app.kedro_session.session_id,
@@ -141,8 +140,8 @@ class Mutation:
                                            finished_at=None,
                                            task_id=None,
                                            task_name=str(run_pipeline)))
+            logger.info(f'Staging pipeline {p.name}')
         else:
-            print("PIPELINE READY AND ATTEMPTING TO RUN")
             result = run_pipeline.delay(
                 name = serial["name"], 
                 inputs = serial["inputs"], 
@@ -177,13 +176,40 @@ class Mutation:
         #p.kedro_parameters = info.context["request"].app.kedro_parameters
         return p
     
-    @strawberry.mutation(description = "Update a pipeline.")
+    @strawberry.mutation(description = "Update a staged pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
-        # Only update the keys in PipelineInput that have been supplied
-        # The key "name" is immutable and should never been updated
-        p = info.context["request"].app.backend.update(id=id, values={k: v for k, v in pipeline_input_dict.items() if k != "name" and v is not None})
+        p = info.context["request"].app.backend.load(id=id)
+
+        # Only allow updates to pipelines with latest status as STAGED
+        if (p.status[-1].state == "STAGED"):
+            # Update the keys in PipelineInput that have been supplied
+            print(pipeline_input_dict)
+            p = info.context["request"].app.backend.update(task_id=p.status[-1].task_id, values={k: v for k, v in pipeline_input_dict.items() if v is not None and k is not "state" and k is not "runner"})
+
+            # If PipelineInput is READY, then run the pipeline
+            if pipeline_input_dict.get("state",None) == "READY":
+                serial = p.serialize()
+
+                result = run_pipeline.delay(
+                name = serial["name"], 
+                inputs = serial["inputs"], 
+                outputs = serial["outputs"], 
+                data_catalog = serial["data_catalog"],
+                parameters = serial["parameters"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                session_id = info.context["request"].app.kedro_session.session_id
+                )
+                p.status.append(PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=datetime.now(),
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline)))
+                logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+                p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
 
         return  p
 
