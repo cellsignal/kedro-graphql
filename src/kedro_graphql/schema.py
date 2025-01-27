@@ -112,8 +112,6 @@ class Mutation:
         """
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
-        print(d)
-        print(p)
         p.task_name = str(run_pipeline)
 
         serial = p.serialize()
@@ -185,7 +183,7 @@ class Mutation:
         # Only allow updates to pipelines with latest status as STAGED
         if (p.status[-1].state == "STAGED"):
             # Update the keys in PipelineInput that have been supplied
-            print(pipeline_input_dict)
+ 
             p = info.context["request"].app.backend.update(task_id=p.status[-1].task_id, values={k: v for k, v in pipeline_input_dict.items() if v is not None and k is not "state" and k is not "runner"})
 
             # If PipelineInput is READY, then run the pipeline
@@ -212,6 +210,15 @@ class Mutation:
                 p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
 
         return  p
+    
+    @strawberry.mutation(description = "Delete a pipeline.")
+    def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
+        p = info.context["request"].app.backend.load(id=id)
+        if p:
+            info.context["request"].app.backend.delete(id=id)
+            logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
+            return p
+        return None
 
 
 @strawberry.type

@@ -103,3 +103,7 @@ class MongoBackend(BaseBackend):
             p = self.load(id = id)
 
         return p
+    
+    def delete(self, id: uuid.UUID = None):
+        """Delete a pipeline using id"""
+        self.db["pipelines"].delete_one({"_id": ObjectId(id)})

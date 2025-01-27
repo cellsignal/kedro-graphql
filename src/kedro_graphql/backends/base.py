@@ -33,3 +33,8 @@ class BaseBackend(metaclass=abc.ABCMeta):
     def update(self, id: uuid.UUID = None, task_id: str = None, values: dict = None):
         """Update a pipeline"""
         raise NotImplementedError
+    
+    @abc.abstractmethod
+    def delete(self, id: uuid.UUID = None):
+        """Delete a pipeline"""
+        raise NotImplementedError
