@@ -11,6 +11,8 @@ from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
 from datetime import datetime
+from kedro.framework.project import pipelines
+from .hooks import InvalidPipeline
 
 
 def encode_cursor(id: int) -> str:
@@ -110,6 +112,11 @@ class Mutation:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
+
+        # Check to see if pipeline name is the name of actual pipeline in the project
+        if pipeline.name not in pipelines.keys():
+            raise InvalidPipeline(f"Pipeline {pipeline.name} does not exist in the project.")
+        
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
         p.task_name = str(run_pipeline)
@@ -132,12 +139,12 @@ class Mutation:
 
         if d["state"] == "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
-                                           runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                           session=info.context["request"].app.kedro_session.session_id,
-                                           started_at=started_at,
+                                           runner=None,
+                                           session=None,
+                                           started_at=None,
                                            finished_at=None,
                                            task_id=None,
-                                           task_name=str(run_pipeline)))
+                                           task_name=None))
             logger.info(f'Staging pipeline {p.name}')
         else:
             result = run_pipeline.delay(
@@ -174,31 +181,28 @@ class Mutation:
         #p.kedro_parameters = info.context["request"].app.kedro_parameters
         return p
     
-    @strawberry.mutation(description = "Update a staged pipeline.")
+    @strawberry.mutation(description = "Update a pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
-        p = info.context["request"].app.backend.load(id=id)
 
-        # Only allow updates to pipelines with latest status as STAGED
-        if (p.status[-1].state == "STAGED"):
-            # Update the keys in PipelineInput that have been supplied
- 
-            p = info.context["request"].app.backend.update(task_id=p.status[-1].task_id, values={k: v for k, v in pipeline_input_dict.items() if v is not None and k is not "state" and k is not "runner"})
+        # If PipelineInput is READY, then run the pipeline
+        if pipeline_input_dict.get("state",None) == "READY":
+            p = info.context["request"].app.backend.load(id=id)
+            serial = p.serialize()
 
-            # If PipelineInput is READY, then run the pipeline
-            if pipeline_input_dict.get("state",None) == "READY":
-                serial = p.serialize()
+            result = run_pipeline.delay(
+            name = serial["name"], 
+            inputs = serial["inputs"], 
+            outputs = serial["outputs"], 
+            data_catalog = serial["data_catalog"],
+            parameters = serial["parameters"],
+            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+            session_id = info.context["request"].app.kedro_session.session_id
+            )
 
-                result = run_pipeline.delay(
-                name = serial["name"], 
-                inputs = serial["inputs"], 
-                outputs = serial["outputs"], 
-                data_catalog = serial["data_catalog"],
-                parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
-                )
+            if (p.status[-1].state != "STAGED"):
+                # Add new status to pipeline
                 p.status.append(PipelineStatus(state=State[result.status],
                                             runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                             session=info.context["request"].app.kedro_session.session_id,
@@ -206,8 +210,18 @@ class Mutation:
                                             finished_at=None,
                                             task_id=result.id,
                                             task_name=str(run_pipeline)))
-                logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
-                p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
+            else:
+                # Replace staged status with running status
+                p.status[-1] = PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=datetime.now(),
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline))
+
+            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+            p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
 
         return  p
     

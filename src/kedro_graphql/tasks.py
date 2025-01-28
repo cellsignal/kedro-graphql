@@ -5,7 +5,6 @@ from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
 from .models import State
-from .hooks import InvalidPipeline
 from datetime import datetime
 from kedro.framework.session import KedroSession
 
@@ -94,12 +93,8 @@ class KedroGraphqlTask(Task):
         Returns:
             None: The return value of this handler is ignored.
         """
-        # If the exception is of type InvalidPipeline, then return to STAGED state
-        if type(exc).__name__ == "InvalidPipeline":
-            logger.info(f'Staging pipeline {kwargs["name"]}')
-            self.db.update(task_id=task_id, values = {"status": {"state": State.STAGED, "task_exception": str(exc), "task_einfo": str(einfo)}})
-        else:
-            self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
+
+        self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -170,10 +165,6 @@ def run_pipeline(self,
         runner().run(pipelines[name], catalog = io, hook_manager=hook_manager, session_id=session_id)
 
         return "success"
-    # Invalid pipelines should be handled separately from other exceptions
-    except InvalidPipeline as e:
-        logger.error(f"Error running pipeline: {e}")
-        raise e
     except Exception as e:
         logger.error(f"Error running pipeline: {e}")
         raise e

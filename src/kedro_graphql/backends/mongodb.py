@@ -84,13 +84,16 @@ class MongoBackend(BaseBackend):
         else:
             filter = {'_id': ObjectId(id)}
         
-        # Only want to update last PipelineStatus object for hooks in tasks.py 
+        # Only want to update single PipelineStatus object for hooks in tasks.py 
         if "status" in values.keys() and not isinstance(values["status"],list):
             pipeline = self.db["pipelines"].find_one(filter, {'status': 1})
-            last_index = len(pipeline['status']) - 1
+            # Find the index of the status object to update
+            target_index = next(
+                (index for index, status in enumerate(pipeline['status']) if status.get("task_id") == task_id),
+                None
+            )
             # The keys "started_at", "task_id", "session", "task_name" are immutable and should never been updated
-            status_updates = {f"status.{last_index}.{key}": jsonable_encoder(value) for key, value in values["status"].items() if key not in [
-                "started_at", "task_id", "session", "task_name"]}
+            status_updates = {f"status.{target_index}.{key}": jsonable_encoder(value) for key, value in values["status"].items()}
             self.db["pipelines"].update_one(filter, {"$set": status_updates})
             values.pop("status")
             
