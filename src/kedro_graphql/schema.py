@@ -11,6 +11,9 @@ from fastapi.encoders import jsonable_encoder
 from base64 import b64encode, b64decode
 from bson.objectid import ObjectId
 from datetime import datetime
+from kedro.framework.project import pipelines
+from .hooks import InvalidPipeline
+from celery.states import UNREADY_STATES
 
 
 def encode_cursor(id: int) -> str:
@@ -75,13 +78,13 @@ class Query:
         )
 
     @strawberry.field(description = "Get a pipeline instance.")
-    def pipeline(self, id: str, info: Info) -> Pipeline:
+    def read_pipeline(self, id: str, info: Info) -> Pipeline:
         p = info.context["request"].app.backend.load(id)
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
     @strawberry.field(description = "Get a list of pipeline instances.")
-    def pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
+    def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)
@@ -106,14 +109,18 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description = "Execute a pipeline.")
-    def pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
+    def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
+
+        # Check to see if pipeline name is the name of actual pipeline in the project
+        if pipeline.name not in pipelines.keys():
+            raise InvalidPipeline(f"Pipeline {pipeline.name} does not exist in the project.")
+        
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
         p.task_name = str(run_pipeline)
-        p.created_at = datetime.now()
 
         serial = p.serialize()
         ## credentials not supported yet
@@ -129,25 +136,36 @@ class Mutation:
         ##        v["credentials"] = creds[v["credentials"]]
 
         started_at = datetime.now()
+        p.created_at = started_at
 
-        result = run_pipeline.delay(
-            name = serial["name"], 
-            inputs = serial["inputs"], 
-            outputs = serial["outputs"], 
-            data_catalog = serial["data_catalog"],
-            parameters = serial["parameters"],
-            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
-        )
+        if d["state"] == "STAGED":
+            p.status.append(PipelineStatus(state=State.STAGED,
+                                           runner=None,
+                                           session=None,
+                                           started_at=None,
+                                           finished_at=None,
+                                           task_id=None,
+                                           task_name=None))
+            logger.info(f'Staging pipeline {p.name}')
+        else:
+            result = run_pipeline.delay(
+                name = serial["name"], 
+                inputs = serial["inputs"], 
+                outputs = serial["outputs"], 
+                data_catalog = serial["data_catalog"],
+                parameters = serial["parameters"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                session_id = info.context["request"].app.kedro_session.session_id
+            )
 
-        pipeline_status = PipelineStatus(state=State[result.status],
-                                         runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                         session=info.context["request"].app.kedro_session.session_id,
-                                         started_at=started_at,
-                                         finished_at=None,
-                                         task_id=result.id,
-                                         task_name=str(run_pipeline))
-    
-        p.status.append(pipeline_status)
+            p.status.append(PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=started_at,
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline)))
+            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
         ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
         ## replace with original string
@@ -155,8 +173,6 @@ class Mutation:
         ## PLACE HOLDER for future reolver plugins
         ## testing plugin_resolvers, 
         #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
-
-        logger.info(f'Starting {p.name} pipeline with task_id: ' + str(result.task_id))
 
         p = info.context["request"].app.backend.create(p)
         ## add private fields to enable resovling of computed fields e.g. "describe" and "template"
@@ -170,11 +186,67 @@ class Mutation:
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
-        # Only update the keys in PipelineInput that have been supplied
-        # The key "name" is immutable and should never been updated
-        p = info.context["request"].app.backend.update(id=id, values={k: v for k, v in pipeline_input_dict.items() if k != "name" and v is not None})
+        p = info.context["request"].app.backend.load(id=id)
 
+        # If PipelineInput is READY and pipeline is not already running
+        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
+
+            serial = p.serialize()
+
+            result = run_pipeline.delay(
+            name = serial["name"], 
+            inputs = serial["inputs"], 
+            outputs = serial["outputs"], 
+            data_catalog = serial["data_catalog"],
+            parameters = serial["parameters"],
+            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+            session_id = info.context["request"].app.kedro_session.session_id
+            )
+
+            if (p.status[-1].state != "STAGED"):
+                # Add new status to pipeline
+                p.status.append(PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=datetime.now(),
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline)))
+            else:
+                # Replace staged status with running status
+                p.status[-1] = PipelineStatus(state=State[result.status],
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=info.context["request"].app.kedro_session.session_id,
+                                            started_at=datetime.now(),
+                                            finished_at=None,
+                                            task_id=result.id,
+                                            task_name=str(run_pipeline))
+
+            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+
+
+        # If PipelineInput is STAGED and pipeline is not already running or staged
+        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state not in UNREADY_STATES and p.status[-1].state != "STAGED":
+            p.status.append(PipelineStatus(state=State.STAGED,
+                                    runner=None,
+                                    session=None,
+                                    started_at=None,
+                                    finished_at=None,
+                                    task_id=None,
+                                    task_name=None))
+            logger.info(f'Staging pipeline {p.name}')
+
+        p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
         return  p
+    
+    @strawberry.mutation(description = "Delete a pipeline.")
+    def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
+        p = info.context["request"].app.backend.load(id=id)
+        if p:
+            info.context["request"].app.backend.delete(id=id)
+            logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
+            return p
+        return None
 
 
 @strawberry.type

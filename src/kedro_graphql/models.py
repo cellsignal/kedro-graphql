@@ -454,11 +454,16 @@ class PipelineTemplates:
 
         return pipes
 
+@strawberry.enum
+class PipelineInputStatus(Enum):
+    STAGED = "STAGED"
+    READY = "READY"
 
 
 @strawberry.input(description = "PipelineInput")
 class PipelineInput:
     name: str
+    state: PipelineInputStatus = PipelineInputStatus.STAGED
     parameters: Optional[List[ParameterInput]] = None
     inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
@@ -557,8 +562,8 @@ class State(Enum):
 @strawberry.type
 class PipelineStatus:
     state: State
-    session: str ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
-    runner: str = "kedro.runner.SequentialRunner"
+    session: Optional[str] ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
+    runner: Optional[str] = "kedro.runner.SequentialRunner"
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     task_id: Optional[str] = None

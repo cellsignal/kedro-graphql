@@ -6,6 +6,7 @@ from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
 from .models import State
 from datetime import datetime
+from kedro.framework.session import KedroSession
 
 #from .backends import init_backend
 #from .config import RUNNER
@@ -39,7 +40,7 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        self.db.update(task_id=task_id, values = {"state": State.STARTED})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
@@ -56,7 +57,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"state": State.SUCCESS})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.SUCCESS, "task_exception": None, "task_einfo": None}})
 
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -75,7 +76,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)})
+        self.db.update(task_id=task_id, values = {"status": {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)}})
    
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -92,8 +93,8 @@ class KedroGraphqlTask(Task):
         Returns:
             None: The return value of this handler is ignored.
         """
-        
-        self.db.update(task_id=task_id, values = {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)})
+
+        self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -109,8 +110,9 @@ class KedroGraphqlTask(Task):
         Returns:
             None: The return value of this handler is ignored.
         """
+
         finished_at = datetime.now()
-        self.db.update(task_id=task_id, values = {"finished_at": finished_at, "task_result": retval})
+        self.db.update(task_id=task_id, values = {"status": {"finished_at": finished_at, "task_result": str(retval)}})
 
         logger.info("Closing log stream")
         for handler in logger.handlers:
@@ -131,7 +133,8 @@ def run_pipeline(self,
                  outputs: dict = None, 
                  parameters: dict = None, 
                  data_catalog: dict = None,
-                 runner: str = None):
+                 runner: str = None,
+                 session_id: str = None):
 
     ## start
     if data_catalog:
@@ -149,7 +152,19 @@ def run_pipeline(self,
     params["parameters"] = parameters
     io.add_feed_dict(params)
 
-    runner = init_runner(runner = runner)
-    runner().run(pipelines[name], catalog = io)
-    
-    return "success"
+    kedro_session = KedroSession(session_id=session_id)
+    hook_manager = kedro_session._hook_manager
+
+    try:
+        hook_manager.hook.before_pipeline_run(
+                run_params={
+                    "pipeline_name": name
+                }, pipeline=pipelines.get(name, None), catalog=io
+            )
+        runner = init_runner(runner = runner)
+        runner().run(pipelines[name], catalog = io, hook_manager=hook_manager, session_id=session_id)
+
+        return "success"
+    except Exception as e:
+        logger.error(f"Error running pipeline: {e}")
+        raise e

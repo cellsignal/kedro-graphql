@@ -145,7 +145,7 @@ and execute the following mutation:
 
 ```
 mutation MyMutation {
-  pipeline(
+  createPipeline(
     pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], dataCatalog:[{name: "text_in",config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},{name: "text_out",config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}]}
   ) {
     id
@@ -159,7 +159,7 @@ Expected response:
 ```
 {
   "data": {
-    "pipeline": {
+    "createPipeline": {
       "id": "6463991db98d7f8564ab15a0",
       "name": "example00"
     }
@@ -213,7 +213,7 @@ Fetch the pipeline result with the following query:
 
 ```
 query MyQuery {
-  pipeline(id: "6463991db98d7f8564ab15a0") {
+  readPipeline(id: "6463991db98d7f8564ab15a0") {
     describe
     id
     name
@@ -249,7 +249,7 @@ Expected result:
 ```
 {
   "data": {
-    "pipeline": {
+    "readPipeline": {
       "describe": "#### Pipeline execution order ####\nInputs: parameters, params:example, text_in\n\necho_node\n\nOutputs: text_out\n##################################",
       "id": "6463991db98d7f8564ab15a0",
       "name": "example00",

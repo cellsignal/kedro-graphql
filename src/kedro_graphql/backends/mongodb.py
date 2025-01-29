@@ -78,16 +78,27 @@ class MongoBackend(BaseBackend):
 
     def update(self, id: uuid.UUID = None, task_id: str = None, values = {}):
         """Update a pipeline using id or task id"""
+
         if task_id:
             filter = {"status": {"$elemMatch": {"task_id": task_id}}}
         else:
             filter = {'_id': ObjectId(id)}
         
-        # Update the last object in the "status" array
-        pipeline = self.db["pipelines"].find_one(filter, {'status': 1})
-        last_index = len(pipeline['status']) - 1
-        status_updates = {f"status.{last_index}.{key}": jsonable_encoder(value) for key, value in values.items()}
-        self.db["pipelines"].update_one(filter, {"$set": status_updates})
+        # Only want to update single PipelineStatus object for hooks in tasks.py 
+        if "status" in values.keys() and not isinstance(values["status"],list):
+            pipeline = self.db["pipelines"].find_one(filter, {'status': 1})
+            # Find the index of the status object to update
+            target_index = next(
+                (index for index, status in enumerate(pipeline['status']) if status.get("task_id") == task_id),
+                None
+            )
+            # The keys "started_at", "task_id", "session", "task_name" are immutable and should never been updated
+            status_updates = {f"status.{target_index}.{key}": jsonable_encoder(value) for key, value in values["status"].items()}
+            self.db["pipelines"].update_one(filter, {"$set": status_updates})
+            values.pop("status")
+            
+        newvalues = { "$set": values }
+        self.db["pipelines"].update_one(filter, newvalues)
 
         if task_id:
             p = self.load(task_id = task_id)
@@ -95,3 +106,7 @@ class MongoBackend(BaseBackend):
             p = self.load(id = id)
 
         return p
+    
+    def delete(self, id: uuid.UUID = None):
+        """Delete a pipeline using id"""
+        self.db["pipelines"].delete_one({"_id": ObjectId(id)})
