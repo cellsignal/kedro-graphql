@@ -13,6 +13,7 @@ from bson.objectid import ObjectId
 from datetime import datetime
 from kedro.framework.project import pipelines
 from .hooks import InvalidPipeline
+from celery.states import UNREADY_STATES
 
 
 def encode_cursor(id: int) -> str:
@@ -185,10 +186,11 @@ class Mutation:
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
+        p = info.context["request"].app.backend.load(id=id)
 
-        # If PipelineInput is READY, then run the pipeline
-        if pipeline_input_dict.get("state",None) == "READY":
-            p = info.context["request"].app.backend.load(id=id)
+        # If PipelineInput is READY and pipeline is not already running
+        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
+
             serial = p.serialize()
 
             result = run_pipeline.delay(
@@ -221,8 +223,20 @@ class Mutation:
                                             task_name=str(run_pipeline))
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
-            p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
 
+
+        # If PipelineInput is STAGED and pipeline is not already running or staged
+        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state not in UNREADY_STATES and p.status[-1].state != "STAGED":
+            p.status.append(PipelineStatus(state=State.STAGED,
+                                    runner=None,
+                                    session=None,
+                                    started_at=None,
+                                    finished_at=None,
+                                    task_id=None,
+                                    task_name=None))
+            logger.info(f'Staging pipeline {p.name}')
+
+        p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
         return  p
     
     @strawberry.mutation(description = "Delete a pipeline.")
