@@ -4,9 +4,13 @@ from kedro.io import DataCatalog
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
-from .models import State
-from datetime import datetime
+from .models import State, DataSet
+from datetime import datetime, date
 from kedro.framework.session import KedroSession
+from fastapi.encoders import jsonable_encoder
+from .config import config as CONFIG
+import json
+from kedro.io import AbstractDataset
 
 #from .backends import init_backend
 #from .config import RUNNER
@@ -40,7 +44,23 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
+        p = self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
+
+        today = date.today()
+
+        # Add metadata and log datasets to data catalog
+        gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
+                                                    "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/meta.json"}))
+        gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
+                                                   "dataset": "text.TextDataset",
+                                                   "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/logs"}))
+        p.data_catalog.append(gql_meta)
+        p.data_catalog.append(gql_logs)
+
+        # Save metadata to S3
+        AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
+        p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
+        setattr(self, "kedro_graphql_pipeline", p)
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
@@ -135,7 +155,7 @@ def run_pipeline(self,
                  data_catalog: dict = None,
                  runner: str = None,
                  session_id: str = None):
-
+    print(f"run_pipeline: {self.kedro_graphql_pipeline}")
     ## start
     if data_catalog:
         logger.info("using data_catalog parameter to build data catalog")
