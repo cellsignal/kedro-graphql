@@ -46,21 +46,33 @@ class KedroGraphqlTask(Task):
 
         p = self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
 
-        today = date.today()
+        try:
+            # Ensure AWS_BUCKET_NAME is provided
+            bucket_name = CONFIG.get('AWS_BUCKET_NAME')
+            if not bucket_name:
+                raise KeyError("AWS_BUCKET_NAME is missing from CONFIG.")
 
-        # Add metadata and log datasets to data catalog
-        gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
-                                                    "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/meta.json"}))
-        gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
-                                                   "dataset": "text.TextDataset",
-                                                   "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/logs"}))
-        p.data_catalog.append(gql_meta)
-        p.data_catalog.append(gql_logs)
+            today = date.today()
 
-        # Save metadata to S3
-        AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
-        p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
-        setattr(self, "kedro_graphql_pipeline", p)
+            # Add metadata and log datasets to data catalog
+            gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
+                                                        "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/meta.json"}))
+            gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
+                                                    "dataset": "text.TextDataset",
+                                                    "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/logs"}))
+            p.data_catalog.append(gql_meta)
+            p.data_catalog.append(gql_logs)
+
+            # Save metadata to S3
+            AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
+            p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
+            setattr(self, "kedro_graphql_pipeline", p)
+
+        except KeyError as e:
+            logging.info(f"Missing AWS_BUCKET_NAME in CONFIG. Not capturing logs in S3: {e}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred: {e}")
+
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
