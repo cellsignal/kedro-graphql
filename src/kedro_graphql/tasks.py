@@ -1,5 +1,6 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
+from kedro import __version__ as kedro_version
 #from kedro.runner import SequentialRunner
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
@@ -56,22 +57,24 @@ class KedroGraphqlTask(Task):
 
             # Add metadata and log datasets to data catalog
             gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
-                                                        "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/meta.json"}))
+                                                        "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json"}))
             gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
                                                     "dataset": "text.TextDataset",
-                                                    "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/month={today.month}/year={today.year}/day={today.day}/{p.id}/logs"}))
+                                                    "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/"}))
             p.data_catalog.append(gql_meta)
             p.data_catalog.append(gql_logs)
 
             # Save metadata to S3
             AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
             p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
+
+            # Capture pipeline object returned as an attribute of the task object
             setattr(self, "kedro_graphql_pipeline", p)
 
         except KeyError as e:
-            logging.info(f"Missing AWS_BUCKET_NAME in CONFIG. Not capturing logs in S3: {e}")
+            logger.info(f"Missing AWS_BUCKET_NAME in CONFIG. Not capturing logs in S3: {e}")
         except Exception as e:
-            logging.error(f"An unexpected error occurred: {e}")
+            logger.error(f"An unexpected error occurred: {e}")
 
 
     def on_success(self, retval, task_id, args, kwargs):
@@ -167,9 +170,17 @@ def run_pipeline(self,
                  data_catalog: dict = None,
                  runner: str = None,
                  session_id: str = None):
-    print(f"run_pipeline: {self.kedro_graphql_pipeline}")
-    ## start
-    if data_catalog:
+
+    logger = logging.getLogger("kedro")
+    # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
+    if getattr(self, "kedro_graphql_pipeline", None):
+        logger.info("using data_catalog with gql_meta and gql_logs")
+        catalog = {}
+        for dataset in self.kedro_graphql_pipeline.data_catalog:
+            dataset.serialize()
+            catalog[dataset.name] = json.loads(dataset.config)
+        io = DataCatalog().from_config(catalog = catalog)
+    elif data_catalog:
         logger.info("using data_catalog parameter to build data catalog")
         io = DataCatalog().from_config(catalog = data_catalog)
     else:
@@ -187,16 +198,46 @@ def run_pipeline(self,
     kedro_session = KedroSession(session_id=session_id)
     hook_manager = kedro_session._hook_manager
 
+    record_data = {
+            "session_id": session_id,
+            "project_path": kedro_session._project_path.as_posix(),
+            "env": kedro_session.load_context().env,
+            "kedro_version": kedro_version,
+            "tags": "", # Construct the pipeline using only nodes which have this tag attached.
+            "from_nodes": "", # A list of node names which should be used as a starting point.
+            "to_nodes": "", # A list of node names which should be used as an end point.
+            "node_names": "", # Run only nodes with specified names.
+            "from_inputs": "", # A list of dataset names which should be used as a starting point.
+            "to_outputs": "", # A list of dataset names which should be used as an end point.
+            "load_versions": "", # Specify a particular dataset version (timestamp) for loading
+            "extra_params": "", # Specify extra parameters that you want to pass to the context initialiser.
+            "pipeline_name": name,
+            "namespace": "", # Name of the node namespace to run.
+            "runner": getattr(runner, "__name__", str(runner)),
+        }
+
     try:
         hook_manager.hook.before_pipeline_run(
-                run_params={
-                    "pipeline_name": name
-                }, pipeline=pipelines.get(name, None), catalog=io
+                run_params=record_data,
+                pipeline=pipelines.get(name, None),
+                catalog=io
             )
         runner = init_runner(runner = runner)
         runner().run(pipelines[name], catalog = io, hook_manager=hook_manager, session_id=session_id)
 
+        hook_manager.hook.after_pipeline_run(
+                run_params=record_data,
+                pipeline=pipelines.get(name, None),
+                catalog=io
+            )
+
         return "success"
     except Exception as e:
         logger.error(f"Error running pipeline: {e}")
+        hook_manager.hook.on_pipline_error(
+            error = e,
+            run_params=record_data,
+            pipeline=pipelines.get(name, None),
+            catalog=io
+        )
         raise e

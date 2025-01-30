@@ -3,6 +3,7 @@ from typing import Any
 from kedro.framework.hooks import hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
+import os
 
 
 class InvalidPipeline(Exception):
@@ -37,3 +38,35 @@ class DataValidationHooks:
         for input in filtered_keys:
             if not catalog.exists(input):
                 raise InvalidPipeline(f"Input dataset {input} does not exist.")
+
+
+class DataLoggingHooks:
+    """
+    A Kedro hook class to save pipeline logs to S3 bucket. 
+    """
+
+    def save_meta(self, run_params: dict[str, Any], catalog: CatalogProtocol):
+        if catalog.exists("gql_meta"):
+            d = catalog.load("gql_meta")
+            d["run_params"]= run_params
+            catalog.save("gql_meta", d)
+
+    def save_logs(self, catalog: CatalogProtocol, session_id: str):
+        d = catalog._get_dataset("gql_logs")
+        log_path = os.path.join(os.path.dirname(__file__), "logs/info.log")
+        with open(log_path, "r") as log_file:
+            logs = log_file.read()
+            d.save({f"logs/{session_id}.txt": logs})
+
+    @hook_impl
+    def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
+        self.save_meta(run_params, catalog)
+
+    @hook_impl
+    def after_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
+        self.save_logs(catalog, run_params["session_id"])
+
+    @hook_impl
+    def on_pipline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
+        self.save_logs(catalog, run_params["session_id"])
+

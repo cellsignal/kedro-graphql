@@ -185,8 +185,12 @@ class Mutation:
     @strawberry.mutation(description = "Update a pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
+        try:
+            p = info.context["request"].app.backend.load(id=id)
+        except Exception as e:
+            raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+
         pipeline_input_dict = jsonable_encoder(pipeline)
-        p = info.context["request"].app.backend.load(id=id)
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
