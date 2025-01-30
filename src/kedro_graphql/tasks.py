@@ -171,7 +171,6 @@ def run_pipeline(self,
                  runner: str = None,
                  session_id: str = None):
 
-    logger = logging.getLogger("kedro")
     # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
     if getattr(self, "kedro_graphql_pipeline", None):
         logger.info("using data_catalog with gql_meta and gql_logs")
