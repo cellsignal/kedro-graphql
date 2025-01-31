@@ -154,8 +154,7 @@ class Mutation:
                 outputs = serial["outputs"], 
                 data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
             )
 
             p.status.append(PipelineStatus(state=State[result.status],
@@ -165,6 +164,7 @@ class Mutation:
                                             finished_at=None,
                                             task_id=result.id,
                                             task_name=str(run_pipeline)))
+            
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
         ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
@@ -203,8 +203,7 @@ class Mutation:
             outputs = serial["outputs"], 
             data_catalog = serial["data_catalog"],
             parameters = serial["parameters"],
-            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-            session_id = info.context["request"].app.kedro_session.session_id
+            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
             )
 
             if (p.status[-1].state != "STAGED"):

@@ -4,6 +4,7 @@ from kedro.framework.hooks import hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
 import os
+from .config import config 
 
 
 class InvalidPipeline(Exception):
@@ -46,27 +47,43 @@ class DataLoggingHooks:
     """
 
     def save_meta(self, run_params: dict[str, Any], catalog: CatalogProtocol):
-        if catalog.exists("gql_meta"):
-            d = catalog.load("gql_meta")
-            d["run_params"]= run_params
-            catalog.save("gql_meta", d)
+        d = catalog.load("gql_meta")
+        d["run_params"]= run_params
+        catalog.save("gql_meta", d)
 
     def save_logs(self, catalog: CatalogProtocol, session_id: str):
-        d = catalog._get_dataset("gql_logs")
-        log_path = os.path.join(os.path.dirname(__file__), "logs/info.log")
-        with open(log_path, "r") as log_file:
-            logs = log_file.read()
-            d.save({f"logs/{session_id}.txt": logs})
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        log_files = ["info.log", "errors.log"]
+
+        for log_file in log_files:
+            log_path = os.path.join(log_dir, log_file)
+            if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
+                with open(log_path, "r") as file:
+                    logs = file.read()
+                d = catalog._get_dataset("gql_logs")
+                d.save({f"logs/{session_id}/{log_file}": logs})
 
     @hook_impl
     def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        self.save_meta(run_params, catalog)
+        # Clear previous logs before pipeline run
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        log_files = ["info.log", "errors.log"]
+
+        for log_file in log_files:
+            log_path = os.path.join(log_dir, log_file)
+            if os.path.exists(log_path):
+                open(log_path, 'w').close()
+
+        if config.get('AWS_BUCKET_NAME'):
+            self.save_meta(run_params, catalog)
 
     @hook_impl
-    def after_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        self.save_logs(catalog, run_params["session_id"])
+    def after_pipeline_run(self, run_params: dict[str, Any], run_result: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
+        if config.get('AWS_BUCKET_NAME'):
+            self.save_logs(catalog, run_params["session_id"])
 
     @hook_impl
     def on_pipline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        self.save_logs(catalog, run_params["session_id"])
+        if config.get('AWS_BUCKET_NAME'):
+            self.save_logs(catalog, run_params["session_id"])
 
