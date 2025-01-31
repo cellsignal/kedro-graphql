@@ -7,8 +7,10 @@ from kedro_graphql.tasks import run_pipeline
 @pytest.mark.usefixtures('celery_session_worker')
 @pytest.mark.usefixtures('depends_on_current_app')
 @pytest.mark.asyncio
-async def test_run_pipeline(mock_text_in, mock_text_out):
-
+async def test_run_pipeline_missing_pipeline(mock_text_in, mock_text_out):
+    """
+    This test will fail because the pipeline is missing in the backend
+    """
     result = run_pipeline.delay(
         name = "example00", 
         data_catalog = {"text_in":{"type": "text.TextDataset", "filepath": str(mock_text_in)},
