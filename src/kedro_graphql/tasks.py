@@ -7,6 +7,7 @@ from celery import shared_task, Task
 from .models import State
 from datetime import datetime
 from kedro.framework.session import KedroSession
+import json
 
 #from .backends import init_backend
 #from .config import RUNNER
@@ -24,6 +25,7 @@ class KedroGraphqlTask(Task):
             self._db = self.app.kedro_graphql_backend
         return self._db
 
+    ## TO DO - modify these hooks to pass the status index -1 if possible to see if we can handle it here rather than in mongo backend 
     def before_start(self, task_id, args, kwargs):
         """Handler called before the task starts.
 
@@ -40,7 +42,16 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
+        #self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
+        ## instead of fetching, we can pass an encoded pipeline object in the task kwargs
+        ##print(args, kwargs)
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.STARTED
+        p.status[-1].task_id = task_id
+        p.status[-1].task_args = json.dumps(args)
+        p.status[-1].task_kwargs = json.dumps(kwargs)
+        self.db.update(p)
+
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
@@ -57,7 +68,9 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"status": {"state": State.SUCCESS, "task_exception": None, "task_einfo": None}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.SUCCESS
+ 
 
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -76,7 +89,11 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"status": {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.RETRY
+        p.status[-1].task_exception = str(exc)
+        p.status[-1].task_einfo = str(einfo)
+        self.db.update(p)        
    
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -94,7 +111,12 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
 
-        self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.FAILURE
+        p.status[-1].task_exception = str(exc)
+        p.status[-1].task_einfo = str(einfo)
+        self.db.update(p)
+
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -112,7 +134,11 @@ class KedroGraphqlTask(Task):
         """
 
         finished_at = datetime.now()
-        self.db.update(task_id=task_id, values = {"status": {"finished_at": finished_at, "task_result": str(retval)}})
+
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].finished_at = finished_at
+        p.status[-1].task_result = str(retval)
+        self.db.update(p)
 
         logger.info("Closing log stream")
         for handler in logger.handlers:
@@ -128,6 +154,7 @@ class KedroGraphqlTask(Task):
 
 @shared_task(bind = True, base = KedroGraphqlTask)
 def run_pipeline(self, 
+                 id: str = None,
                  name: str = None, 
                  inputs: dict = None, 
                  outputs: dict = None, 

@@ -79,7 +79,7 @@ class Query:
 
     @strawberry.field(description = "Get a pipeline instance.")
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
-        p = info.context["request"].app.backend.load(id)
+        p = info.context["request"].app.backend.read(id)
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
@@ -120,7 +120,7 @@ class Mutation:
         
         d = jsonable_encoder(pipeline)
         p = Pipeline.from_dict(d)
-        p.task_name = str(run_pipeline)
+        #p.task_name = str(run_pipeline)
 
         serial = p.serialize()
         ## credentials not supported yet
@@ -147,8 +147,23 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
+            p = info.context["request"].app.backend.create(p)
+            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
+            return p
         else:
+
+            p.status.append(PipelineStatus(state=State.READY,
+                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                            session=None,
+                                            started_at=started_at,
+                                            finished_at=None,
+                                            task_id=None,
+                                            task_name=str(run_pipeline)))
+
+            p = info.context["request"].app.backend.create(p)
+ 
             result = run_pipeline.delay(
+                id = str(p.id),
                 name = serial["name"], 
                 inputs = serial["inputs"], 
                 outputs = serial["outputs"], 
@@ -158,69 +173,54 @@ class Mutation:
                 session_id = info.context["request"].app.kedro_session.session_id
             )
 
-            p.status.append(PipelineStatus(state=State[result.status],
-                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                            session=info.context["request"].app.kedro_session.session_id,
-                                            started_at=started_at,
-                                            finished_at=None,
-                                            task_id=result.id,
-                                            task_name=str(run_pipeline)))
+
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
-
-        ## TO DO - remove credentials from inputs and outputs so they are not persisted to backend
-        ## replace with original string
-
-        ## PLACE HOLDER for future reolver plugins
-        ## testing plugin_resolvers, 
-        #RESOLVER_PLUGINS["text_in"].__input__("called text_in resolver")
-
-        p = info.context["request"].app.backend.create(p)
-        ## add private fields to enable resovling of computed fields e.g. "describe" and "template"
-        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
-        #p.kedro_pipelines = info.context["request"].app.kedro_pipelines
-        #p.kedro_catalog = info.context["request"].app.kedro_catalog
-        #p.kedro_parameters = info.context["request"].app.kedro_parameters
-        return p
+            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
+            return p
     
+
     @strawberry.mutation(description = "Update a pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
-        p = info.context["request"].app.backend.load(id=id)
+        p = info.context["request"].app.backend.read(id=id)
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
 
+            if (p.status[-1].state != "STAGED"):
+                # Add new status object to pipeline because this another run attempt
+                p.status.append(PipelineStatus(state=State.READY,
+                                               runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                               session=info.context["request"].app.kedro_session.session_id,
+                                               started_at=datetime.now(),
+                                               finished_at=None,
+                                               task_id=None,
+                                               task_name=str(run_pipeline)))
+            else:
+                # Replace staged status with running status
+                p.status[-1] = PipelineStatus(state=State.READY,
+                                              runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                              session=info.context["request"].app.kedro_session.session_id,
+                                              started_at=datetime.now(),
+                                              finished_at=None,
+                                              task_id=None,
+                                              task_name=str(run_pipeline))
+
+
+
             serial = p.serialize()
 
             result = run_pipeline.delay(
-            name = serial["name"], 
-            inputs = serial["inputs"], 
-            outputs = serial["outputs"], 
-            data_catalog = serial["data_catalog"],
-            parameters = serial["parameters"],
-            runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-            session_id = info.context["request"].app.kedro_session.session_id
+                id = str(p.id),
+                name = serial["name"], 
+                inputs = serial["inputs"], 
+                outputs = serial["outputs"], 
+                data_catalog = serial["data_catalog"],
+                parameters = serial["parameters"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                session_id = info.context["request"].app.kedro_session.session_id
             )
-
-            if (p.status[-1].state != "STAGED"):
-                # Add new status to pipeline
-                p.status.append(PipelineStatus(state=State[result.status],
-                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                            session=info.context["request"].app.kedro_session.session_id,
-                                            started_at=datetime.now(),
-                                            finished_at=None,
-                                            task_id=result.id,
-                                            task_name=str(run_pipeline)))
-            else:
-                # Replace staged status with running status
-                p.status[-1] = PipelineStatus(state=State[result.status],
-                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                            session=info.context["request"].app.kedro_session.session_id,
-                                            started_at=datetime.now(),
-                                            finished_at=None,
-                                            task_id=result.id,
-                                            task_name=str(run_pipeline))
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
@@ -236,12 +236,12 @@ class Mutation:
                                     task_name=None))
             logger.info(f'Staging pipeline {p.name}')
 
-        p = info.context["request"].app.backend.update(id=id, values={"status": jsonable_encoder(p.status)})
+        p = info.context["request"].app.backend.update(p)
         return  p
     
     @strawberry.mutation(description = "Delete a pipeline.")
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
-        p = info.context["request"].app.backend.load(id=id)
+        p = info.context["request"].app.backend.read(id=id)
         if p:
             info.context["request"].app.backend.delete(id=id)
             logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
@@ -255,7 +255,7 @@ class Subscription:
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
-        p  = info.context["request"].app.backend.load(id=id)
+        p  = info.context["request"].app.backend.read(id=id)
         if p:
             async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
@@ -263,7 +263,7 @@ class Subscription:
 
     @strawberry.subscription(description = "Subscribe to pipeline logs.")
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
-        p  = info.context["request"].app.backend.load(id=id)
+        p  = info.context["request"].app.backend.read(id=id)
         if p:
             stream = await PipelineLogStream().create(task_id = p.status[-1].task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
             async for e in stream.consume():

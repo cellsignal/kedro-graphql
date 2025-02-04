@@ -11,6 +11,8 @@ from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
 from .utils import parse_filepath_for_s3
 from kedro.io import AbstractDataset
+from fastapi.encoders import jsonable_encoder
+from copy import deepcopy
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -644,6 +646,15 @@ class Pipeline:
             "data_catalog": data_catalog,
             "parameters": parameters,
         }
+    
+    def encode(self):
+        p = deepcopy(self)
+        p.id = str(p.id) ## if type ObjectID the jsonable_encoder will throw an error
+        encoded_pipeline = jsonable_encoder(p)
+
+        ## remove fields we dont want to encode
+        encoded_pipeline.pop("kedro_pipelines_index")
+        return encoded_pipeline
 
     @staticmethod
     def from_dict(payload):
@@ -669,7 +680,7 @@ class Pipeline:
         
         if payload.get("status", None):
             status = [PipelineStatus(
-                state=s["state"],
+                state=State[s["state"]],
                 session=s["session"],
                 runner=s.get("runner", "kedro.runner.SequentialRunner"),
                 started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,

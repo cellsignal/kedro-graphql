@@ -24,7 +24,6 @@ class TestSchemaSubscriptions:
             }
     	  }
         """
-
         sub = await mock_app.schema.subscribe(query)
 
         async for result in sub:
