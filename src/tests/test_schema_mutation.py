@@ -393,4 +393,52 @@ class TestSchemaMutations:
                                                              variable_values={"id": pipeline_id})
 
         assert delete_pipeline_resp.errors is None
+
+    @pytest.mark.usefixtures('mock_celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.usefixtures('depends_on_current_app')
+    @pytest.mark.asyncio
+    async def test_pipeline_data_catalog_modified_with_log_datasets(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
+
+        create_pipeline_mutation = """
+        mutation CreatePipeline($pipeline: PipelineInput!) {
+          createPipeline(pipeline: $pipeline) {
+            id
+          }
+        }
+        """
+
+        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
+        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
+
+        create_pipeline_resp = await mock_app.schema.execute(create_pipeline_mutation,
+                                                             variable_values={"pipeline": {
+                                                                 "name": "example00",
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
+                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "parameters": [{"name": "example", "value": "hello"},
+                                                                                {"name": "duration", "value": "0.1", "type": "FLOAT"}],
+                                                                  "state": "READY",
+
+                                                             }})
+        # Sleep for 1 second to ensure pipeline before_start handler has run
+        import time
+        time.sleep(1)
+        pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
+
+        pipeline_query = """
+        query ReadPipelineModifiedDataCatalog($id: String!) {
+           readPipeline(id: $id) {
+            dataCatalog {
+              name
+            }
+          }
+        }
+        """
+
+        pipeline_query = await mock_app.schema.execute(pipeline_query,
+                                                             variable_values={"id": pipeline_id})
+        
+        assert pipeline_query.data["readPipeline"]["dataCatalog"] == [{'name': 'text_in'}, {'name': 'text_out'}, {'name': 'gql_meta'}, {'name': 'gql_logs'}]
+        assert pipeline_query.errors is None
     
