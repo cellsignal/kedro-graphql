@@ -74,16 +74,16 @@ class DataLoggingHooks:
             if os.path.exists(log_path):
                 open(log_path, 'w').close()
 
-        if config.get('AWS_BUCKET_NAME'):
+        if config.get('LOG_PATH_PREFIX'):
             self.save_meta(run_params, catalog)
 
     @hook_impl
     def after_pipeline_run(self, run_params: dict[str, Any], run_result: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        if config.get('AWS_BUCKET_NAME'):
+        if config.get('LOG_PATH_PREFIX'):
             self.save_logs(catalog, run_params["session_id"])
 
     @hook_impl
     def on_pipline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        if config.get('AWS_BUCKET_NAME'):
+        if config.get('LOG_PATH_PREFIX'):
             self.save_logs(catalog, run_params["session_id"])
 

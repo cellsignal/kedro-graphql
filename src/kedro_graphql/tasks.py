@@ -49,18 +49,18 @@ class KedroGraphqlTask(Task):
         p = self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
 
         try:
-            # Ensure AWS_BUCKET_NAME is provided
-            bucket_name = CONFIG.get('AWS_BUCKET_NAME')
-            if bucket_name:
+            # Ensure LOG_PATH_PREFIX is provided
+            log_path_prefix = CONFIG.get('LOG_PATH_PREFIX')
+            if log_path_prefix:
 
                 today = date.today()
 
                 # Add metadata and log datasets to data catalog
                 gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
-                                                            "filepath":f"s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json"}))
+                                                            "filepath":f"{CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json"}))
                 gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
                                                         "dataset": "text.TextDataset",
-                                                        "path": f"s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/"}))
+                                                        "path": f"{CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/"}))
                 p.data_catalog.append(gql_meta)
                 p.data_catalog.append(gql_logs)
 
@@ -68,13 +68,13 @@ class KedroGraphqlTask(Task):
                 AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
                 p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
 
-                logger.info(f"Capturing pipeline metadata in s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json")
-                logger.info(f"Capturing pipeline logs in s3://{CONFIG['AWS_BUCKET_NAME']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/logs")
+                logger.info(f"Capturing pipeline metadata in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json")
+                logger.info(f"Capturing pipeline logs in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/logs")
 
                 # Capture pipeline object returned as an attribute of the task object
                 setattr(self, "kedro_graphql_pipeline", p)
             else:
-                logger.info(f"Missing AWS_BUCKET_NAME in config. Not capturing logs in S3.")
+                logger.info(f"Missing LOG_PATH_PREFIX in config. Not capturing logs in S3.")
         except Exception as e:
             logger.error(f"An unexpected error occurred: {e}")
 
