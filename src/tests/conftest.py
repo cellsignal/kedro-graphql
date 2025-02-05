@@ -7,7 +7,8 @@ from kedro_graphql.asgi import KedroGraphQL
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag, State, PipelineStatus
 from unittest.mock import patch
-
+from datetime import datetime
+import json
 
 @pytest.fixture(scope="session")
 def kedro_session():
@@ -101,26 +102,29 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
         tags = [Tag(**p) for p in tags]
     )
 
+    p.status.append(PipelineStatus(state=State.READY,
+                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                                        session=mock_app.kedro_session.session_id,
+                                        started_at=datetime.now(),
+                                        task_name=str(run_pipeline)))
+
+    p.created_at = datetime.now()
+    p = mock_app.backend.create(p)
+
     serial = p.serialize()
 
-    result = run_pipeline.apply_async(kwargs = {"name": "example00", 
+    result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
+                                                 "name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
-                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
+                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
+                                      countdown=0.1)
     
-    pipeline_status = PipelineStatus(state=State[result.status],
-                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                                        session=mock_app.kedro_session.session_id,
-                                        started_at=None,
-                                        finished_at=None,
-                                        task_id=result.id,
-                                        task_name=str(run_pipeline))
-
-    p.status.append(pipeline_status)
-
+    
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
-    p = mock_app.backend.create(p)
+    p.status[-1].task_id = result.id
+    p = mock_app.backend.update(p)
     return p
 
 @pytest.fixture
@@ -139,24 +143,50 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
         tags = [Tag(**p) for p in tags]
     )
 
+    p.status.append(PipelineStatus(state=State.READY,
+                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                                        session=mock_app.kedro_session.session_id,
+                                        started_at=datetime.now(),
+                                        task_name=str(run_pipeline)))
+
+    p.created_at = datetime.now()
+    p = mock_app.backend.create(p)
+
     serial = p.serialize()
 
-    result = run_pipeline.apply_async(kwargs = {"name": "example00", 
+    result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
+                                                 "name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
-                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, countdown=0.1)
-
-    pipeline_status = PipelineStatus(state=State[result.status],
-                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                                        session=mock_app.kedro_session.session_id,
-                                        started_at=None,
-                                        finished_at=None,
-                                        task_id=result.id,
-                                        task_name=str(run_pipeline))
-
-    p.status.append(pipeline_status)
+                                                 "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
+                                      countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
-    p = mock_app.backend.create(p)
+    p.status[-1].task_id = result.id
+    p = mock_app.backend.update(p)
+    return p
+
+@pytest.fixture
+def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
+
+    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name":"text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
+    parameters = [{"name":"example", "value":"hello"}]
+    tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
+
+    p = Pipeline(
+        name = "example00",
+        data_catalog= [DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
+        parameters = [Parameter(**p) for p in parameters],
+        tags = [Tag(**p) for p in tags]
+    )
+
+    p.status.append(PipelineStatus(state=State.READY,
+                                        runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                                        session=mock_app.kedro_session.session_id,
+                                        started_at=datetime.now(),
+                                        task_name=str(run_pipeline)))
+
+    p.created_at = datetime.now()
     return p

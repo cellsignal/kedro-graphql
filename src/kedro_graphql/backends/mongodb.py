@@ -47,13 +47,12 @@ class MongoBackend(BaseBackend):
 
         results = []
         for r in raw:
-            id = r.pop("_id")
-            p = Pipeline.from_dict(r)
-            p.id = str(id)
+            r["id"] = str(["_id"])
+            p = Pipeline.decode(r)
             results.append(p)
         return results
 
-    def load(self, id: uuid.UUID = None, task_id: str = None):
+    def read(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id or task_id"""
         if task_id:
             r = self.db["pipelines"].find_one({"status": {"$elemMatch": {"task_id": task_id}}})
@@ -61,52 +60,36 @@ class MongoBackend(BaseBackend):
             r = self.db["pipelines"].find_one({"_id": ObjectId(id)})
 
         if r:
-            id = r.pop("_id")
-            p = Pipeline.from_dict(r)
-            p.id = str(id)
+            r["id"] = str(r["_id"])
+            p = Pipeline.decode(r)
             return p
         else:
             return None
 
     def create(self, pipeline: Pipeline):
         """Save a pipeline"""
-        j = jsonable_encoder(pipeline)
-        created = self.db["pipelines"].insert_one(j)
+        values = pipeline.encode()
+        values.pop("id") ## we dont have an id yet, we will get it after insert
+        created = self.db["pipelines"].insert_one(values)
         created = self.db["pipelines"].find_one({"_id": created.inserted_id})
-        pipeline.id = created["_id"]
-        return pipeline
+        created["id"] = str(created["_id"])
+        p = Pipeline.decode(created)
+        return p
 
-    def update(self, id: uuid.UUID = None, task_id: str = None, values = {}):
-        """Update a pipeline using id or task id"""
-
-        if task_id:
-            filter = {"status": {"$elemMatch": {"task_id": task_id}}}
-        else:
-            filter = {'_id': ObjectId(id)}
-        
-        # Only want to update single PipelineStatus object for hooks in tasks.py 
-        if "status" in values.keys() and not isinstance(values["status"],list):
-            pipeline = self.db["pipelines"].find_one(filter, {'status': 1})
-            # Find the index of the status object to update
-            target_index = next(
-                (index for index, status in enumerate(pipeline['status']) if status.get("task_id") == task_id),
-                None
-            )
-            # The keys "started_at", "task_id", "session", "task_name" are immutable and should never been updated
-            status_updates = {f"status.{target_index}.{key}": jsonable_encoder(value) for key, value in values["status"].items()}
-            self.db["pipelines"].update_one(filter, {"$set": status_updates})
-            values.pop("status")
-            
+    def update(self, pipeline: Pipeline = None):
+        """Update a pipeline"""
+        id = ObjectId(pipeline.id)
+        filter = {'_id': id}
+        values = pipeline.encode()
+        values.pop("id") ## we dont want to update the id
         newvalues = { "$set": values }
         self.db["pipelines"].update_one(filter, newvalues)
 
-        if task_id:
-            p = self.load(task_id = task_id)
-        else:
-            p = self.load(id = id)
+        p = self.read(id = id)
 
         return p
     
     def delete(self, id: uuid.UUID = None):
         """Delete a pipeline using id"""
         self.db["pipelines"].delete_one({"_id": ObjectId(id)})
+        return id

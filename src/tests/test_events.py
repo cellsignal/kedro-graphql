@@ -23,7 +23,7 @@ from celery.result import AsyncResult
 class TestPipelineEventMonitor:
 
     @pytest.mark.asyncio
-    async def test_consume_default(self, mocker, mock_celery_session_app, mock_pipeline):
+    async def test_consume_default(self, mocker, mock_celery_session_app, mock_app, mock_pipeline):
         """
         Requires Redis to run.
         """
@@ -38,7 +38,7 @@ class TestPipelineEventMonitor:
             assert e["status"] in ALL_STATES
 
     @pytest.mark.asyncio
-    async def test_consume_short_timeout(self, mocker, mock_celery_session_app, mock_pipeline):
+    async def test_consume_short_timeout(self, mocker, mock_celery_session_app, mock_app, mock_pipeline):
         """
         Requires Redis to run.
 
@@ -55,7 +55,7 @@ class TestPipelineEventMonitor:
             assert e["status"] in ALL_STATES
         
     @pytest.mark.asyncio
-    async def test_consume_exception(self, mocker, mock_celery_session_app, mock_pipeline):
+    async def test_consume_exception(self, mocker, mock_celery_session_app, mock_app, mock_pipeline):
         """
         Requires Redis to run.
 
@@ -68,6 +68,7 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
         result = AsyncResult(mock_pipeline.status[-1].task_id).wait()
+
         async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id).start():
             print(e)
             assert e["status"] in ALL_STATES
