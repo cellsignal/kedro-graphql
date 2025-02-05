@@ -1,8 +1,11 @@
 import pytest
 from kedro_graphql.models import State
+from datetime import datetime
 
 def test_backend_create(mock_app, mock_pipeline_no_task):
     p = mock_app.backend.create(mock_pipeline_no_task)
+    assert p.id is not None
+    p.id = None
     assert p == mock_pipeline_no_task
 
 

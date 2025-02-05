@@ -42,9 +42,6 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        #self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
-        ## instead of fetching, we can pass an encoded pipeline object in the task kwargs
-        ##print(args, kwargs)
         p = self.db.read(id=kwargs["id"])
         p.status[-1].state = State.STARTED
         p.status[-1].task_id = task_id
@@ -70,6 +67,7 @@ class KedroGraphqlTask(Task):
         
         p = self.db.read(id=kwargs["id"])
         p.status[-1].state = State.SUCCESS
+        self.db.update(p)
  
 
 

@@ -108,6 +108,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
                                         started_at=datetime.now(),
                                         task_name=str(run_pipeline)))
 
+    p.created_at = datetime.now()
     p = mock_app.backend.create(p)
 
     serial = p.serialize()
@@ -148,6 +149,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
                                         started_at=datetime.now(),
                                         task_name=str(run_pipeline)))
 
+    p.created_at = datetime.now()
     p = mock_app.backend.create(p)
 
     serial = p.serialize()
@@ -186,5 +188,5 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
                                         started_at=datetime.now(),
                                         task_name=str(run_pipeline)))
 
-
+    p.created_at = datetime.now()
     return p

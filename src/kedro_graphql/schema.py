@@ -114,26 +114,18 @@ class Mutation:
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
 
-        # Check to see if pipeline name is the name of actual pipeline in the project
         if pipeline.name not in pipelines.keys():
             raise InvalidPipeline(f"Pipeline {pipeline.name} does not exist in the project.")
         
         d = jsonable_encoder(pipeline)
-        p = Pipeline.from_dict(d)
-        #p.task_name = str(run_pipeline)
+        p = Pipeline.decode(d)
 
-        serial = p.serialize()
+        serial = p.encode(encoder="kedro")
+
         ## credentials not supported yet
         ## merge any credentials with inputs and outputs
         ## credentials are intentionally not persisted
         ## NOTE celery result may persist creds in task result?
-        ##for k,v in serial["inputs"].items():
-        ##    if v.get("credentials", None):
-        ##        v["credentials"] = creds[v["credentials"]]
-
-        ##for k,v in serial["outputs"].items():
-        ##    if v.get("credentials", None):
-        ##        v["credentials"] = creds[v["credentials"]]
 
         started_at = datetime.now()
         p.created_at = started_at
@@ -151,7 +143,6 @@ class Mutation:
             p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
         else:
-
             p.status.append(PipelineStatus(state=State.READY,
                                             runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                             session=None,
@@ -172,7 +163,6 @@ class Mutation:
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                 session_id = info.context["request"].app.kedro_session.session_id
             )
-
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
@@ -209,7 +199,7 @@ class Mutation:
 
 
 
-            serial = p.serialize()
+            serial = p.encode(encoder="kedro")
 
             result = run_pipeline.delay(
                 id = str(p.id),
