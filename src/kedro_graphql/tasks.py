@@ -201,7 +201,7 @@ def run_pipeline(self,
         if getattr(self, "kedro_graphql_pipeline", None):
             logger.info("using data_catalog with gql_meta and gql_logs")
             serial = self.kedro_graphql_pipeline.serialize()
-            catalog = {**serial["data_catalog"], **(data_catalog or {**inputs, **outputs})}
+            catalog = {**serial["data_catalog"], **(data_catalog if data_catalog is not None else {**inputs, **outputs})}
         elif data_catalog:
             logger.info("using data_catalog parameter to build data catalog")
             catalog = data_catalog

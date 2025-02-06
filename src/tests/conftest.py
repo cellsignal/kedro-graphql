@@ -104,22 +104,23 @@ def mock_text_out_tsv(tmp_path):
 @pytest.fixture
 def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    data_catalog = [{"name": "text_in","config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},{"name": "text_out","config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}]
+    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
     p = Pipeline(
         name = "example00",
-        data_catalog=[DataSet.decode(d) for d in data_catalog],
+        inputs = [DataSet(**i) for i in inputs],
+        outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags]
-    )
-
-    p.status.append(PipelineStatus(state=State.READY,
+        tags = [Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.READY,
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=datetime.now(),
-                                        task_name=str(run_pipeline)))
+                                        task_name=str(run_pipeline))]
+    )
 
     p.created_at = datetime.now()
     p = mock_app.backend.create(p)
@@ -128,7 +129,8 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
                                                 "name": "example00", 
-                                                 "data_catalog": serial["data_catalog"],
+                                                 "inputs": serial["inputs"], 
+                                                 "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
                                       countdown=0.1)
@@ -142,22 +144,23 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 @pytest.fixture
 def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    data_catalog = [{"name": "text_in","config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},{"name": "text_out","config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}]
+    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
+    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
     p = Pipeline(
         name = "example00",
-        data_catalog=[DataSet.decode(d) for d in data_catalog],
+        inputs = [DataSet(**i) for i in inputs],
+        outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags]
-    )
-
-    p.status.append(PipelineStatus(state=State.READY,
+        tags = [Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.READY,
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=datetime.now(),
-                                        task_name=str(run_pipeline)))
+                                        task_name=str(run_pipeline))]
+    )
 
     p.created_at = datetime.now()
     p = mock_app.backend.create(p)
@@ -166,7 +169,8 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     result = run_pipeline.apply_async(kwargs = {"id": str(p.id),
                                                 "name": "example00", 
-                                                 "data_catalog": serial["data_catalog"],
+                                                 "inputs": serial["inputs"], 
+                                                 "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
                                       countdown=0.1)
