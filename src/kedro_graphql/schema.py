@@ -181,11 +181,8 @@ class Mutation:
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
-            print(p.status[-1].state.value)
-
             if (p.status[-1].state.value != "STAGED"):
                 # Add new status object to pipeline because this is another run attempt
-                print("Adding new status object to pipeline because this is another run attempt")
                 p.status.append(PipelineStatus(state=State.READY,
                                                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                                session=None,
@@ -195,7 +192,6 @@ class Mutation:
                                                task_name=str(run_pipeline)))
             else:
                 # Replace staged status with running status
-                print("Replacing staged status with running status")
                 p.status[-1] = PipelineStatus(state=State.READY,
                                               runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                                               session=None,

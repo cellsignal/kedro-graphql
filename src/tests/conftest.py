@@ -110,7 +110,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     p = Pipeline(
         name = "example00",
-        data_catalog=[DataSet.from_dict(d) for d in data_catalog],
+        data_catalog=[DataSet.decode(d) for d in data_catalog],
         parameters = [Parameter(**p) for p in parameters],
         tags = [Tag(**p) for p in tags]
     )
@@ -148,7 +148,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     p = Pipeline(
         name = "example00",
-        data_catalog=[DataSet.from_dict(d) for d in data_catalog],
+        data_catalog=[DataSet.decode(d) for d in data_catalog],
         parameters = [Parameter(**p) for p in parameters],
         tags = [Tag(**p) for p in tags]
     )

@@ -69,7 +69,7 @@ class KedroGraphqlTask(Task):
 
                 # Save metadata to S3
                 AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
-                p = self.db.update(p.id, values={"data_catalog": jsonable_encoder(p.data_catalog)})
+                p = self.db.update(p)
 
                 logger.info(f"Capturing pipeline metadata in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json")
                 logger.info(f"Capturing pipeline logs in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/logs")
@@ -196,24 +196,22 @@ def run_pipeline(self,
         p = self.db.read(id=id)
         p.status[-1].session = session.session_id
         self.db.update(p)
-        
+
         # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
         if getattr(self, "kedro_graphql_pipeline", None):
             logger.info("using data_catalog with gql_meta and gql_logs")
-            catalog = {}
-            for dataset in self.kedro_graphql_pipeline.data_catalog:
-                dataset.serialize()
-                catalog[dataset.name] = json.loads(dataset.config)
-            io = DataCatalog().from_config(catalog = catalog)
+            serial = self.kedro_graphql_pipeline.serialize()
+            catalog = {**serial["data_catalog"], **(data_catalog or {**inputs, **outputs})}
         elif data_catalog:
             logger.info("using data_catalog parameter to build data catalog")
-            io = DataCatalog().from_config(catalog = data_catalog)
+            catalog = data_catalog
         else:
             logger.info("using inputs and outputs parameters to build data catalog")
             logger.info("inputs: " + str(inputs))
             logger.info("outputs: " + str(outputs))
             catalog = {**inputs, **outputs}
-            io = DataCatalog().from_config(catalog = catalog)
+
+        io = DataCatalog().from_config(catalog=catalog)
 
         ## add parameters to DataCatalog e.g. {"params:myparam":"value"}
         params = {"params:"+k:v for k,v in parameters.items()}
