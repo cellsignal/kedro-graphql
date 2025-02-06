@@ -11,6 +11,8 @@ from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
 from .utils import parse_filepath_for_s3
 from kedro.io import AbstractDataset
+from fastapi.encoders import jsonable_encoder
+from copy import deepcopy
 
 def mark_deprecated(default = None):
     return strawberry.field(default = default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
@@ -38,6 +40,16 @@ class Parameter:
     name: str
     value: str
     type: Optional[ParameterType] = ParameterType.STRING
+
+    @staticmethod
+    def decode(input_dict) -> dict:
+        """
+        Returns a Parameter object from a dictionary.
+        """
+        if input_dict.get("type", True):
+            return Parameter(name = input_dict["name"], value = input_dict["value"], type = ParameterType[input_dict["type"].upper()])
+        else:
+            return Parameter(**input_dict)
 
     def serialize(self) -> dict:
         """
@@ -261,7 +273,7 @@ class DataSet:
         return {self.name: temp}
 
     @staticmethod
-    def from_dict(payload):
+    def decode(payload):
         """
         Return a new DataSet from a dictionary.
 
@@ -644,32 +656,47 @@ class Pipeline:
             "data_catalog": data_catalog,
             "parameters": parameters,
         }
+    
+    def encode(self, encoder = "dict"):
+
+        if encoder == "dict":
+            p = deepcopy(self)
+            p.id = str(p.id) ## if type ObjectID the jsonable_encoder will throw an error
+            encoded_pipeline = jsonable_encoder(p)
+
+            ## remove fields we dont want to encode
+            encoded_pipeline.pop("kedro_pipelines_index")
+            return encoded_pipeline
+        elif encoder == "kedro":
+            return self.serialize()
+        else:
+            raise TypeError("encoder must be 'dict' or 'kedro'")
 
     @staticmethod
-    def from_dict(payload):
+    def decode(payload):
         if payload.get("tags", None):
             tags = [Tag(**t) for t in payload["tags"]]
         else:
             tags = None
          
         if payload.get("data_catalog", None):
-            data_catalog = [DataSet.from_dict(d) for d in payload["data_catalog"]]
+            data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
             data_catalog = None
 
         if payload.get("inputs", None):
-            inputs = [DataSet.from_dict(i) for i in payload["inputs"]]
+            inputs = [DataSet.decode(i) for i in payload["inputs"]]
         else:
             inputs = None
 
         if payload.get("outputs", None):
-            outputs = [DataSet.from_dict(o) for o in payload["outputs"]]
+            outputs = [DataSet.decode(o) for o in payload["outputs"]]
         else:
             outputs = None
         
         if payload.get("status", None):
             status = [PipelineStatus(
-                state=s["state"],
+                state=State[s["state"]],
                 session=s["session"],
                 runner=s.get("runner", "kedro.runner.SequentialRunner"),
                 started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,
@@ -693,7 +720,7 @@ class Pipeline:
             inputs = inputs,
             outputs = outputs,
             data_catalog = data_catalog,
-            parameters = [Parameter(**p) for p in payload["parameters"]],
+            parameters = [Parameter.decode(p) for p in payload["parameters"]],
             status = status,
             tags = tags,
             created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,

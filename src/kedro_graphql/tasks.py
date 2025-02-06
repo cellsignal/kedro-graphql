@@ -1,7 +1,6 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
 from kedro import __version__ as kedro_version
-#from kedro.runner import SequentialRunner
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
@@ -13,10 +12,8 @@ from .config import config as CONFIG
 import json
 from kedro.io import AbstractDataset
 from pathlib import Path
-
-#from .backends import init_backend
-#from .config import RUNNER
 import logging
+
 logger = logging.getLogger("kedro")
 
 class KedroGraphqlTask(Task):
@@ -30,6 +27,7 @@ class KedroGraphqlTask(Task):
             self._db = self.app.kedro_graphql_backend
         return self._db
 
+    ## TO DO - modify these hooks to pass the status index -1 if possible to see if we can handle it here rather than in mongo backend 
     def before_start(self, task_id, args, kwargs):
         """Handler called before the task starts.
 
@@ -46,7 +44,12 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
         logger.addHandler(handler)
 
-        p = self.db.update(task_id=task_id, values = {"status": {"state": State.STARTED}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.STARTED
+        p.status[-1].task_id = task_id
+        p.status[-1].task_args = json.dumps(args)
+        p.status[-1].task_kwargs = json.dumps(kwargs)
+        self.db.update(p)
 
         try:
             # Ensure LOG_PATH_PREFIX is provided
@@ -74,7 +77,7 @@ class KedroGraphqlTask(Task):
                 # Capture pipeline object returned as an attribute of the task object
                 setattr(self, "kedro_graphql_pipeline", p)
             else:
-                logger.info(f"Missing LOG_PATH_PREFIX in config. Not capturing logs in S3.")
+                logger.info(f"Missing LOG_PATH_PREFIX in config. Not capturing session logs.")
         except Exception as e:
             logger.error(f"An unexpected error occurred: {e}")
 
@@ -94,7 +97,9 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"status": {"state": State.SUCCESS, "task_exception": None, "task_einfo": None}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.SUCCESS
+        self.db.update(p)
 
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -113,8 +118,13 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         
-        self.db.update(task_id=task_id, values = {"status": {"state": State.RETRY, "task_exception": str(exc), "task_einfo": str(einfo)}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.RETRY
+        p.status[-1].task_exception = str(exc)
+        p.status[-1].task_einfo = str(einfo)
+        self.db.update(p)        
    
+
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
 
@@ -131,7 +141,12 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
 
-        self.db.update(task_id=task_id, values = {"status": {"state": State.FAILURE, "task_exception": str(exc), "task_einfo": str(einfo)}})
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].state = State.FAILURE
+        p.status[-1].task_exception = str(exc)
+        p.status[-1].task_einfo = str(einfo)
+        self.db.update(p)
+
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -149,7 +164,11 @@ class KedroGraphqlTask(Task):
         """
 
         finished_at = datetime.now()
-        self.db.update(task_id=task_id, values = {"status": {"finished_at": finished_at, "task_result": str(retval)}})
+
+        p = self.db.read(id=kwargs["id"])
+        p.status[-1].finished_at = finished_at
+        p.status[-1].task_result = str(retval)
+        self.db.update(p)
 
         logger.info("Closing log stream")
         for handler in logger.handlers:
@@ -161,10 +180,9 @@ class KedroGraphqlTask(Task):
         logger.handlers = []
 
 
-
-
 @shared_task(bind = True, base = KedroGraphqlTask)
 def run_pipeline(self, 
+                 id: str = None,
                  name: str = None, 
                  inputs: dict = None, 
                  outputs: dict = None, 
@@ -174,6 +192,10 @@ def run_pipeline(self,
     with KedroSession.create(project_path = Path(__file__).resolve().parent.parent.parent,
                              env = CONFIG["KEDRO_GRAPHQL_ENV"],
                              conf_source = CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
+        
+        p = self.db.read(id=id)
+        p.status[-1].session = session.session_id
+        self.db.update(p)
         
         # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
         if getattr(self, "kedro_graphql_pipeline", None):

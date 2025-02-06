@@ -15,7 +15,7 @@ class BaseBackend(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load(self, id: uuid.UUID = None, task_id: str = None):
+    def read(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id"""
         raise NotImplementedError
 
@@ -30,7 +30,7 @@ class BaseBackend(metaclass=abc.ABCMeta):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update(self, id: uuid.UUID = None, task_id: str = None, values: dict = None):
+    def update(self, pipeline: Pipeline):
         """Update a pipeline"""
         raise NotImplementedError
     
