@@ -5,9 +5,6 @@ from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
 import os
 from .config import config
-import logging
-
-logger = logging.getLogger("kedro")
 
 
 class InvalidPipeline(Exception):
