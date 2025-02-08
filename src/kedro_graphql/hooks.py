@@ -4,7 +4,10 @@ from kedro.framework.hooks import hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
 import os
-from .config import config 
+from .config import config
+import logging
+
+logger = logging.getLogger("kedro")
 
 
 class InvalidPipeline(Exception):
@@ -51,8 +54,8 @@ class DataLoggingHooks:
         d["run_params"]= run_params
         catalog.save("gql_meta", d)
 
-    def save_logs(self, catalog: CatalogProtocol, session_id: str):
-        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    def save_logs(self, catalog: CatalogProtocol, session_id: str, celery_task_id: str):
+        log_dir = os.path.join("temp_logs", celery_task_id)
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:
@@ -66,7 +69,7 @@ class DataLoggingHooks:
     @hook_impl
     def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         # Clear previous logs before pipeline run
-        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        log_dir = os.path.join("temp_logs", run_params["celery_task_id"])
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:
@@ -80,10 +83,9 @@ class DataLoggingHooks:
     @hook_impl
     def after_pipeline_run(self, run_params: dict[str, Any], run_result: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         if config.get('LOG_PATH_PREFIX'):
-            self.save_logs(catalog, run_params["session_id"])
+            self.save_logs(catalog, run_params["session_id"], run_params["celery_task_id"])
 
     @hook_impl
     def on_pipline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         if config.get('LOG_PATH_PREFIX'):
-            self.save_logs(catalog, run_params["session_id"])
-
+            self.save_logs(catalog, run_params["session_id"], run_params["celery_task_id"])

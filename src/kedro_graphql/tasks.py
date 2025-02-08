@@ -7,12 +7,13 @@ from celery import shared_task, Task
 from .models import State, DataSet
 from datetime import datetime, date
 from kedro.framework.session import KedroSession
-from fastapi.encoders import jsonable_encoder
 from .config import config as CONFIG
 import json
 from kedro.io import AbstractDataset
 from pathlib import Path
 import logging
+import os
+import shutil
 
 logger = logging.getLogger("kedro")
 
@@ -52,6 +53,18 @@ class KedroGraphqlTask(Task):
         self.db.update(p)
 
         try:
+            # Create info and error handlers for the run
+            os.makedirs(os.path.join("temp_logs", task_id), exist_ok=True)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            info_handler = logging.FileHandler(os.path.join("temp_logs", task_id + '/info.log'), 'w')
+            info_handler.setLevel(logging.INFO)
+            info_handler.setFormatter(formatter)
+            error_handler = logging.FileHandler(os.path.join("temp_logs", task_id + '/errors.log'), 'w') 
+            error_handler.setLevel(logging.ERROR)
+            error_handler.setFormatter(formatter)
+            logger.addHandler(info_handler)
+            logger.addHandler(error_handler)
+            
             # Ensure LOG_PATH_PREFIX is provided
             log_path_prefix = CONFIG.get('LOG_PATH_PREFIX')
             if log_path_prefix:
@@ -171,13 +184,23 @@ class KedroGraphqlTask(Task):
         self.db.update(p)
 
         logger.info("Closing log stream")
+
+        # Clean up log handlers
         for handler in logger.handlers:
             if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
                 handler.flush()
                 handler.close()
                 handler.broker.connection.delete(task_id) ## delete stream
                 handler.broker.connection.close()
+            if isinstance(handler, logging.FileHandler):
+                handler.close()
         logger.handlers = []
+
+        # Clear logs from temp_logs
+        try:
+            shutil.rmtree("temp_logs")  # Removes the directory and its contents
+        except Exception as e:
+            logger.info(f"Failed to clear logs in temp_logs/: {e}")
 
 
 @shared_task(bind = True, base = KedroGraphqlTask)
@@ -222,6 +245,7 @@ def run_pipeline(self,
 
         record_data = {
                 "session_id": session.session_id,
+                "celery_task_id": self.request.id,
                 "project_path": session._project_path.as_posix(),
                 "env": session.load_context().env,
                 "kedro_version": kedro_version,
