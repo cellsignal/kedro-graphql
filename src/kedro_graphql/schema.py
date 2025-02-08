@@ -160,10 +160,9 @@ class Mutation:
                 outputs = serial["outputs"], 
                 data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
             )
-
+            
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
@@ -172,17 +171,21 @@ class Mutation:
     @strawberry.mutation(description = "Update a pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
+        try:
+            p = info.context["request"].app.backend.read(id=id)
+        except Exception as e:
+            raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+
         pipeline_input_dict = jsonable_encoder(pipeline)
-        p = info.context["request"].app.backend.read(id=id)
 
         # If PipelineInput is READY and pipeline is not already running
-        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
+        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
-            if (p.status[-1].state != "STAGED"):
-                # Add new status object to pipeline because this another run attempt
+            if (p.status[-1].state.value != "STAGED"):
+                # Add new status object to pipeline because this is another run attempt
                 p.status.append(PipelineStatus(state=State.READY,
                                                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                               session=info.context["request"].app.kedro_session.session_id,
+                                               session=None,
                                                started_at=datetime.now(),
                                                finished_at=None,
                                                task_id=None,
@@ -191,13 +194,11 @@ class Mutation:
                 # Replace staged status with running status
                 p.status[-1] = PipelineStatus(state=State.READY,
                                               runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                              session=info.context["request"].app.kedro_session.session_id,
+                                              session=None,
                                               started_at=datetime.now(),
                                               finished_at=None,
                                               task_id=None,
                                               task_name=str(run_pipeline))
-
-
 
             serial = p.encode(encoder="kedro")
 
@@ -208,15 +209,14 @@ class Mutation:
                 outputs = serial["outputs"], 
                 data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state not in UNREADY_STATES and p.status[-1].state != "STAGED":
+        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
                                     runner=None,
                                     session=None,
