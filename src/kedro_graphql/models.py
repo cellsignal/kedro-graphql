@@ -1,6 +1,6 @@
 import strawberry
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional
 import uuid
 import json
 from .config import config as CONFIG
