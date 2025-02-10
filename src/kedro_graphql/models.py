@@ -1,6 +1,6 @@
 import strawberry
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 import uuid
 import json
 from .config import config as CONFIG
@@ -466,6 +466,24 @@ class PipelineTemplates:
 
         return pipes
 
+
+@strawberry.enum
+class PipelineSliceType(Enum):
+    TAGS = "tags"
+    FROM_NODES = "from_nodes"
+    TO_NODES = "to_nodes"
+    NODE_NAMES = "node_names"
+    FROM_INPUTS = "from_inputs"
+    TO_OUTPUTS = "to_outputs"
+    NODE_NAMESPACE = "node_namespace"
+
+
+@strawberry.input(description = "Slice a pipeline.")
+class PipelineSlice:
+    slice: PipelineSliceType
+    args: List[str] # e.g. ["node1", "node2"]
+
+
 @strawberry.enum
 class PipelineInputStatus(Enum):
     STAGED = "STAGED"
@@ -485,6 +503,8 @@ class PipelineInput:
     #credentials_nested: Optional[List[CredentialNestedInput]] = None
     parent: Optional[uuid.UUID] = None
     runner: str = "kedro.runner.SequentialRunner"
+    slices: Optional[List[PipelineSlice]] = None
+    only_missing: Optional[bool] = False
 
     @staticmethod
     def create(name = None, data_catalog = None, parameters = None, tags = None):
