@@ -161,7 +161,8 @@ def run_pipeline(self,
                  data_catalog: dict = None,
                  runner: str = None,
                  session_id: str = None,
-                 slices: List[Dict[str, List[str]]]=None):
+                 slices: List[Dict[str, List[str]]] = None,
+                 only_missing: bool = False):
 
     ## start
     if data_catalog:
@@ -190,50 +191,72 @@ def run_pipeline(self,
             )
         runner = init_runner(runner = runner)
 
-        # Populate the filtering parameters based on the slices input
-        tags = None
-        from_nodes = None
-        to_nodes = None
-        node_names = None
-        from_inputs = None
-        to_outputs = None
-        node_namespace = None
+        if only_missing:
+            # https://github.com/kedro-org/kedro/blob/06d5a6920cbb6b45c07dca6f77d14bb35e283b19/kedro/runner/runner.py#L154
+            free_outputs = pipelines[name].outputs() - set(io.list())
+            missing = {ds for ds in io.list() if not io.exists(ds)}
+            to_build = free_outputs | missing
+            to_rerun = pipelines[name].only_nodes_with_outputs(*to_build) + pipelines[name].from_inputs(
+                *to_build
+            )
 
-        if slices:            
-            for slice_item in slices:
-                slice_type = slice_item['slice']
-                slice_args = slice_item['args']
-                
-                if slice_type == 'tags':
-                    tags = slice_args
-                elif slice_type == 'from_nodes':
-                    from_nodes = slice_args
-                elif slice_type == 'to_nodes':
-                    to_nodes = slice_args
-                elif slice_type == 'node_names':
-                    node_names = slice_args
-                elif slice_type == 'from_inputs':
-                    from_inputs = slice_args
-                elif slice_type == 'to_outputs':
-                    to_outputs = slice_args
-                elif slice_type == 'node_namespace':
-                    node_namespace = slice_args[0]
+            # We also need any missing datasets that are required to run the
+            # `to_rerun` pipeline, including any chains of missing datasets.
+            unregistered_ds = pipelines[name].datasets() - set(io.list())
+            output_to_unregistered = pipelines[name].only_nodes_with_outputs(*unregistered_ds)
+            input_from_unregistered = to_rerun.inputs() & unregistered_ds
+            to_rerun += output_to_unregistered.to_outputs(*input_from_unregistered)
 
-        filtered_pipeline = pipelines[name].filter(
-            tags=tags,
-            from_nodes=from_nodes,
-            to_nodes=to_nodes,
-            node_names=node_names,
-            from_inputs=from_inputs,
-            to_outputs=to_outputs,
-            node_namespace=node_namespace,
-        )
+            p = self.db.read(id=id)
+            p.status[-1].filtered_nodes = [node.name for node in to_rerun.nodes]
+            self.db.update(p)
 
-        p = self.db.read(id=id)
-        p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
-        self.db.update(p)
+            runner().run(to_rerun, io, hook_manager)
+        else:
+            # Populate the filtering parameters based on the slices input
+            tags = None
+            from_nodes = None
+            to_nodes = None
+            node_names = None
+            from_inputs = None
+            to_outputs = None
+            node_namespace = None
 
-        runner().run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session_id)
+            if slices:            
+                for slice_item in slices:
+                    slice_type = slice_item['slice']
+                    slice_args = slice_item['args']
+                    
+                    if slice_type == 'tags':
+                        tags = slice_args
+                    elif slice_type == 'from_nodes':
+                        from_nodes = slice_args
+                    elif slice_type == 'to_nodes':
+                        to_nodes = slice_args
+                    elif slice_type == 'node_names':
+                        node_names = slice_args
+                    elif slice_type == 'from_inputs':
+                        from_inputs = slice_args
+                    elif slice_type == 'to_outputs':
+                        to_outputs = slice_args
+                    elif slice_type == 'node_namespace':
+                        node_namespace = slice_args[0]
+
+            filtered_pipeline = pipelines[name].filter(
+                tags=tags,
+                from_nodes=from_nodes,
+                to_nodes=to_nodes,
+                node_names=node_names,
+                from_inputs=from_inputs,
+                to_outputs=to_outputs,
+                node_namespace=node_namespace,
+            )
+
+            p = self.db.read(id=id)
+            p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
+            self.db.update(p)
+
+            runner().run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session_id)
 
         return "success"
     except Exception as e:

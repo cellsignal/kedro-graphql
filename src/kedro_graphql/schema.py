@@ -162,7 +162,8 @@ class Mutation:
                 parameters = serial["parameters"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                 session_id = info.context["request"].app.kedro_session.session_id,
-                slices=d.get("slices", None)
+                slices=d.get("slices", None),
+                only_missing=d.get("only_missing", False)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
@@ -211,7 +212,8 @@ class Mutation:
                 parameters = serial["parameters"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                 session_id = info.context["request"].app.kedro_session.session_id,
-                slices=pipeline_input_dict.get("slices", None)
+                slices=pipeline_input_dict.get("slices", None),
+                only_missing=pipeline_input_dict.get("only_missing", False)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
