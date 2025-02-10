@@ -596,6 +596,7 @@ class PipelineStatus:
     state: State
     session: Optional[str] ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
     runner: Optional[str] = "kedro.runner.SequentialRunner"
+    filtered_nodes: Optional[List[str]] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     task_id: Optional[str] = None
@@ -719,6 +720,7 @@ class Pipeline:
                 state=State[s["state"]],
                 session=s["session"],
                 runner=s.get("runner", "kedro.runner.SequentialRunner"),
+                filtered_nodes=s.get("filtered_nodes"),
                 started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,
                 finished_at=datetime.fromisoformat(s["finished_at"]) if s.get("finished_at") else None,
                 task_name=s.get("task_name"),

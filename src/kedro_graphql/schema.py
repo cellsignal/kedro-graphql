@@ -161,7 +161,8 @@ class Mutation:
                 data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
+                session_id = info.context["request"].app.kedro_session.session_id,
+                slices=d.get("slices", None)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
@@ -176,9 +177,9 @@ class Mutation:
         p = info.context["request"].app.backend.read(id=id)
 
         # If PipelineInput is READY and pipeline is not already running
-        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state not in UNREADY_STATES:
+        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
-            if (p.status[-1].state != "STAGED"):
+            if (p.status[-1].state.value != "STAGED"):
                 # Add new status object to pipeline because this another run attempt
                 p.status.append(PipelineStatus(state=State.READY,
                                                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
@@ -209,14 +210,15 @@ class Mutation:
                 data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                session_id = info.context["request"].app.kedro_session.session_id
+                session_id = info.context["request"].app.kedro_session.session_id,
+                slices=pipeline_input_dict.get("slices", None)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state not in UNREADY_STATES and p.status[-1].state != "STAGED":
+        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
                                     runner=None,
                                     session=None,

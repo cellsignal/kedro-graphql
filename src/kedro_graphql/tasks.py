@@ -1,6 +1,7 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
 #from kedro.runner import SequentialRunner
+from typing import List, Dict
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
@@ -159,7 +160,8 @@ def run_pipeline(self,
                  parameters: dict = None, 
                  data_catalog: dict = None,
                  runner: str = None,
-                 session_id: str = None):
+                 session_id: str = None,
+                 slices: List[Dict[str, List[str]]]=None):
 
     ## start
     if data_catalog:
@@ -187,7 +189,51 @@ def run_pipeline(self,
                 }, pipeline=pipelines.get(name, None), catalog=io
             )
         runner = init_runner(runner = runner)
-        runner().run(pipelines[name], catalog = io, hook_manager=hook_manager, session_id=session_id)
+
+        # Populate the filtering parameters based on the slices input
+        tags = None
+        from_nodes = None
+        to_nodes = None
+        node_names = None
+        from_inputs = None
+        to_outputs = None
+        node_namespace = None
+
+        if slices:            
+            for slice_item in slices:
+                slice_type = slice_item['slice']
+                slice_args = slice_item['args']
+                
+                if slice_type == 'tags':
+                    tags = slice_args
+                elif slice_type == 'from_nodes':
+                    from_nodes = slice_args
+                elif slice_type == 'to_nodes':
+                    to_nodes = slice_args
+                elif slice_type == 'node_names':
+                    node_names = slice_args
+                elif slice_type == 'from_inputs':
+                    from_inputs = slice_args
+                elif slice_type == 'to_outputs':
+                    to_outputs = slice_args
+                elif slice_type == 'node_namespace':
+                    node_namespace = slice_args[0]
+
+        filtered_pipeline = pipelines[name].filter(
+            tags=tags,
+            from_nodes=from_nodes,
+            to_nodes=to_nodes,
+            node_names=node_names,
+            from_inputs=from_inputs,
+            to_outputs=to_outputs,
+            node_namespace=node_namespace,
+        )
+
+        p = self.db.read(id=id)
+        p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
+        self.db.update(p)
+
+        runner().run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session_id)
 
         return "success"
     except Exception as e:
