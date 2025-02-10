@@ -9,3 +9,15 @@ text_in:
 text_out:
   type: text.TextDataset
   filepath: ./data/02_intermediate/text_out.txt
+
+uppercase_out:
+  type: text.TextDataset
+  filepath: ./data/02_intermediate/uppercase_out.txt
+
+reversed_out:
+  type: text.TextDataset
+  filepath: ./data/02_intermediate/reversed_out.txt
+
+timestamp_out:
+  type: text.TextDataset
+  filepath: ./data/02_intermediate/timestamp_out.txt

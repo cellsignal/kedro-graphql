@@ -286,7 +286,7 @@ class TestSchemaMutations:
         output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         create_pipeline_resp = await mock_app.schema.execute(create_pipeline_mutation,
                                                              variable_values={"pipeline": {
-                                                                 "name": "example01",
+                                                                 "name": "example02",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
                                                                                  {"name": "text_out", "config": json.dumps(output_dict)}],
                                                                  "parameters": [{"name": "example", "value": "hello"},
