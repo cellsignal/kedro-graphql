@@ -8,6 +8,7 @@ from .models import State
 from datetime import datetime
 from kedro.framework.session import KedroSession
 import json
+from omegaconf import OmegaConf
 
 #from .backends import init_backend
 #from .config import RUNNER
@@ -172,10 +173,14 @@ def run_pipeline(self,
         catalog = {**inputs, **outputs}
         io = DataCatalog().from_config(catalog = catalog)
 
-    ## add parameters to DataCatalog e.g. {"params:myparam":"value"}
-    params = {"params:"+k:v for k,v in parameters.items()}
-    params["parameters"] = parameters
-    io.add_feed_dict(params)
+    ## add parameters to DataCatalog using OmegaConf and dotlist notation
+    parameters_dotlist = [f"{key}={value}" for key, value in parameters.items()]
+    conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
+    io.add_feed_dict({"parameters": conf_parameters})
+
+    params_dotlist = [f"params:{key}={value}" for key, value in parameters.items()]
+    conf_params = OmegaConf.from_dotlist(params_dotlist)
+    io.add_feed_dict(conf_params)
 
     kedro_session = KedroSession(session_id=session_id)
     hook_manager = kedro_session._hook_manager
