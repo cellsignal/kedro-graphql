@@ -747,7 +747,7 @@ class Pipeline:
             dot_list = json_to_dotlist(json.loads(payload["parameters_config"]))
             parameters = [Parameter.create(param.split("=")[0],param.split("=")[1]) for param in dot_list]
         elif payload.get("parameters", None):
-            parameters = [Parameter(**p) for p in payload["parameters"]]
+            parameters = [Parameter.decode(p) for p in payload["parameters"]]
         else:
             parameters = None
 
