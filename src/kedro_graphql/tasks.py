@@ -181,6 +181,10 @@ def run_pipeline(self,
     hook_manager = kedro_session._hook_manager
 
     try:
+        hook_manager.hook.after_catalog_created(
+            catalog=io
+        )
+
         hook_manager.hook.before_pipeline_run(
                 run_params={
                     "pipeline_name": name
