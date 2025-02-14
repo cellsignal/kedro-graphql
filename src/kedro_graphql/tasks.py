@@ -182,7 +182,12 @@ def run_pipeline(self,
 
     try:
         hook_manager.hook.after_catalog_created(
-            catalog=io
+            catalog=io,
+            conf_catalog=None,
+            conf_creds=None,
+            feed_dict=None,
+            save_version=None,
+            load_versions=None
         )
 
         hook_manager.hook.before_pipeline_run(
