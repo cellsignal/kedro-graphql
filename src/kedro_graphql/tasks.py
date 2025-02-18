@@ -54,16 +54,17 @@ class KedroGraphqlTask(Task):
 
         try:
             # Create info and error handlers for the run
-            os.makedirs(os.path.join("temp_logs", task_id), exist_ok=True)
+            os.makedirs(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, task_id), exist_ok=True)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            info_handler = logging.FileHandler(os.path.join("temp_logs", task_id + '/info.log'), 'w')
+            info_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, task_id + '/info.log'), 'w')
             info_handler.setLevel(logging.INFO)
             info_handler.setFormatter(formatter)
-            error_handler = logging.FileHandler(os.path.join("temp_logs", task_id + '/errors.log'), 'w') 
+            error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, task_id + '/errors.log'), 'w') 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
             logger.addHandler(info_handler)
             logger.addHandler(error_handler)
+            logger.info(f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}")
             
             # Ensure LOG_PATH_PREFIX is provided
             log_path_prefix = CONFIG.get('LOG_PATH_PREFIX')
@@ -198,9 +199,9 @@ class KedroGraphqlTask(Task):
 
         # Clear logs from temp_logs
         try:
-            shutil.rmtree("temp_logs")  # Removes the directory and its contents
+            shutil.rmtree(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, task_id))  # Removes the directory and its contents
         except Exception as e:
-            logger.info(f"Failed to clear logs in temp_logs/: {e}")
+            logger.info(f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
 
 
 @shared_task(bind = True, base = KedroGraphqlTask)
