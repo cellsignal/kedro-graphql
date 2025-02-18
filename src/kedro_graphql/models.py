@@ -703,7 +703,7 @@ class Pipeline:
         if payload.get("data_catalog", None):
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
-            data_catalog = None
+            data_catalog = []
 
         if payload.get("inputs", None):
             inputs = [DataSet.decode(i) for i in payload["inputs"]]

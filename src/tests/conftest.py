@@ -7,6 +7,8 @@ from kedro_graphql.asgi import KedroGraphQL
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import Pipeline, DataSet, Parameter, Tag, State, PipelineStatus
 from unittest.mock import patch
+import shutil
+import os
 from datetime import datetime
 import json
 
@@ -17,7 +19,20 @@ def kedro_session():
 
 @pytest.fixture(scope="session")
 def mock_app(kedro_session):
-    return KedroGraphQL(kedro_session = kedro_session)
+    app = KedroGraphQL(kedro_session = kedro_session)
+    app.config["LOG_PATH_PREFIX"]="src/tests/tmp"
+    return app
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_tmp_directory():
+    """Fixture to clean up all files in src/tests/tmp after each test."""
+    tmp_dir = "src/tests/tmp" # Should match LOG_PATH_PREFIX
+    
+    yield  # The test runs here
+    
+    # Clean up the tmp directory after the test completes
+    if os.path.exists(tmp_dir):
+        shutil.rmtree(tmp_dir)
 
 @pytest.fixture(scope='session')
 def celery_config():
@@ -99,14 +114,13 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
         inputs = [DataSet(**i) for i in inputs],
         outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags]
-    )
-
-    p.status.append(PipelineStatus(state=State.READY,
+        tags = [Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.READY,
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=datetime.now(),
-                                        task_name=str(run_pipeline)))
+                                        task_name=str(run_pipeline))]
+    )
 
     p.created_at = datetime.now()
     p = mock_app.backend.create(p)
@@ -114,7 +128,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
     serial = p.serialize()
 
     result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
-                                                 "name": "example00", 
+                                                "name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
@@ -140,22 +154,21 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
         inputs = [DataSet(**i) for i in inputs],
         outputs = [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
-        tags = [Tag(**p) for p in tags]
-    )
-
-    p.status.append(PipelineStatus(state=State.READY,
+        tags = [Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.READY,
                                         runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
                                         session=mock_app.kedro_session.session_id,
                                         started_at=datetime.now(),
-                                        task_name=str(run_pipeline)))
+                                        task_name=str(run_pipeline))]
+    )
 
     p.created_at = datetime.now()
     p = mock_app.backend.create(p)
 
     serial = p.serialize()
 
-    result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
-                                                 "name": "example00", 
+    result = run_pipeline.apply_async(kwargs = {"id": str(p.id),
+                                                "name": "example00", 
                                                  "inputs": serial["inputs"], 
                                                  "outputs": serial["outputs"],
                                                  "parameters": serial["parameters"],
