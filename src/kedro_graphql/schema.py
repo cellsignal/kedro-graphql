@@ -231,6 +231,7 @@ class Mutation:
             logger.info(f'Staging pipeline {p.name}')
 
         p = info.context["request"].app.backend.update(p)
+        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return  p
     
     @strawberry.mutation(description = "Delete a pipeline.")
