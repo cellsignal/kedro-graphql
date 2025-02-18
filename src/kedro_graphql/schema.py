@@ -240,6 +240,7 @@ class Mutation:
         if p:
             info.context["request"].app.backend.delete(id=id)
             logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
+            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
         return None
 
