@@ -6,9 +6,10 @@ generated using Kedro 0.19.11
 from kedro.pipeline import Pipeline, node, pipeline
 from .nodes import uppercase, reverse, append_timestamp
 
+
 def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([
-        node(uppercase, inputs="text_in", outputs="uppercase_out", name="uppercase_node"),
-        node(reverse, inputs="uppercase_out", outputs="reversed_out", name="reverse_node"),
-        node(append_timestamp, inputs="reversed_out", outputs="timestamp_out", name="timestamp_node"),
+        node(uppercase, inputs="text_in", outputs="uppercased", name="uppercase_node"),
+        node(reverse, inputs="uppercased", outputs="reversed", name="reverse_node"),
+        node(append_timestamp, inputs="reversed", outputs="timestamped", name="timestamp_node"),
     ])
