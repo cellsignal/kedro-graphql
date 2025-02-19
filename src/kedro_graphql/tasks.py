@@ -11,15 +11,11 @@ from datetime import datetime, date
 from kedro.framework.session import KedroSession
 from .config import config as CONFIG
 import json
-<<<<<<< HEAD
 from omegaconf import OmegaConf
-
 #from .backends import init_backend
 #from .config import RUNNER
-=======
 from kedro.io import AbstractDataset
 from pathlib import Path
->>>>>>> main
 import logging
 import os
 import shutil
