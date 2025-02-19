@@ -14,7 +14,7 @@ from datetime import datetime
 from kedro.framework.project import pipelines
 from .hooks import InvalidPipeline
 from celery.states import UNREADY_STATES
-from . import __version__
+from . import __version__ as kedro_graphql_version
 from importlib import import_module
 from .config import config
 
@@ -132,9 +132,18 @@ class Mutation:
 
         started_at = datetime.now()
         p.created_at = started_at
-        p.project_version = __version__
-        p.pipeline_version = import_module(".pipelines" + "." + pipeline.name, package=config.get("KEDRO_PROJECT_NAME", None)).__version__
-        p.kedro_graphql_version = config.get("KEDRO_PROJECT_VERSION", None)
+
+        # Get kedro project, kedro-graphql, and pipeline versions
+        p.project_version = config.get("KEDRO_PROJECT_VERSION", None)
+        p.kedro_graphql_version = kedro_graphql_version
+        p.pipeline_version = None
+        package_name = config.get("KEDRO_PROJECT_NAME", None)
+        if package_name:
+            try:
+                module = import_module(f".pipelines.{pipeline.name}", package=package_name)
+                p.pipeline_version = getattr(module, "__version__", None)
+            except Exception as e:
+                logger.info(f"Could not find pipeline version: {e}")
 
         if d["state"] == "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,

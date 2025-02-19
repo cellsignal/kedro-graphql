@@ -130,7 +130,7 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
             "KEDRO_GRAPHQL_RUNNER": runner,
             "KEDRO_GRAPHQL_ENV": env,
             "KEDRO_GRAPHQL_CONF_SOURCE": conf_source,
-            "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name),"__version__", "Unknown version"),
+            "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name),"__version__", None),
             "KEDRO_PROJECT_NAME": metadata.package_name
             })
     
