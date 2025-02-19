@@ -223,6 +223,8 @@ def run_pipeline(self,
                             env = CONFIG["KEDRO_GRAPHQL_ENV"],
                             conf_source = CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
         
+        hook_manager = session._hook_manager
+        
         p = self.db.read(id=id)
         p.status[-1].session = session.session_id
         self.db.update(p)
@@ -251,58 +253,64 @@ def run_pipeline(self,
         params_dotlist = [f"params:{key}={value}" for key, value in parameters.items()]
         conf_params = OmegaConf.from_dotlist(params_dotlist)
         io.add_feed_dict(conf_params)
-        
-        # Populate the filtering parameters based on the slices input
-        tags = None
-        from_nodes = None
-        to_nodes = None
-        node_names = None
-        from_inputs = None
-        to_outputs = None
-        node_namespace = None
 
-        if slices:            
-            for slice_item in slices:
-                slice_type = slice_item['slice']
-                slice_args = slice_item['args']
-                
-                if slice_type == 'tags':
-                    tags = slice_args
-                if slice_type == 'from_nodes':
-                    from_nodes = slice_args
-                if slice_type == 'to_nodes':
-                    to_nodes = slice_args
-                if slice_type == 'node_names':
-                    node_names = slice_args
-                if slice_type == 'from_inputs':
-                    from_inputs = slice_args
-                if slice_type == 'to_outputs':
-                    to_outputs = slice_args
-                if slice_type == 'node_namespace':
-                    node_namespace = slice_args[0]
-
-        record_data = {
-                "session_id": session.session_id,
-                "celery_task_id": self.request.id,
-                "project_path": session._project_path.as_posix(),
-                "env": session.load_context().env,
-                "kedro_version": kedro_version,
-                "tags": tags, # Construct the pipeline using only nodes which have this tag attached.
-                "from_nodes": from_nodes, # A list of node names which should be used as a starting point.
-                "to_nodes": to_nodes, # A list of node names which should be used as an end point.
-                "node_names": node_names, # Run only nodes with specified names.
-                "from_inputs": from_inputs, # A list of dataset names which should be used as a starting point.
-                "to_outputs": to_outputs, # A list of dataset names which should be used as an end point.
-                "load_versions": "", # Specify a particular dataset version (timestamp) for loading
-                "extra_params": "", # Specify extra parameters that you want to pass to the context initialiser.
-                "pipeline_name": name,
-                "namespace": node_namespace, # Name of the node namespace to run.
-                "runner": getattr(runner, "__name__", str(runner)),
-            }
-
-        hook_manager = session._hook_manager
-        
         try:
+            hook_manager.hook.after_catalog_created(
+                catalog=io,
+                conf_catalog=None,
+                conf_creds=None,
+                feed_dict=None,
+                save_version=None,
+                load_versions=None
+            )
+            # Populate the filtering parameters based on the slices input
+            tags = None
+            from_nodes = None
+            to_nodes = None
+            node_names = None
+            from_inputs = None
+            to_outputs = None
+            node_namespace = None
+
+            if slices:            
+                for slice_item in slices:
+                    slice_type = slice_item['slice']
+                    slice_args = slice_item['args']
+                    
+                    if slice_type == 'tags':
+                        tags = slice_args
+                    if slice_type == 'from_nodes':
+                        from_nodes = slice_args
+                    if slice_type == 'to_nodes':
+                        to_nodes = slice_args
+                    if slice_type == 'node_names':
+                        node_names = slice_args
+                    if slice_type == 'from_inputs':
+                        from_inputs = slice_args
+                    if slice_type == 'to_outputs':
+                        to_outputs = slice_args
+                    if slice_type == 'node_namespace':
+                        node_namespace = slice_args[0]
+
+            record_data = {
+                    "session_id": session.session_id,
+                    "celery_task_id": self.request.id,
+                    "project_path": session._project_path.as_posix(),
+                    "env": session.load_context().env,
+                    "kedro_version": kedro_version,
+                    "tags": tags, # Construct the pipeline using only nodes which have this tag attached.
+                    "from_nodes": from_nodes, # A list of node names which should be used as a starting point.
+                    "to_nodes": to_nodes, # A list of node names which should be used as an end point.
+                    "node_names": node_names, # Run only nodes with specified names.
+                    "from_inputs": from_inputs, # A list of dataset names which should be used as a starting point.
+                    "to_outputs": to_outputs, # A list of dataset names which should be used as an end point.
+                    "load_versions": "", # Specify a particular dataset version (timestamp) for loading
+                    "extra_params": "", # Specify extra parameters that you want to pass to the context initialiser.
+                    "pipeline_name": name,
+                    "namespace": node_namespace, # Name of the node namespace to run.
+                    "runner": getattr(runner, "__name__", str(runner)),
+                }
+        
             hook_manager.hook.before_pipeline_run(
                     run_params=record_data,
                     pipeline=pipelines.get(name, None),
