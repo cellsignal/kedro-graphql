@@ -9,7 +9,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
-from .utils import parse_filepath_for_s3, json_to_dotlist
+from .utils import parse_filepath_for_s3
 from kedro.io import AbstractDataset
 from fastapi.encoders import jsonable_encoder
 from copy import deepcopy
@@ -50,34 +50,6 @@ class Parameter:
             return Parameter(name = input_dict["name"], value = input_dict["value"], type = ParameterType[input_dict["type"].upper()])
         else:
             return Parameter(**input_dict)
-    
-    @staticmethod
-    def create(name: str, value: str):
-        """
-        Attempts to infer the type of "value" and create a Parameter object.
-        If the value is enclosed in quotes ("" or ''), it is treated as a string.
-        """
-        if (value.startswith("'") and value.endswith("'")) or (value.startswith('"') and value.endswith('"')):
-            # Preserve as a string, stripping the surrounding quotes
-            parsed_value = value[1:-1]  # Remove surrounding quotes
-            ptype = ParameterType.STRING
-        elif value.lower() in {"true", "false"}:  # Check for boolean
-            parsed_value = value.lower() == "true"
-            ptype = ParameterType.BOOLEAN
-        else:
-            try:
-                if "." in value:  # If it contains a dot, try float
-                    parsed_value = float(value)
-                    ptype = ParameterType.FLOAT
-                else:
-                    parsed_value = int(value)  # Otherwise, try int
-                    ptype = ParameterType.INTEGER
-            except ValueError:
-                parsed_value = value  # Default to string
-                ptype = ParameterType.STRING
-
-        return Parameter(name=name, value=str(parsed_value), type=ptype)
-
 
     def serialize(self) -> dict:
         """
@@ -505,7 +477,6 @@ class PipelineInput:
     name: str
     state: PipelineInputStatus = PipelineInputStatus.STAGED
     parameters: Optional[List[ParameterInput]] = None
-    parameters_config: Optional[str] = None
     inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     data_catalog: Optional[List[DataSetInput]] = None
@@ -743,10 +714,7 @@ class Pipeline:
         else:
             status = []
         
-        if payload.get("parameters_config", None):
-            dot_list = json_to_dotlist(json.loads(payload["parameters_config"]))
-            parameters = [Parameter.create(param.split("=")[0],param.split("=")[1]) for param in dot_list]
-        elif payload.get("parameters", None):
+        if payload.get("parameters", None):
             parameters = [Parameter.decode(p) for p in payload["parameters"]]
         else:
             parameters = None
