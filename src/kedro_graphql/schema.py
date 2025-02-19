@@ -158,9 +158,11 @@ class Mutation:
                 name = serial["name"], 
                 inputs = serial["inputs"], 
                 outputs = serial["outputs"], 
-                data_catalog = serial["data_catalog"],
                 parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+                data_catalog = serial["data_catalog"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                slices=d.get("slices", None),
+                only_missing=d.get("only_missing", False)
             )
             
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
@@ -206,10 +208,12 @@ class Mutation:
                 id = str(p.id),
                 name = serial["name"], 
                 inputs = serial["inputs"], 
-                outputs = serial["outputs"], 
-                data_catalog = serial["data_catalog"],
+                outputs = serial["outputs"],
                 parameters = serial["parameters"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+                data_catalog = serial["data_catalog"],
+                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                slices=pipeline_input_dict.get("slices", None),
+                only_missing=pipeline_input_dict.get("only_missing", False)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
@@ -227,6 +231,7 @@ class Mutation:
             logger.info(f'Staging pipeline {p.name}')
 
         p = info.context["request"].app.backend.update(p)
+        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return  p
     
     @strawberry.mutation(description = "Delete a pipeline.")
@@ -235,6 +240,7 @@ class Mutation:
         if p:
             info.context["request"].app.backend.delete(id=id)
             logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
+            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
         return None
 

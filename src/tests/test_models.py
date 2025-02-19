@@ -42,7 +42,7 @@ class TestDataSet:
 
         d = DataSet(**params)
         output = d.serialize()
-        print(output)
+
         assert output == expected
     
     def test_pre_signed_url_create_config_no_filepath(self):
@@ -150,7 +150,6 @@ class TestDataSet:
             "name": "text_in",
             "config": f'{{"type": "text.TextDataset", "filepath": "{str(mock_text_in)}"}}'
         }
-        print(params)
 
         d = DataSet(**params)
         assert d.exists() == True

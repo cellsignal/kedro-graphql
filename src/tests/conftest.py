@@ -98,6 +98,24 @@ def mock_text_out_tsv(tmp_path):
     text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
 
+@pytest.fixture
+def mock_uppercased_txt(tmp_path):
+    text = tmp_path / "uppercased.txt"
+    text.write_text("HELLO")
+    return text
+
+@pytest.fixture
+def mock_reversed_txt(tmp_path):
+    text = tmp_path / "reversed.txt"
+    text.write_text("OLLEH")
+    return text
+
+@pytest.fixture
+def mock_timestamped_txt(tmp_path):
+    text = tmp_path / "timestamped.txt"
+    # Don't write to the file for the run "only_missing" mutation
+    return text
+
 @pytest.mark.usefixtures('mock_celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
 @pytest.mark.usefixtures('depends_on_current_app')

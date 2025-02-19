@@ -1,5 +1,7 @@
 from kedro.framework.project import pipelines
 from kedro.io import DataCatalog
+#from kedro.runner import SequentialRunner
+from typing import List, Dict
 from kedro import __version__ as kedro_version
 from kedro_graphql.runners import init_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
@@ -28,7 +30,7 @@ class KedroGraphqlTask(Task):
             self._db = self.app.kedro_graphql_backend
         return self._db
 
-    ## TO DO - modify these hooks to pass the status index -1 if possible to see if we can handle it here rather than in mongo backend 
+
     def before_start(self, task_id, args, kwargs):
         """Handler called before the task starts.
 
@@ -212,10 +214,13 @@ def run_pipeline(self,
                  outputs: dict = None, 
                  parameters: dict = None, 
                  data_catalog: dict = None,
-                 runner: str = None):
+                 runner: str = None,
+                 slices: List[Dict[str, List[str]]] = None,
+                 only_missing: bool = False):
+    
     with KedroSession.create(project_path = Path(__file__).resolve().parent.parent.parent,
-                             env = CONFIG["KEDRO_GRAPHQL_ENV"],
-                             conf_source = CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
+                            env = CONFIG["KEDRO_GRAPHQL_ENV"],
+                            conf_source = CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
         
         p = self.db.read(id=id)
         p.status[-1].session = session.session_id
@@ -242,7 +247,34 @@ def run_pipeline(self,
         params["parameters"] = parameters
         io.add_feed_dict(params)
 
-        hook_manager = session._hook_manager
+        # Populate the filtering parameters based on the slices input
+        tags = None
+        from_nodes = None
+        to_nodes = None
+        node_names = None
+        from_inputs = None
+        to_outputs = None
+        node_namespace = None
+
+        if slices:            
+            for slice_item in slices:
+                slice_type = slice_item['slice']
+                slice_args = slice_item['args']
+                
+                if slice_type == 'tags':
+                    tags = slice_args
+                if slice_type == 'from_nodes':
+                    from_nodes = slice_args
+                if slice_type == 'to_nodes':
+                    to_nodes = slice_args
+                if slice_type == 'node_names':
+                    node_names = slice_args
+                if slice_type == 'from_inputs':
+                    from_inputs = slice_args
+                if slice_type == 'to_outputs':
+                    to_outputs = slice_args
+                if slice_type == 'node_namespace':
+                    node_namespace = slice_args[0]
 
         record_data = {
                 "session_id": session.session_id,
@@ -250,27 +282,62 @@ def run_pipeline(self,
                 "project_path": session._project_path.as_posix(),
                 "env": session.load_context().env,
                 "kedro_version": kedro_version,
-                "tags": "", # Construct the pipeline using only nodes which have this tag attached.
-                "from_nodes": "", # A list of node names which should be used as a starting point.
-                "to_nodes": "", # A list of node names which should be used as an end point.
-                "node_names": "", # Run only nodes with specified names.
-                "from_inputs": "", # A list of dataset names which should be used as a starting point.
-                "to_outputs": "", # A list of dataset names which should be used as an end point.
+                "tags": tags, # Construct the pipeline using only nodes which have this tag attached.
+                "from_nodes": from_nodes, # A list of node names which should be used as a starting point.
+                "to_nodes": to_nodes, # A list of node names which should be used as an end point.
+                "node_names": node_names, # Run only nodes with specified names.
+                "from_inputs": from_inputs, # A list of dataset names which should be used as a starting point.
+                "to_outputs": to_outputs, # A list of dataset names which should be used as an end point.
                 "load_versions": "", # Specify a particular dataset version (timestamp) for loading
                 "extra_params": "", # Specify extra parameters that you want to pass to the context initialiser.
                 "pipeline_name": name,
-                "namespace": "", # Name of the node namespace to run.
+                "namespace": node_namespace, # Name of the node namespace to run.
                 "runner": getattr(runner, "__name__", str(runner)),
             }
 
+        hook_manager = session._hook_manager
+        
         try:
             hook_manager.hook.before_pipeline_run(
                     run_params=record_data,
                     pipeline=pipelines.get(name, None),
                     catalog=io
                 )
+            
             runner = init_runner(runner = runner)
-            run_result = runner().run(pipelines[name], catalog = io, hook_manager=hook_manager, session_id=session.session_id)
+
+            # Filter the pipeline based on the slices and only_missing parameters
+            if only_missing:
+                # https://github.com/kedro-org/kedro/blob/06d5a6920cbb6b45c07dca6f77d14bb35e283b19/kedro/runner/runner.py#L154
+                free_outputs = pipelines[name].outputs() - set(io.list())
+                missing = {ds for ds in io.list() if not io.exists(ds)}
+                to_build = free_outputs | missing
+                filtered_pipeline = pipelines[name].only_nodes_with_outputs(*to_build) + pipelines[name].from_inputs(
+                    *to_build
+                )
+
+                # We also need any missing datasets that are required to run the
+                # `filtered_pipeline` pipeline, including any chains of missing datasets.
+                unregistered_ds = pipelines[name].datasets() - set(io.list())
+                output_to_unregistered = pipelines[name].only_nodes_with_outputs(*unregistered_ds)
+                input_from_unregistered = filtered_pipeline.inputs() & unregistered_ds
+                filtered_pipeline += output_to_unregistered.to_outputs(*input_from_unregistered)
+            else:
+                filtered_pipeline = pipelines[name].filter(
+                    tags=tags,
+                    from_nodes=from_nodes,
+                    to_nodes=to_nodes,
+                    node_names=node_names,
+                    from_inputs=from_inputs,
+                    to_outputs=to_outputs,
+                    node_namespace=node_namespace,
+                )
+
+            p = self.db.read(id=id)
+            p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
+            self.db.update(p)
+
+            run_result = runner().run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session.session_id)
 
             hook_manager.hook.after_pipeline_run(
                     run_params=record_data,
