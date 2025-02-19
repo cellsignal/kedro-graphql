@@ -11,6 +11,7 @@ from datetime import datetime, date
 from kedro.framework.session import KedroSession
 from .config import config as CONFIG
 import json
+from omegaconf import OmegaConf
 from kedro.io import AbstractDataset
 from pathlib import Path
 import logging
@@ -242,11 +243,15 @@ def run_pipeline(self,
 
         io = DataCatalog().from_config(catalog=catalog)
 
-        ## add parameters to DataCatalog e.g. {"params:myparam":"value"}
-        params = {"params:"+k:v for k,v in parameters.items()}
-        params["parameters"] = parameters
-        io.add_feed_dict(params)
+        ## add parameters to DataCatalog using OmegaConf and dotlist notation
+        parameters_dotlist = [f"{key}={value}" for key, value in parameters.items()]
+        conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
+        io.add_feed_dict({"parameters": conf_parameters})
 
+        params_dotlist = [f"params:{key}={value}" for key, value in parameters.items()]
+        conf_params = OmegaConf.from_dotlist(params_dotlist)
+        io.add_feed_dict(conf_params)
+        
         # Populate the filtering parameters based on the slices input
         tags = None
         from_nodes = None

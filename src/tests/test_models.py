@@ -10,6 +10,7 @@ To run the tests, run ``kedro test`` from the project root directory.
 
 
 import pytest
+from omegaconf import OmegaConf
 from kedro_graphql.models import DataSet, Parameter
 
 class TestDataSet:
@@ -308,3 +309,64 @@ class TestParameter:
             output = p.serialize()
         except ValueError as e:
             assert True
+    
+    def test_dotlist_notation_to_omega_conf(self):
+        """
+        Tests serialized Parameter objects with dotlist notation names can be converted to OmegaConf
+        which is used to construct the DataCatalog with the add_feed_dict method in tasks.py.
+        """
+        parameter_inputs = [{"name": "example", "value": "hello", "type": "string"},
+                      {"name": "duration", "value": "0.1", "type": "float"},
+                      {"name": "model_options.model_params.learning_date", "value": "2023-11-01", "type": "string"},
+                      {"name": "model_options.model_params.training_date", "value": "2023-11-01", "type": "string"},
+                      {"name": "model_options.model_params.data_ratio", "value": "14", "type": "float"},
+                      {"name": "data_options.step_size", "value": "123123", "type": "float"},
+                      ]
+
+        parameters = [Parameter.decode(p) for p in parameter_inputs]
+
+        serialized_parameters = {}
+
+        for p in parameters:
+            serialized_parameters.update(p.serialize())
+        
+        parameters_dotlist = [f"{key}={value}" for key, value in serialized_parameters.items()]
+        conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
+        kedro_parameters = {"parameters": conf_parameters}
+        
+        assert kedro_parameters == {
+                                      'parameters': {
+                                        'example': 'hello',
+                                        'duration': 0.1,
+                                        'model_options': {
+                                          'model_params': {
+                                            'learning_date': '2023-11-01',
+                                            'training_date': '2023-11-01',
+                                            'data_ratio': 14
+                                          }
+                                        },
+                                        'data_options': {
+                                          'step_size': 123123
+                                        }
+                                      }
+                                    }
+
+        params_dotlist = [f"params:{key}={value}" for key, value in serialized_parameters.items()]
+        kedro_params = OmegaConf.from_dotlist(params_dotlist)
+
+        assert kedro_params == {
+                                'params:example': 'hello',
+                                'params:duration': 0.1,
+                                'params:model_options': {
+                                  'model_params': {
+                                    'learning_date': '2023-11-01',
+                                    'training_date': '2023-11-01',
+                                    'data_ratio': 14
+                                  }
+                                },
+                                'params:data_options': {
+                                    'step_size': 123123
+                                }
+                              }
+
+

@@ -735,6 +735,11 @@ class Pipeline:
             ) for s in payload["status"]]
         else:
             status = []
+        
+        if payload.get("parameters", None):
+            parameters = [Parameter.decode(p) for p in payload["parameters"]]
+        else:
+            parameters = None
 
         return Pipeline(
             id = payload.get("id", None),
@@ -742,7 +747,7 @@ class Pipeline:
             inputs = inputs,
             outputs = outputs,
             data_catalog = data_catalog,
-            parameters = [Parameter.decode(p) for p in payload["parameters"]],
+            parameters = parameters,
             status = status,
             tags = tags,
             created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,
