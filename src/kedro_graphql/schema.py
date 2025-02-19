@@ -133,7 +133,7 @@ class Mutation:
         started_at = datetime.now()
         p.created_at = started_at
         p.project_version = __version__
-        p.pipeline_version = import_module(".pipelines" + "." + pipeline.name, package="kedro_graphql").__version__
+        p.pipeline_version = import_module(".pipelines" + "." + pipeline.name, package=config.get("KEDRO_PROJECT_NAME", None)).__version__
         p.kedro_graphql_version = config.get("KEDRO_PROJECT_VERSION", None)
 
         if d["state"] == "STAGED":
