@@ -14,6 +14,9 @@ from datetime import datetime
 from kedro.framework.project import pipelines
 from .hooks import InvalidPipeline
 from celery.states import UNREADY_STATES
+from . import __version__
+from importlib import import_module
+from .config import config
 
 
 def encode_cursor(id: int) -> str:
@@ -129,6 +132,9 @@ class Mutation:
 
         started_at = datetime.now()
         p.created_at = started_at
+        p.project_version = __version__
+        p.pipeline_version = import_module(".pipelines" + "." + pipeline.name, package="kedro_graphql").__version__
+        p.kedro_graphql_version = config.get("KEDRO_PROJECT_VERSION", None)
 
         if d["state"] == "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,

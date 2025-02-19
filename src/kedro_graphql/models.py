@@ -627,6 +627,9 @@ class Pipeline:
     tags: Optional[List[Tag]] = None
     created_at: Optional[datetime] = None
     parent: Optional[uuid.UUID] = None
+    project_version: Optional[str] = None
+    pipeline_version: Optional[str] = None
+    kedro_graphql_version: Optional[str] = None
 
     @strawberry.field
     def template(self) -> PipelineTemplate:
@@ -751,6 +754,10 @@ class Pipeline:
             status = status,
             tags = tags,
             created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,
+            parent = payload.get("parent", None),
+            project_version = payload.get("project_version", None),
+            pipeline_version = payload.get("pipeline_version", None),
+            kedro_graphql_version = payload.get("kedro_graphql_version", None)
         )
 
 @strawberry.type

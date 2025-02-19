@@ -7,6 +7,7 @@ from kedro.framework.startup import bootstrap_project
 from watchfiles import run_process
 import pathlib
 from .logs.logger import logger
+from importlib import import_module
 
 def init_app(app, config, session):
         ## create app instance
@@ -128,7 +129,9 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
             "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": celery_result_backend,
             "KEDRO_GRAPHQL_RUNNER": runner,
             "KEDRO_GRAPHQL_ENV": env,
-            "KEDRO_GRAPHQL_CONF_SOURCE": conf_source})
+            "KEDRO_GRAPHQL_CONF_SOURCE": conf_source,
+            "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name),"__version__", "Unknown version")
+            })
     
     if not reload_path:
         reload_path = metadata.project_path.joinpath("src")
