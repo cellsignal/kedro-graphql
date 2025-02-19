@@ -12,8 +12,6 @@ from kedro.framework.session import KedroSession
 from .config import config as CONFIG
 import json
 from omegaconf import OmegaConf
-#from .backends import init_backend
-#from .config import RUNNER
 from kedro.io import AbstractDataset
 from pathlib import Path
 import logging
