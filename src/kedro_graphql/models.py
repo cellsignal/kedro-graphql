@@ -466,6 +466,24 @@ class PipelineTemplates:
 
         return pipes
 
+
+@strawberry.enum
+class PipelineSliceType(Enum):
+    TAGS = "tags"
+    FROM_NODES = "from_nodes"
+    TO_NODES = "to_nodes"
+    NODE_NAMES = "node_names"
+    FROM_INPUTS = "from_inputs"
+    TO_OUTPUTS = "to_outputs"
+    NODE_NAMESPACE = "node_namespace"
+
+
+@strawberry.input(description = "Slice a pipeline.")
+class PipelineSlice:
+    slice: PipelineSliceType
+    args: List[str] # e.g. ["node1", "node2"]
+
+
 @strawberry.enum
 class PipelineInputStatus(Enum):
     STAGED = "STAGED"
@@ -485,6 +503,8 @@ class PipelineInput:
     #credentials_nested: Optional[List[CredentialNestedInput]] = None
     parent: Optional[uuid.UUID] = None
     runner: str = "kedro.runner.SequentialRunner"
+    slices: Optional[List[PipelineSlice]] = None
+    only_missing: Optional[bool] = False
 
     @staticmethod
     def create(name = None, data_catalog = None, parameters = None, tags = None):
@@ -576,6 +596,7 @@ class PipelineStatus:
     state: State
     session: Optional[str] ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
     runner: Optional[str] = "kedro.runner.SequentialRunner"
+    filtered_nodes: Optional[List[str]] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     task_id: Optional[str] = None
@@ -682,7 +703,7 @@ class Pipeline:
         if payload.get("data_catalog", None):
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
-            data_catalog = None
+            data_catalog = []
 
         if payload.get("inputs", None):
             inputs = [DataSet.decode(i) for i in payload["inputs"]]
@@ -699,6 +720,7 @@ class Pipeline:
                 state=State[s["state"]],
                 session=s["session"],
                 runner=s.get("runner", "kedro.runner.SequentialRunner"),
+                filtered_nodes=s.get("filtered_nodes"),
                 started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,
                 finished_at=datetime.fromisoformat(s["finished_at"]) if s.get("finished_at") else None,
                 task_name=s.get("task_name"),
@@ -713,6 +735,11 @@ class Pipeline:
             ) for s in payload["status"]]
         else:
             status = []
+        
+        if payload.get("parameters", None):
+            parameters = [Parameter.decode(p) for p in payload["parameters"]]
+        else:
+            parameters = None
 
         return Pipeline(
             id = payload.get("id", None),
@@ -720,7 +747,7 @@ class Pipeline:
             inputs = inputs,
             outputs = outputs,
             data_catalog = data_catalog,
-            parameters = [Parameter.decode(p) for p in payload["parameters"]],
+            parameters = parameters,
             status = status,
             tags = tags,
             created_at = datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,
