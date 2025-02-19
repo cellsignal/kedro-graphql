@@ -421,3 +421,69 @@ class TestSchemaMutations:
         
         assert "gql_meta" in dataset_names
         assert "gql_logs" in dataset_names
+    
+    @pytest.mark.usefixtures('mock_celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.usefixtures('depends_on_current_app')
+    @pytest.mark.asyncio
+    async def test_pipeline_slicing(self, mock_app, mock_info_context, mock_text_in, mock_uppercased_txt, mock_reversed_txt, mock_timestamped_txt):
+
+        text_in_config = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
+        uppercased_config = {"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)}
+        reversed_config = {"type": "text.TextDataset", "filepath": str(mock_reversed_txt)}
+        timestamped_config = {"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)}
+
+        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+                                                             variable_values={"pipeline": {
+                                                                 "name": "example01",
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(text_in_config)},
+                                                                                 {"name": "uppercased", "config": json.dumps(uppercased_config)},
+                                                                                 {"name": "reversed", "config": json.dumps(reversed_config)},
+                                                                                 {"name": "timestamped", "config": json.dumps(timestamped_config)}],
+                                                                  "slices": {"slice": "NODE_NAMES", "args": ["uppercase_node","reverse_node"]},
+                                                                 "parameters": [{"name": "example", "value": "hello"},
+                                                                                {"name": "duration", "value": "0.1", "type": "FLOAT"}],
+                                                                  "state": "READY",
+                                                             }})
+
+
+
+        # Sleep for 1 second to ensure pipeline filtered_nodes has been updated
+        time.sleep(1)
+
+        # Make sure only nodes specified in "slices" were run
+        assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]["id"]).status[-1].filtered_nodes == ["uppercase_node", "reverse_node"]
+        create_pipeline_resp.errors is None
+      
+    @pytest.mark.usefixtures('mock_celery_session_app')
+    @pytest.mark.usefixtures('celery_session_worker')
+    @pytest.mark.usefixtures('depends_on_current_app')
+    @pytest.mark.asyncio
+    async def test_pipeline_run_only_missing(self, mock_app, mock_info_context, mock_text_in, mock_uppercased_txt, mock_reversed_txt, mock_timestamped_txt):
+
+        text_in_config = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
+        uppercased_config = {"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)}
+        reversed_config = {"type": "text.TextDataset", "filepath": str(mock_reversed_txt)}
+        timestamped_config = {"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)}
+
+        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+                                                             variable_values={"pipeline": {
+                                                                 "name": "example01",
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(text_in_config)},
+                                                                                 {"name": "uppercased", "config": json.dumps(uppercased_config)},
+                                                                                 {"name": "reversed", "config": json.dumps(reversed_config)},
+                                                                                 {"name": "timestamped", "config": json.dumps(timestamped_config)}],
+                                                                  "onlyMissing": True,
+                                                                 "parameters": [{"name": "example", "value": "hello"},
+                                                                                {"name": "duration", "value": "0.1", "type": "FLOAT"}],
+                                                                  "state": "READY",
+                                                             }})
+
+
+
+        # Sleep for 1 second to ensure pipeline filtered_nodes has been updated
+        time.sleep(1)
+
+        # Make sure only timestamp_node was run because the file does not exist (did not write to it in conftest.py)
+        assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]["id"]).status[-1].filtered_nodes == ["timestamp_node"]
+        create_pipeline_resp.errors is None
