@@ -469,6 +469,7 @@ KEDRO_GRAPHQL_RUNNER=kedro.runner.SequentialRunner
 KEDRO_GRAPHQL_ENV=local
 KEDRO_GRAPHQL_CONF_SOURCE=None
 KEDRO_GRAPHQL_LOG_TMP_DIR=my_tmp_dir/
+KEDRO_GRAPHQL_LOG_PATH_PREFIX=s3://my-bucket/
 ```
 
 The configuration can also be provided at startup through the cli interface.
@@ -489,6 +490,7 @@ for the remaining string.  For example:
 |KEDRO_GRAPHQL_ENV |    --env   | local |
 |KEDRO_GRAPHQL_CONF_SOURCE |   --conf-source    | $HOME/myproject/conf |
 |KEDRO_GRAPHQL_LOG_TMP_DIR |   --log-tmp-dir    | my_tmp_dir/ |
+|KEDRO_GRAPHQL_LOG_PATH_PREFIX |   --log-path-prefix    | s3://my-bucket/ |
 
 
 ## How to install dependencies
@@ -545,7 +547,7 @@ After this, if you'd like to update your project requirements, please update `sr
 - Renamed schema fields to follow CRUD naming conventions (`createPipeline`, `readPipelines`, `readPipeline`)
 - Added `updatePipeline` and `deletePipeline` mutations
 - Refactored back-end interface to make updating pipeline objects easier and to prevent race conditions
-- Added universal logs handling with `gql_meta` and `gql_logs` DataSets, `KEDRO_GRAPHQL_LOG_TMP_DIR` and `LOG_PATH_PREFIX` env variables, and `DataLoggingHooks`
+- Added universal logs handling with `gql_meta` and `gql_logs` DataSets, `KEDRO_GRAPHQL_LOG_TMP_DIR` and `KEDRO_GRAPHQL_LOG_PATH_PREFIX` env variables, and `DataLoggingHooks`
 - Added support for `Pipeline` slicing with `PipelineSlice` and `PipelineSliceType` types and `slices` and `only_missing` fields
 - Added support for nested parameters using dot-list notation in the `Parameter` type `name` field
 - Added `after_catalog_created`,`before_pipeline_run`, `after_pipeline_run`, and `on_pipeline_error` kedro hook calls in the `run_pipeline` task
