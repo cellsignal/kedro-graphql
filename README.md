@@ -6,7 +6,9 @@
   </picture>
 </p>
 
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/opensean/kedro-graphql)
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/cellsignal/kedro-graphql)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![PyPI Latest Release](https://img.shields.io/pypi/v/kedro-graphql.svg)](https://pypi.org/project/kedro-graphql/)
 
 ## Overview
 
@@ -25,10 +27,10 @@ and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
 
 ```mermaid
 flowchart  TB
-  api[GraphQL API\n<i>strawberry + FastAPI</i>]
-  mongodb[(db: 'pipelines'\ncollection: 'pipelines'\n<i>mongdob</i>)]
-  redis[(task queue\n<i>redis</i>)]
-  worker[worker\n<i>celery</i>]
+  api[GraphQL API<br/><i>strawberry + FastAPI</i>]
+  mongodb[(db: 'pipelines'<br/>collection: 'pipelines'<br/><i>mongdob</i>)]
+  redis[(task queue<br/><i>redis</i>)]
+  worker[worker<br/><i>celery</i>]
 
   api<-->mongodb
   api<-->redis
@@ -97,7 +99,7 @@ pipeline called "example00".
 Clone the kedro-graphql repository.
 
 ```
-git clone git@github.com:opensean/kedro-graphql.git
+git clone https://github.com/cellsignal/kedro-graphql.git
 ```
 
 Create a virtualenv and activate it.
@@ -146,7 +148,7 @@ and execute the following mutation:
 ```
 mutation MyMutation {
   createPipeline(
-    pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], dataCatalog:[{name: "text_in",config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},{name: "text_out",config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}]}
+    pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
   ) {
     id
     name
@@ -160,7 +162,7 @@ Expected response:
 {
   "data": {
     "createPipeline": {
-      "id": "6463991db98d7f8564ab15a0",
+      "id": "67b795d44f0f5729b9b5730e",
       "name": "example00"
     }
   }
@@ -173,7 +175,7 @@ Now execute the following subscription to track the progress:
 
 ```
 subscription MySubscription {
-  pipeline(id: "6463991db98d7f8564ab15a0") {
+  pipeline(id: "67b795d44f0f5729b9b5730e") {
     id
     result
     status
@@ -193,14 +195,14 @@ Execute the following subscription to recieve log messages:
 
 
 ```
-subscription {
-   	pipelineLogs(id:"6463991db98d7f8564ab15a0") {
-       id
-       message
-       messageId
-       taskId
-       time
-     }
+subscription MySubscriptionLogs {
+  pipelineLogs(id: "67b795d44f0f5729b9b5730e") {
+    id
+    message
+    messageId
+    taskId
+    time
+  }
 }
 ```
 
@@ -213,33 +215,35 @@ Fetch the pipeline result with the following query:
 
 ```
 query MyQuery {
-  readPipeline(id: "6463991db98d7f8564ab15a0") {
+  readPipeline(id: "67b795d44f0f5729b9b5730e") {
     describe
     id
     name
-    outputs {
-      filepath
-      name
-      type
-    }
-    inputs {
-      filepath
-      name
-      type
-    }
     parameters {
       name
       value
     }
-    status
-    taskEinfo
-    taskException
-    taskId
-    taskKwargs
-    taskRequest
-    taskName
-    taskResult
-    taskTraceback
+    status {
+      filteredNodes
+      finishedAt
+      runner
+      session
+      startedAt
+      state
+      taskArgs
+      taskEinfo
+      taskException
+      taskTraceback
+      taskResult
+      taskRequest
+      taskName
+      taskKwargs
+      taskId
+    }
+    dataCatalog {
+      config
+      name
+    }
   }
 }
 ```
@@ -251,22 +255,8 @@ Expected result:
   "data": {
     "readPipeline": {
       "describe": "#### Pipeline execution order ####\nInputs: parameters, params:example, text_in\n\necho_node\n\nOutputs: text_out\n##################################",
-      "id": "6463991db98d7f8564ab15a0",
+      "id": "67b795d44f0f5729b9b5730e",
       "name": "example00",
-      "outputs": [
-        {
-          "filepath": "./data/02_intermediate/text_out.txt",
-          "name": "text_out",
-          "type": "text.TextDataSet"
-        }using 
-      ],
-      "inputs": [
-        {
-          "filepath": "./data/01_raw/text_in.txt",
-          "name": "text_in",
-          "type": "text.TextDataSet"
-        }
-      ],
       "parameters": [
         {
           "name": "example",
@@ -274,18 +264,40 @@ Expected result:
         },
         {
           "name": "duration",
-          "value": "10"
+          "value": "3"
         }
       ],
-      "status": "SUCCESS",
-      "taskEinfo": "None",
-      "taskException": null,
-      "taskId": "129b4441-6150-4c0b-90df-185c1ec692ea",
-      "taskKwargs": "{'name': 'example00', 'inputs': {'text_in': {'type': 'text.TextDataSet', 'filepath': './data/01_raw/text_in.txt'}}, 'outputs': {'text_out': {'type': 'text.TextDataSet', 'filepath': './data/02_intermediate/text_out.txt'}}, 'parameters': {'example': 'hello', 'duration': '10'}}",
-      "taskRequest": null,
-      "taskName": "<@task: kedro_graphql.tasks.run_pipeline of kedro_graphql at 0x7f29e3e9e500>",
-      "taskResult": null,
-      "taskTraceback": null
+      "status": [
+        {
+          "filteredNodes": [
+            "echo_node"
+          ],
+          "finishedAt": "2025-02-20T15:51:51.045044",
+          "runner": "kedro.runner.SequentialRunner",
+          "session": "2025-02-20T20.51.47.821Z",
+          "startedAt": "2025-02-20T15:51:32.916990",
+          "state": "SUCCESS",
+          "taskArgs": "[]",
+          "taskEinfo": null,
+          "taskException": null,
+          "taskTraceback": null,
+          "taskResult": "success",
+          "taskRequest": null,
+          "taskName": "<@task: kedro_graphql.tasks.run_pipeline of __main__ at 0x107eaff50>",
+          "taskKwargs": "{\"id\": \"67b795d44f0f5729b9b5730e\", \"name\": \"example00\", \"parameters\": {\"example\": \"hello\", \"duration\": \"3\"}, \"data_catalog\": {\"text_in\": {\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}, \"text_out\": {\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/text_out.txt\"}}, \"runner\": \"kedro.runner.SequentialRunner\", \"slices\": null, \"only_missing\": false}",
+          "taskId": "febc1c7d-d4ac-43f5-9ce4-8806d3d4773a"
+        }
+      ],
+      "dataCatalog": [
+        {
+          "config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}",
+          "name": "text_in"
+        },
+        {
+          "config": "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}",
+          "name": "text_out"
+        }
+      ]
     }
   }
 }
@@ -456,6 +468,7 @@ KEDRO_GRAPHQL_CELERY_RESULT_BACKEND=redis://localhost
 KEDRO_GRAPHQL_RUNNER=kedro.runner.SequentialRunner
 KEDRO_GRAPHQL_ENV=local
 KEDRO_GRAPHQL_CONF_SOURCE=None
+KEDRO_GRAPHQL_LOG_TMP_DIR=my_tmp_dir/
 ```
 
 The configuration can also be provided at startup through the cli interface.
@@ -475,6 +488,7 @@ for the remaining string.  For example:
 |KEDRO_GRAPHQL_RUNNER |    --runner   | kedro.runner.SequentialRunner |
 |KEDRO_GRAPHQL_ENV |    --env   | local |
 |KEDRO_GRAPHQL_CONF_SOURCE |   --conf-source    | $HOME/myproject/conf |
+|KEDRO_GRAPHQL_LOG_TMP_DIR |   --log-tmp-dir    | my_tmp_dir/ |
 
 
 ## How to install dependencies
@@ -521,7 +535,30 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
+### v1.0.0
 
+- Added a "sort" argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
+- Added support for presigned S3 urls for upload and download of `DataSet`
+- Added `tags` and `exists` fields to `DataSet` type
+- Added  `parent`, `runner`, `created_at` fields to `Pipeline` type
+- Refactored `Pipeline` status field with new `PipelineStatus`
+- Renamed schema fields to follow CRUD naming conventions (`createPipeline`, `readPipelines`, `readPipeline`)
+- Added `updatePipeline` and `deletePipeline` mutations
+- Refactored back-end interface to make updating pipeline objects easier and to prevent race conditions
+- Added universal logs handling with `gql_meta` and `gql_logs` DataSets, `KEDRO_GRAPHQL_LOG_TMP_DIR` and `LOG_PATH_PREFIX` env variables, and `DataLoggingHooks`
+- Added support for `Pipeline` slicing with `PipelineSlice` and `PipelineSliceType` types and `slices` and `only_missing` fields
+- Added support for nested parameters using dot-list notation in the `Parameter` type `name` field
+- Added `after_catalog_created`,`before_pipeline_run`, `after_pipeline_run`, and `on_pipeline_error` kedro hook calls in the `run_pipeline` task
+- Added `project_version`, `pipeline_version`, and `kedro_graphql_version` fields to `Pipeline` type
+- Removed the following fields of the `Pipeline` and `PipelineInput` types:
+  - `filepath`
+  - `load_args`
+  - `save_args`
+  - `type`
+  - `credentials`
+- Removed the following fields of the `Pipeline` and `PipelineInput` types:
+  - `inputs`
+  - `outputs`
 
 ### v0.5.0
 
@@ -531,7 +568,7 @@ After this, if you'd like to update your project requirements, please update `sr
 #### DataSet and DataSetInput types
 
 The following fields of the `DataSet` and `DataSetInput` types are marked for
- deprecation and will be removed in a future release:
+deprecation and will be removed in a future release:
 
 - `filepath`
 - `load_args`
@@ -567,8 +604,8 @@ string.  The `config` field approach supports all dataset implementations.
 
 #### Pipeline and PipelineInput types
 
-The following fields of the `DataSet` and `DataSetInput` types are marked for
- deprecation and will be removed in a future release:
+The following fields of the `Pipeline` and `PipelineInput` types are marked for
+deprecation and will be removed in a future release:
 
 - `inputs`
 - `outputs`
