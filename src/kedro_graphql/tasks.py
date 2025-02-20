@@ -59,28 +59,28 @@ class KedroGraphqlTask(Task):
             # Create info and error handlers for the run
             os.makedirs(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            info_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'w')
+            info_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'w', encoding='utf-8')
             info_handler.setLevel(logging.INFO)
             info_handler.setFormatter(formatter)
-            error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'w') 
+            error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'w', encoding='utf-8') 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
             logger.addHandler(info_handler)
             logger.addHandler(error_handler)
             logger.info(f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             
-            # Ensure LOG_PATH_PREFIX is provided
-            log_path_prefix = CONFIG.get('LOG_PATH_PREFIX')
+            # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
+            log_path_prefix = CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
             if log_path_prefix:
 
                 today = date.today()
 
                 # Add metadata and log datasets to data catalog
                 gql_meta = DataSet(name="gql_meta", config=json.dumps({"type": "json.JSONDataset",
-                                                            "filepath":f"{CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json"}))
+                                                            "filepath": os.path.join(log_path_prefix,f"year={today.year}",f"month={today.month}",f"day={today.day}",str(p.id),"meta.json")}))
                 gql_logs = DataSet(name="gql_logs",config=json.dumps({"type": "partitions.PartitionedDataset",
                                                         "dataset": "text.TextDataset",
-                                                        "path": f"{CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/"}))
+                                                        "path": os.path.join(log_path_prefix,f"year={today.year}",f"month={today.month}",f"day={today.day}",str(p.id))}))
                 p.data_catalog.append(gql_meta)
                 p.data_catalog.append(gql_logs)
 
@@ -88,13 +88,13 @@ class KedroGraphqlTask(Task):
                 AbstractDataset.from_config(gql_meta.name, json.loads(gql_meta.config)).save(p.serialize())
                 p = self.db.update(p)
 
-                logger.info(f"Capturing pipeline metadata in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/meta.json")
-                logger.info(f"Capturing pipeline logs in {CONFIG['LOG_PATH_PREFIX']}/year={today.year}/month={today.month}/day={today.day}/{p.id}/logs")
+                logger.info(f"Capturing pipeline metadata in {os.path.join(log_path_prefix,f'year={today.year}',f'month={today.month}',f'day={today.day}',str(p.id),'meta.json')}")
+                logger.info(f"Capturing pipeline logs in {os.path.join(log_path_prefix,f'year={today.year}',f'month={today.month}',f'day={today.day}',str(p.id))}")
 
                 # Capture pipeline object returned as an attribute of the task object
                 setattr(self, "kedro_graphql_pipeline", p)
             else:
-                logger.info(f"Missing LOG_PATH_PREFIX in config. Not capturing session logs.")
+                logger.info(f"Missing KEDRO_GRAPHQL_LOG_PATH_PREFIX in config. Not capturing session logs.")
         except Exception as e:
             logger.error(f"An unexpected error occurred: {e}")
 
