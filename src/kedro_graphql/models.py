@@ -166,7 +166,6 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
-    credentials: Optional[str] = None
     tags: Optional[List[Tag]] = None
 
     @strawberry.field
@@ -293,7 +292,6 @@ class DataSet:
 class DataSetInput:
     name: str
     config: Optional[str] = None
-    credentials: Optional[str] = None
     tags: Optional[List[TagInput]] = None
         
 
