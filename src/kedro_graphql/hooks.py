@@ -52,7 +52,7 @@ class DataLoggingHooks:
         catalog.save("gql_meta", d)
 
     def save_logs(self, catalog: CatalogProtocol, session_id: str, celery_task_id: str):
-        log_dir = os.path.join(config["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, celery_task_id)
+        log_dir = os.path.join(config["KEDRO_GRAPHQL_LOG_TMP_DIR"], celery_task_id)
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:
@@ -66,7 +66,7 @@ class DataLoggingHooks:
     @hook_impl
     def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         # Clear previous logs before pipeline run
-        log_dir = os.path.join(config["KEDRO_GRAPHQL_LOG_TMP_DIR"].name, run_params["celery_task_id"])
+        log_dir = os.path.join(config["KEDRO_GRAPHQL_LOG_TMP_DIR"], run_params["celery_task_id"])
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:

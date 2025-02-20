@@ -95,6 +95,11 @@ def commands():
     help="Execution mechanism to run pipelines e.g. 'kedro.runner.SequentialRunner'"
 )
 @click.option(
+    "--log-tmp-dir",
+    default = config["KEDRO_GRAPHQL_LOG_TMP_DIR"],
+    help="Temporary directory for logs"
+)
+@click.option(
     "--reload",
     "-r",
     is_flag=True,
@@ -116,7 +121,7 @@ def commands():
 )
 
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source, 
-        env, imports, mongo_uri, mongo_db_name, runner, reload, reload_path, worker):
+        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir, reload, reload_path, worker):
     """Commands for working with kedro-graphql."""
 
     config.update({
@@ -130,6 +135,7 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
             "KEDRO_GRAPHQL_RUNNER": runner,
             "KEDRO_GRAPHQL_ENV": env,
             "KEDRO_GRAPHQL_CONF_SOURCE": conf_source,
+            "KEDRO_GRAPHQL_LOG_TMP_DIR": log_tmp_dir,
             "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name),"__version__", None),
             "KEDRO_PROJECT_NAME": metadata.package_name
             })
