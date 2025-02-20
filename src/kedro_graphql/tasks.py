@@ -211,8 +211,6 @@ class KedroGraphqlTask(Task):
 def run_pipeline(self, 
                  id: str = None,
                  name: str = None, 
-                 inputs: dict = None, 
-                 outputs: dict = None, 
                  parameters: dict = None, 
                  data_catalog: dict = None,
                  runner: str = None,
@@ -233,15 +231,10 @@ def run_pipeline(self,
         if getattr(self, "kedro_graphql_pipeline", None):
             logger.info("using data_catalog with gql_meta and gql_logs")
             serial = self.kedro_graphql_pipeline.serialize()
-            catalog = {**serial["data_catalog"], **(data_catalog if data_catalog is not None else {**inputs, **outputs})}
-        elif data_catalog:
+            catalog = {**serial["data_catalog"], **data_catalog}
+        else:
             logger.info("using data_catalog parameter to build data catalog")
             catalog = data_catalog
-        else:
-            logger.info("using inputs and outputs parameters to build data catalog")
-            logger.info("inputs: " + str(inputs))
-            logger.info("outputs: " + str(outputs))
-            catalog = {**inputs, **outputs}
 
         io = DataCatalog().from_config(catalog=catalog)
 

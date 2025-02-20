@@ -147,8 +147,9 @@ class TestSchemaMutations:
         resp = await mock_app.schema.execute(self.create_pipeline_mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
-                                      "inputs": [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}],
-                                      "outputs": [{"name": "text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}],
+                                      "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                      {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                      ],
                                       "parameters": [{"name":"example", "value":"hello"},
                                                      {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                       "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
@@ -163,18 +164,12 @@ class TestSchemaMutations:
         resp = await mock_app.schema.execute(self.create_pipeline_mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
-                                      "inputs": [{"name": "text_in", 
-                                                  "type": "text.TextDataset", 
-                                                  "filepath": str(mock_text_in),
-                                                  "credentials": "my_creds"
-                                      }],
-                                      "outputs": [{"name": "text_out", 
-                                                   "type": "text.TextDataset", 
-                                                   "filepath": str(mock_text_out)}],
+                                      "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in), "credentials": "my_creds"})},
+                                                      {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                      ],
                                       "parameters": [{"name":"example", "value":"hello"}],
                                       "tags": [{"key": "author", "value": "opensean"},
                                                {"key":"package", "value":"kedro-graphql"}],
-
                                       "credentials":[{"name":"my_creds", 
                                                       "value": [
                                                           {"name":"key", "value":"admin"},
@@ -200,68 +195,11 @@ class TestSchemaMutations:
         resp = await mock_app.schema.execute(self.create_pipeline_mutation, 
                                     variable_values = {"pipeline": {
                                       "name": "example00",
-                                      "inputs": [{"name": "text_in", 
-                                                  "type": "pandas.CSVDataset", 
-                                                  "filepath": str(mock_text_in_tsv),
-                                                  "loadArgs":[
-                                                      {"name": "sep", "value": "\t"}
-                                                  ],
-                                                  "saveArgs":[
-                                                      {"name": "sep", "value": "\t"}
-                                                  ]
-                                                }],
-                                      "outputs": [{"name": "text_out", 
-                                                   "type": "pandas.CSVDataset", 
-                                                   "filepath": str(mock_text_out_tsv),
-                                                   "loadArgs":[
-                                                      {"name": "sep", "value": "\t"}
-                                                  ],
-                                                  "saveArgs":[
-                                                      {"name": "sep", "value": "\t"}
-                                                  ]}],
+                                      "dataCatalog": [
+                                          {"name": "text_in", "config": json.dumps({"type": "pandas.CSVDataset", "filepath": str(mock_text_in_tsv), "loadArgs":[{"name": "sep", "value": "\t"}], "saveArgs":[{"name": "sep", "value": "\t"}]})},
+                                          {"name": "text_out", "config": json.dumps({"type": "pandas.CSVDataset", "filepath": str(mock_text_out_tsv), "loadArgs":[{"name": "sep", "value": "\t"}], "saveArgs":[{"name": "sep", "value": "\t"}]})}
+                                      ],
                                       "parameters": [{"name":"example", "value":"hello"}],
-                                      "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
-                                    }})
-        
-        assert resp.errors is None
-
-
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
-    @pytest.mark.asyncio
-    async def test_pipeline_with_config(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
-
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-        resp = await mock_app.schema.execute(self.create_pipeline_mutation, 
-                                    variable_values = {"pipeline": {
-                                      "name": "example00",
-  
-                                      "inputs": [{"name": "text_in", "config": json.dumps(input_dict)}],
-                                      "outputs": [{"name": "text_out", "config": json.dumps(output_dict)}],
-                                      "parameters": [{"name":"example", "value":"hello"},
-                                                     {"name": "duration", "value": "0.1", "type": "FLOAT"}],
-                                      "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
-                                    }})
-        
-        assert resp.errors is None
-
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
-    @pytest.mark.asyncio
-    async def test_pipeline_with_data_catalog(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
-
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-        resp = await mock_app.schema.execute(self.create_pipeline_mutation, 
-                                    variable_values = {"pipeline": {
-                                      "name": "example00",
-                                      "dataCatalog":[{"name": "text_in", "config": json.dumps(input_dict)},
-                                                      {"name": "text_out", "config": json.dumps(output_dict)}],
-                                      "parameters": [{"name":"example", "value":"hello"},
-                                                     {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                       "tags": [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
                                     }})
         
@@ -273,13 +211,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_create_staged_pipeline(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "STAGED",
@@ -297,13 +234,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_create_valid_ready_pipeline(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
@@ -321,13 +257,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_create_invalid_name_ready_pipeline(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example02",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
@@ -342,14 +277,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_update_pipeline_staged_to_ready(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "STAGED",
@@ -375,14 +308,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_delete_pipeline(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
@@ -401,14 +332,12 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_pipeline_data_catalog_modified_with_log_datasets(self, mock_app, mock_info_context, mock_text_in, mock_text_out):
 
-        input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                                                                                 {"name": "text_out", "config": json.dumps(output_dict)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                  ],
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                   "state": "READY",
@@ -428,25 +357,18 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_pipeline_slicing(self, mock_app, mock_info_context, mock_text_in, mock_uppercased_txt, mock_reversed_txt, mock_timestamped_txt):
 
-        text_in_config = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        uppercased_config = {"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)}
-        reversed_config = {"type": "text.TextDataset", "filepath": str(mock_reversed_txt)}
-        timestamped_config = {"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)}
-
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example01",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(text_in_config)},
-                                                                                 {"name": "uppercased", "config": json.dumps(uppercased_config)},
-                                                                                 {"name": "reversed", "config": json.dumps(reversed_config)},
-                                                                                 {"name": "timestamped", "config": json.dumps(timestamped_config)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                 {"name": "uppercased", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)})},
+                                                                                 {"name": "reversed", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_reversed_txt)})},
+                                                                                 {"name": "timestamped", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)})}],
                                                                   "slices": {"slice": "NODE_NAMES", "args": ["uppercase_node","reverse_node"]},
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                   "state": "READY",
                                                              }})
-
-
 
         # Sleep for 1 second to ensure pipeline filtered_nodes has been updated
         time.sleep(1)
@@ -461,25 +383,18 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_pipeline_run_only_missing(self, mock_app, mock_info_context, mock_text_in, mock_uppercased_txt, mock_reversed_txt, mock_timestamped_txt):
 
-        text_in_config = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
-        uppercased_config = {"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)}
-        reversed_config = {"type": "text.TextDataset", "filepath": str(mock_reversed_txt)}
-        timestamped_config = {"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)}
-
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example01",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps(text_in_config)},
-                                                                                 {"name": "uppercased", "config": json.dumps(uppercased_config)},
-                                                                                 {"name": "reversed", "config": json.dumps(reversed_config)},
-                                                                                 {"name": "timestamped", "config": json.dumps(timestamped_config)}],
+                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                 {"name": "uppercased", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_uppercased_txt)})},
+                                                                                 {"name": "reversed", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_reversed_txt)})},
+                                                                                 {"name": "timestamped", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_timestamped_txt)})}],
                                                                   "onlyMissing": True,
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                   "state": "READY",
                                                              }})
-
-
 
         # Sleep for 1 second to ensure pipeline filtered_nodes has been updated
         time.sleep(1)

@@ -10,23 +10,19 @@ To run the tests, run ``kedro test`` from the project root directory.
 
 
 import pytest
+import json
 from omegaconf import OmegaConf
 from kedro_graphql.models import DataSet, Parameter
 
 class TestDataSet:
 
     def test_serialize(self):
-        params = {"name": "text_in", 
-                  "type": "text.TextDataset", 
-                  "filepath": "/tmp/test_in.csv",
-                  "load_args":[Parameter(**{
-                    "name": "delimiter",
-                    "value": "\t" 
-                  })],
-                  "save_args":[Parameter(**{
-                    "name":"delimiter",
-                    "value": "\t"  
-                  })]}
+        params = {"name": "text_in",
+                  "config": json.dumps({"type": "text.TextDataset",
+                              "filepath": "/tmp/test_in.csv",
+                              "load_args": {"delimiter": "\t"},
+                              "save_args": {"delimiter":"\t"}})
+                  }
 
         expected = {"text_in":{ 
                       "type": "text.TextDataset", 
@@ -36,8 +32,7 @@ class TestDataSet:
                       },
                       "save_args":{
                         "delimiter": "\t"  
-                      },
-                      "credentials": None
+                      }
                     }
                    }
 
@@ -52,99 +47,12 @@ class TestDataSet:
         with pytest.raises(ValueError):
           output = d.pre_signed_url_create()
     
-    def test_pre_signed_url_create_no_filepath(self):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset",
-          "load_args":[Parameter(**{
-            "name": "delimiter",
-            "value": "\t" 
-          })],
-          "save_args":[Parameter(**{
-            "name":"delimiter",
-            "value": "\t"  
-          })]}
-        
-        d = DataSet(**params)
-        
-        with pytest.raises(ValueError):
-          output = d.pre_signed_url_create()
-    
-    def test_pre_signed_url_create_no_s3_filepath(self):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset",
-          "filepath": "/tmp/test_in.csv", 
-          "load_args":[Parameter(**{
-            "name": "delimiter",
-            "value": "\t" 
-          })],
-          "save_args":[Parameter(**{
-            "name":"delimiter",
-            "value": "\t"  
-          })]}
-        
-        d = DataSet(**params)
-        
-        with pytest.raises(ValueError):
-          output = d.pre_signed_url_create()
-    
     def test_pre_signed_url_read_config_no_filepath(self):
         d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
 
         with pytest.raises(ValueError):
-          output = d.pre_signed_url_create()
-    
-    def test_pre_signed_url_read_no_filepath(self):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset", 
-          "load_args":[Parameter(**{
-            "name": "delimiter",
-            "value": "\t" 
-          })],
-          "save_args":[Parameter(**{
-            "name":"delimiter",
-            "value": "\t"  
-          })]}
-        
-        d = DataSet(**params)
-        
-        with pytest.raises(ValueError):
           output = d.pre_signed_url_read()
     
-    def test_pre_signed_url_read_no_s3_filepath(self):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset",
-          "filepath": "/tmp/test_in.csv",  
-          "load_args":[Parameter(**{
-            "name": "delimiter",
-            "value": "\t" 
-          })],
-          "save_args":[Parameter(**{
-            "name":"delimiter",
-            "value": "\t"  
-          })]}
-        
-        d = DataSet(**params)
-        
-        with pytest.raises(ValueError):
-          output = d.pre_signed_url_read()
-    
-    def test_does_exist_with_filepath(self, mock_text_in):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset",
-          "filepath": str(mock_text_in)}
-        
-        d = DataSet(**params)
-        
-        assert d.exists() == True
-    
-    def test_does_not_exist_with_filepath(self):
-        params = {"name": "text_in", 
-          "type": "text.TextDataset",
-          "filepath": "/tmp/does_not_exist.csv"}
-        
-        d = DataSet(**params)
-        
-        assert d.exists() == False
     
     def test_does_exist_with_config(self, mock_text_in):
         params = {
@@ -164,6 +72,7 @@ class TestDataSet:
         d = DataSet(**params)
         assert d.exists() == False
     
+
 class TestParameter:
 
     def test_serialize_string(self):
