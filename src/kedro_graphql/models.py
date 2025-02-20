@@ -260,17 +260,6 @@ class DataSet:
 
                 {
                   "name": "text_in",
-                  "filepath": "./data/01_raw/text_in.txt",
-                  "type": "text.TextDataSet",
-                  "save_args":[{"name": "say", "value": "hello"}],
-                  "load_args":[{"name": "say", "value": "hello"}],
-                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
-                }
-
-                or
-
-                {
-                  "name": "text_in",
                   "config": '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
                   "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
                 }
@@ -374,7 +363,6 @@ class PipelineTemplate:
         for n in self.kedro_pipelines[self.name].all_inputs():
             if not n.startswith("params:") and n != "parameters":
                 config = self.kedro_catalog[n]
-                #inputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
                 inputs_resolved.append(DataSet(name = n, config = json.dumps(config)))
             
         return inputs_resolved
@@ -384,7 +372,6 @@ class PipelineTemplate:
         outputs_resolved = []
         for n in self.kedro_pipelines[self.name].all_outputs():    
             config = self.kedro_catalog[n]
-            #outputs_resolved.append(DataSet(name = n, filepath = config["filepath"], type = config["type"], save_args = config.get("save_args", None), load_args = config.get("load_args", None)))
             outputs_resolved.append(DataSet(name = n, config = json.dumps(config)))
  
         return outputs_resolved
@@ -478,11 +465,9 @@ class PipelineInput:
                                            type=<ParameterType.STRING: 'string'>), 
                             ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
                           ], 
-                          inputs=None, 
-                          outputs=None, 
                           data_catalog=[
-                            DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None), 
-                            DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)
+                            DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'), 
+                            DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
                           ], 
                           tags=[TagInput(key='owner', value='sean')])
 
@@ -492,22 +477,10 @@ class PipelineInput:
             {'name': 'example00',
             'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
              {'name': 'duration', 'value': '1', 'type': 'string'}],
-            'inputs': None,
-            'outputs': None,
             'data_catalog': [{'name': 'text_in',
-              'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}',
-              'type': None,
-              'filepath': None,
-              'save_args': None,
-              'load_args': None,
-              'credentials': None},
+              'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'},
              {'name': 'text_out',
-              'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}',
-              'type': None,
-              'filepath': None,
-              'save_args': None,
-              'load_args': None,
-              'credentials': None}],
+              'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}'}],
             'tags': [{'key': 'owner', 'value': 'sean'}],
             'credentials': None,
             'credentials_nested': None}
