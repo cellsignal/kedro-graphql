@@ -17,6 +17,7 @@ from celery.states import UNREADY_STATES
 from . import __version__ as kedro_graphql_version
 from importlib import import_module
 from .config import config
+import asyncio
 
 
 def encode_cursor(id: int) -> str:
@@ -82,7 +83,13 @@ class Query:
 
     @strawberry.field(description = "Get a pipeline instance.")
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
-        p = info.context["request"].app.backend.read(id)
+        try:
+            p = info.context["request"].app.backend.read(id=id)
+            if p is None:
+                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+        except Exception as e:
+            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+        
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
@@ -188,8 +195,10 @@ class Mutation:
 
         try:
             p = info.context["request"].app.backend.read(id=id)
+            if p is None:
+                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
         except Exception as e:
-            raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
         pipeline_input_dict = jsonable_encoder(pipeline)
 
@@ -247,13 +256,17 @@ class Mutation:
     
     @strawberry.mutation(description = "Delete a pipeline.")
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
-        p = info.context["request"].app.backend.read(id=id)
-        if p:
-            info.context["request"].app.backend.delete(id=id)
-            logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
-            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
-            return p
-        return None
+        try:
+            p = info.context["request"].app.backend.read(id=id)
+            if p is None:
+                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+        except Exception as e:
+            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+
+        info.context["request"].app.backend.delete(id=id)
+        logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
+        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
+        return p
 
 
 @strawberry.type
@@ -262,7 +275,18 @@ class Subscription:
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
-        p  = info.context["request"].app.backend.read(id=id)
+        try:
+            p = info.context["request"].app.backend.read(id=id)
+            if p is None:
+                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+        except Exception as e:
+            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+
+        while (not p.status[-1].task_id):
+            # Wait for the task to be assigned a task_id
+            await asyncio.sleep(0.1)
+            p = info.context["request"].app.backend.read(id=id)
+        
         if p:
             async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
@@ -270,7 +294,19 @@ class Subscription:
 
     @strawberry.subscription(description = "Subscribe to pipeline logs.")
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
-        p  = info.context["request"].app.backend.read(id=id)
+        """Subscribe to pipeline logs."""
+        try:
+            p = info.context["request"].app.backend.read(id=id)
+            if p is None:
+                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+        except Exception as e:
+            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+
+        while (not p.status[-1].task_id):
+            # Wait for the task to be assigned a task_id
+            await asyncio.sleep(0.1)
+            p = info.context["request"].app.backend.read(id=id)
+
         if p:
             stream = await PipelineLogStream().create(task_id = p.status[-1].task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
             async for e in stream.consume():
