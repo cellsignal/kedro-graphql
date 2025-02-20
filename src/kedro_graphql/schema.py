@@ -171,8 +171,6 @@ class Mutation:
             result = run_pipeline.delay(
                 id = str(p.id),
                 name = serial["name"], 
-                inputs = serial["inputs"], 
-                outputs = serial["outputs"], 
                 parameters = serial["parameters"],
                 data_catalog = serial["data_catalog"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
@@ -222,8 +220,6 @@ class Mutation:
             result = run_pipeline.delay(
                 id = str(p.id),
                 name = serial["name"], 
-                inputs = serial["inputs"], 
-                outputs = serial["outputs"],
                 parameters = serial["parameters"],
                 data_catalog = serial["data_catalog"],
                 runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
