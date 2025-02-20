@@ -9,7 +9,7 @@ from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError
 from strawberry.scalars import JSON
-from .utils import parse_filepath_for_s3
+from .utils import parse_s3_filepath
 from kedro.io import AbstractDataset
 from fastapi.encoders import jsonable_encoder
 from copy import deepcopy
@@ -166,10 +166,6 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
-    type: Optional[str] = mark_deprecated(default = None)
-    filepath: Optional[str] = mark_deprecated(default = None)
-    save_args: Optional[List[Parameter]] = mark_deprecated(default = None)
-    load_args: Optional[List[Parameter]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
     tags: Optional[List[Tag]] = None
 
@@ -194,7 +190,7 @@ class DataSet:
                 }
         """
 
-        bucket_name, s3_key = parse_filepath_for_s3(self.config, self.filepath)
+        bucket_name, s3_key = parse_s3_filepath(self.config)
 
         try:
             s3_client = boto3.client('s3')
@@ -220,7 +216,7 @@ class DataSet:
             Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
         """
 
-        bucket_name, s3_key = parse_filepath_for_s3(self.config, self.filepath)
+        bucket_name, s3_key = parse_s3_filepath(self.config)
 
         try:
             s3_client = boto3.client('s3')
@@ -244,10 +240,6 @@ class DataSet:
     def exists(self) -> bool:
         if self.config:
             return AbstractDataset.from_config(self.name, json.loads(self.config)).exists()
-        elif self.filepath and self.type and self.load_args and self.save_args:
-            return AbstractDataset.from_config(self.name, {"filepath": self.filepath, "type": self.type, "load_args": self.load_args, "save_args": self.save_args}).exists()
-        elif self.filepath and self.type:
-            return AbstractDataset.from_config(self.name, {"filepath": self.filepath, "type": self.type}).exists()
         else:
             return False
 
@@ -257,20 +249,7 @@ class DataSet:
         """
         temp = self.__dict__.copy()
         temp.pop("name")
-        if temp.get("config", None):
-            return {self.name: json.loads(temp['config'])}
-        else:
-            temp.pop("config")
-            temp.pop("tags")
-            if not temp["save_args"]:
-                temp.pop("save_args")
-            else:
-                temp["save_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
-            if not temp["load_args"]:
-                temp.pop("load_args")
-            else:
-                temp["load_args"] = {k:v for p in self.__dict__["save_args"] for k,v in p.serialize().items() }
-        return {self.name: temp}
+        return {self.name: json.loads(temp['config'])}
 
     @staticmethod
     def decode(payload):
@@ -303,42 +282,17 @@ class DataSet:
         else:
             tags = None
 
-        if payload.get("config", False):
-            return DataSet(
-                name = payload["name"],
-                config = payload["config"],
-                tags = tags
-            )
-
-        else:
-            if payload.get("save_args", False):
-                save_args = [Parameter(**p) for p in payload["save_args"]]
-            else:
-                save_args = None
-                
-            if payload.get("load_args", False):
-                load_args = [Parameter(**p) for p in payload["load_args"]]
-            else:
-                load_args = None
-
-            return DataSet(
-                name = payload["name"],
-                type = payload["type"],
-                filepath = payload["filepath"],
-                save_args = save_args,
-                load_args = load_args,
-                tags = tags
-            )
+        return DataSet(
+            name = payload["name"],
+            config = payload["config"],
+            tags = tags
+        )
 
 
 @strawberry.input
 class DataSetInput:
     name: str
     config: Optional[str] = None
-    type: Optional[str] = mark_deprecated(default = None)
-    filepath: Optional[str] = mark_deprecated(default = None)
-    save_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
-    load_args: Optional[List[ParameterInput]] = mark_deprecated(default = None)
     credentials: Optional[str] = None
     tags: Optional[List[TagInput]] = None
         
@@ -495,8 +449,6 @@ class PipelineInput:
     name: str
     state: PipelineInputStatus = PipelineInputStatus.STAGED
     parameters: Optional[List[ParameterInput]] = None
-    inputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
-    outputs: Optional[List[DataSetInput]] = mark_deprecated(default = None)
     data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
     #credentials: Optional[List[CredentialInput]] = None
@@ -618,9 +570,7 @@ class Pipeline:
     #kedro_parameters: strawberry.Private[Optional[dict]] = None
     kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
     id: Optional[uuid.UUID] = None
-    inputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     name: str
-    outputs: Optional[List[DataSet]] = mark_deprecated(default= None)
     data_catalog: Optional[List[DataSet]] = None
     parameters: List[Parameter]
     status: List[PipelineStatus] = strawberry.field(default_factory=list)
@@ -646,19 +596,8 @@ class Pipeline:
         return self.template().nodes()
 
     def serialize(self):
-        inputs = {}
-        outputs = {}
         parameters = {}
         data_catalog = {}
-        if self.inputs:
-             for i in self.inputs:
-                 s = i.serialize()
-                 inputs.update(s)
-
-        if self.outputs:
-            for o in self.outputs:
-                s = o.serialize()
-                outputs.update(s)
 
         if self.parameters:
             for p in self.parameters:
@@ -670,13 +609,9 @@ class Pipeline:
                 s = d.serialize()
                 data_catalog.update(s)
 
-
-
         return {
             "id": self.id,
             "name": self.name,
-            "inputs": inputs,
-            "outputs": outputs,
             "data_catalog": data_catalog,
             "parameters": parameters,
         }
@@ -707,16 +642,6 @@ class Pipeline:
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
             data_catalog = []
-
-        if payload.get("inputs", None):
-            inputs = [DataSet.decode(i) for i in payload["inputs"]]
-        else:
-            inputs = None
-
-        if payload.get("outputs", None):
-            outputs = [DataSet.decode(o) for o in payload["outputs"]]
-        else:
-            outputs = None
         
         if payload.get("status", None):
             status = [PipelineStatus(
@@ -747,8 +672,6 @@ class Pipeline:
         return Pipeline(
             id = payload.get("id", None),
             name = payload["name"],
-            inputs = inputs,
-            outputs = outputs,
             data_catalog = data_catalog,
             parameters = parameters,
             status = status,

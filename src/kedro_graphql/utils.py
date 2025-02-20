@@ -21,7 +21,7 @@ def merge(a, b, path=None):
 def merge_dicts(dicts):
     return reduce(merge, dicts)
 
-def parse_filepath_for_s3(config, s3_filepath):
+def parse_s3_filepath(config):
     """
     Parse the s3 bucket name and key from DataSet filepath field.
     """
@@ -33,8 +33,6 @@ def parse_filepath_for_s3(config, s3_filepath):
                 raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in config: {e}")
-    elif s3_filepath:
-        filepath = s3_filepath
     else:
         raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
 
