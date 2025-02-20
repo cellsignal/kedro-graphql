@@ -59,10 +59,10 @@ class KedroGraphqlTask(Task):
             # Create info and error handlers for the run
             os.makedirs(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            info_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'w', encoding='utf-8')
+            info_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
             info_handler.setLevel(logging.INFO)
             info_handler.setFormatter(formatter)
-            error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'w', encoding='utf-8') 
+            error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a') 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
             logger.addHandler(info_handler)
