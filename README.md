@@ -28,7 +28,7 @@ and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
 ```mermaid
 flowchart  TB
   api[GraphQL API<br/><i>strawberry + FastAPI</i>]
-  mongodb[(db: 'pipelines'<br/>collection: 'pipelines'<br/><i>mongdob</i>)]
+  mongodb[(db: 'pipelines'<br/>collection: 'pipelines'<br/><i>mongoDB</i>)]
   redis[(task queue<br/><i>redis</i>)]
   worker[worker<br/><i>celery</i>]
 
@@ -537,7 +537,7 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ### v1.0.0
 
-- Added a "sort" argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
+- Added a `sort` argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
 - Added support for presigned S3 urls for upload and download of `DataSet`
 - Added `tags` and `exists` fields to `DataSet` type
 - Added  `parent`, `runner`, `created_at` fields to `Pipeline` type
