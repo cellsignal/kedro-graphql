@@ -51,8 +51,6 @@ class TestSchemaQuery:
               describe
               inputs {
                 name
-                filepath
-                type
               }
               nodes {
                 name
@@ -61,9 +59,7 @@ class TestSchemaQuery:
                 tags
               }
               outputs {
-                filepath
                 name
-                type
               }
               parameters {
                 name

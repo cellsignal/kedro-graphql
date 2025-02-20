@@ -1,4 +1,5 @@
 import pytest
+import json
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.models import DataSet, Parameter, Tag, Pipeline, PipelineStatus, State
 
@@ -12,8 +13,8 @@ async def test_run_pipeline(mock_app, mock_text_in, mock_text_out):
     """
     This test will fail because the pipeline is missing in the backend
     """
-    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
-    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
+    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name":"text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 

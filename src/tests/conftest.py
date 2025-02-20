@@ -113,7 +113,7 @@ def mock_reversed_txt(tmp_path):
 @pytest.fixture
 def mock_timestamped_txt(tmp_path):
     text = tmp_path / "timestamped.txt"
-    # Don't write to the file for the run "only_missing" mutation
+    # Don't write to this file. We need an missing file to test the run "only_missing" mutation
     return text
 
 @pytest.mark.usefixtures('mock_celery_session_app')
@@ -122,15 +122,14 @@ def mock_timestamped_txt(tmp_path):
 @pytest.fixture
 def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
-    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
+    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name":"text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
     p = Pipeline(
         name = "example00",
-        inputs = [DataSet(**i) for i in inputs],
-        outputs = [DataSet(**o) for o in outputs],
+        data_catalog= [DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
         tags = [Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
@@ -147,8 +146,7 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     result = run_pipeline.apply_async(kwargs = { "id": str(p.id),
                                                 "name": "example00", 
-                                                 "inputs": serial["inputs"], 
-                                                 "outputs": serial["outputs"],
+                                                 "data_catalog": serial["data_catalog"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
                                       countdown=0.1)
@@ -162,15 +160,14 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 @pytest.fixture
 def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "type": "text.TextDataset", "filepath": str(mock_text_in)}]
-    outputs = [{"name":"text_out", "type": "text.TextDataset", "filepath": str(mock_text_out)}]
+    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name":"text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name":"example", "value":"hello"}]
     tags = [{"key": "author", "value": "opensean"},{"key":"package", "value":"kedro-graphql"}]
 
     p = Pipeline(
         name = "example00",
-        inputs = [DataSet(**i) for i in inputs],
-        outputs = [DataSet(**o) for o in outputs],
+        data_catalog= [DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
         parameters = [Parameter(**p) for p in parameters],
         tags = [Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
@@ -187,8 +184,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     result = run_pipeline.apply_async(kwargs = {"id": str(p.id),
                                                 "name": "example00", 
-                                                 "inputs": serial["inputs"], 
-                                                 "outputs": serial["outputs"],
+                                                 "data_catalog": serial["data_catalog"],
                                                  "parameters": serial["parameters"],
                                                  "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]}, 
                                       countdown=0.1)
