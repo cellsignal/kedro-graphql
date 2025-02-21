@@ -620,8 +620,6 @@ After this, if you'd like to update your project requirements, please update `sr
 ### TO DO
 
 - support custom runners e.g. Argo Workflows, AWS Batch, etc...
-- document plan for supporting custom IOResolverPlugins
-- API paginations e.g. list pipelines and/or search results
 - support passing credentials via api
 
 ## Changelog
