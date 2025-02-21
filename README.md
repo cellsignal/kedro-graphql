@@ -145,7 +145,17 @@ and execute the following mutation:
 ```
 mutation MyMutation {
   createPipeline(
-    pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
+    pipeline: {
+      name: "example00",
+      parameters: [
+        {name: "example", value: "hello"},
+        {name: "duration", value: "10"}
+      ],
+      dataCatalog: [
+        {name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},
+        {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}
+      ],
+      state: READY}
   ) {
     id
     name
@@ -258,7 +268,7 @@ Expected result:
         },
         {
           "name": "duration",
-          "value": "3"
+          "value": "10"
         }
       ],
       "status": [
@@ -326,7 +336,18 @@ Execute the following mutation to update the staged pipeline with a data catalog
 mutation MyMutation {
   updatePipeline(
     id: "67b8b41535ac10b558916cba"
-    pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
+    pipeline: {
+      name: "example00",
+      parameters: [
+        {name: "example", value: "hello"},
+        {name: "duration", value: "10"}
+      ],
+      tags: [{key: "owner", value: "harinlee83"}],
+      dataCatalog: [
+        {name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"},
+        {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}
+      ],
+      state: READY}
   ) {
     id
     name
@@ -341,7 +362,21 @@ You can slice a pipeline by providing **inputs/outputs**, specifying **start/fin
 ```
 mutation MyMutation {
   createPipeline(
-    pipeline: {name: "example01", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "uppercased", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/uppercased.txt\"}"}, {name: "reversed", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/reversed.txt\"}"}, {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"}], slices: {slice: NODE_NAMES, args: ["uppercase_node", "reverse_node"]}, state: READY}
+    pipeline: {
+      name: "example01",
+      parameters: [
+        {name: "example", value: "hello"},
+        {name: "duration", value: "10"}
+      ],
+      tags: [{key: "owner", value: "harinlee83"}],
+      dataCatalog: [
+        {name: "text_in", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}"},
+        {name: "uppercased", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/uppercased.txt\"}"},
+        {name: "reversed", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/reversed.txt\"}"},
+        {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"}
+      ],
+      slices: {slice: NODE_NAMES, args: ["uppercase_node", "reverse_node"]},
+      state: READY}
   ) {
     id
     name
