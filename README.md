@@ -12,18 +12,18 @@
 
 ## Overview
 
-Kedro-graphql is a [kedro-plugin](https://docs.kedro.org/en/stable/extend_kedro/plugins.html) 
-for serving kedro projects as a graphql api.  It leverages 
-[Strawberry](https://strawberry.rocks/), [FastAPI](https://fastapi.tiangolo.com/), 
-and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any 
- [Kedro](https://docs.kedro.org/en/stable/) project into a GraphqlQL api 
+Kedro-graphql is a [kedro-plugin](https://docs.kedro.org/en/stable/extend_kedro/plugins.html)
+for serving kedro projects as a graphql api.  It leverages
+[Strawberry](https://strawberry.rocks/), [FastAPI](https://fastapi.tiangolo.com/),
+and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
+ [Kedro](https://docs.kedro.org/en/stable/) project into a GraphqlQL api
  with features such as:
- 
- - a distributed task queue
- - subscribe to pipline events and logs via GraphQL subscriptions
- - storage
-   - persist and track all pipelines executed via the API
- - [additional features](#features)
+
+- a distributed task queue
+- subscribe to pipline events and logs via GraphQL subscriptions
+- storage
+  - persist and track all pipelines executed via the API
+- [additional features](#features)
 
 ```mermaid
 flowchart  TB
@@ -40,8 +40,6 @@ flowchart  TB
 ```
 
 Figure 1. Architecture
-
-
 
 ## Quickstart
 
@@ -69,29 +67,28 @@ Start a worker (in another terminal).
 kedro gql -w
 ```
 
-Navigate to http://127.0.0.1:5000/graphql to access the graphql interface.
+Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
 
 ![strawberry-ui](docs/strawberry-ui.png)
 
-The [docker-compose.yaml](./docker-compose.yaml) includes 
-[mongo-express](https://github.com/mongo-express/mongo-express) and 
-[redis-commander](https://github.com/joeferner/redis-commander) services 
+The [docker-compose.yaml](./docker-compose.yaml) includes
+[mongo-express](https://github.com/mongo-express/mongo-express) and
+[redis-commander](https://github.com/joeferner/redis-commander) services
 to provide easy acess to MongoDB and redis.
 
-
-Navigate to http://127.0.0.1:8082 to access mongo-express interface.
+Navigate to <http://127.0.0.1:8082> to access mongo-express interface.
 
 ![mongo-express-ui](docs/mongo-express-ui.png)
 
-Navigate to http://127.0.0.1:8081 to access the redis-commander interface.
-One can access the task queues created and managed by 
+Navigate to <http://127.0.0.1:8081> to access the redis-commander interface.
+One can access the task queues created and managed by
 [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
 ![redis-commander-ui](docs/redis-commander-ui.png)
 
 ## Example
 
-The kedro-graphl package contains an very simple example 
+The kedro-graphl package contains an very simple example
 pipeline called "example00".
 
 ### Setup
@@ -142,7 +139,7 @@ kedro gql -w
 
 ### Start a pipeline
 
-Navigate to http://127.0.0.1:5000/graphql to access the graphql interface 
+Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface
 and execute the following mutation:
 
 ```
@@ -188,11 +185,9 @@ subscription MySubscription {
 
 ![subscription](docs/subscription.gif)
 
-
 ### Susbscribe to pipeline logs
 
 Execute the following subscription to recieve log messages:
-
 
 ```
 subscription MySubscriptionLogs {
@@ -205,7 +200,6 @@ subscription MySubscriptionLogs {
   }
 }
 ```
-
 
 ![logs subscription](docs/logs-subscription.gif)
 
@@ -302,8 +296,9 @@ Expected result:
   }
 }
 ```
-One can explore how the pipeline is persisted using the mongo-express 
-interface located here http://127.0.0.1:8082.  Pipelines are persisted in the
+
+One can explore how the pipeline is persisted using the mongo-express
+interface located here <http://127.0.0.1:8082>.  Pipelines are persisted in the
 "pipelines" collection of the "pipelines" database.
 
 ![mongo-express-pipeline](./docs/mongo-express-pipeline.png)
@@ -325,26 +320,13 @@ mutation MyMutation {
 }
 ```
 
-Expected response:
-
-```
-{
-  "data": {
-    "createPipeline": {
-      "id": "67b89343715a3291af455eac",
-      "name": "example00"
-    }
-  }
-}
-```
-
-Execute the following mutation to update the pipeline with a data catalog, tags, and a `READY` state which will run the pipeline:
+Execute the following mutation to update the staged pipeline with a data catalog, tags, and a `READY` state which will run the pipeline:
 
 ```
 mutation MyMutation {
   updatePipeline(
-    id: "67b89343715a3291af455eac"
-    pipeline: {name: "example00", tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
+    id: "67b8b41535ac10b558916cba"
+    pipeline: {name: "example00", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
   ) {
     id
     name
@@ -354,8 +336,42 @@ mutation MyMutation {
 
 ### Slice a pipeline
 
+You can slice a pipeline by providing **inputs/outputs**, specifying **start/final/tagged nodes** or **node namespaces**, following [Kedro's pipeline slicing pattern](https://docs.kedro.org/en/stable/nodes_and_pipelines/slice_a_pipeline.html). For example, executing the following mutation will only run `"uppercase_node"` and `"reversed_node"` in the `"example01"` pipeline, skipping the `"timestamp_node"`:
+
+```
+mutation MyMutation {
+  createPipeline(
+    pipeline: {name: "example01", parameters: [{name: "example", value: "hello"}, {name: "duration", value: "10"}], tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "uppercased", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/uppercased.txt\"}"}, {name: "reversed", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/reversed.txt\"}"}, {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"}], slices: {slice: NODE_NAMES, args: ["uppercase_node", "reverse_node"]}, state: READY}
+  ) {
+    id
+    name
+  }
+}
+```
+
 ### Search for a pipeline
 
+Search for a pipeline using the [MongoDB document query filter](https://www.mongodb.com/docs/manual/core/document/#std-label-document-query-filter), [MongoDB cursor sort sytnax](https://www.mongodb.com/docs/manual/reference/method/cursor.sort/#syntax), and the [MongoDB cursor limit](https://www.mongodb.com/docs/manual/reference/method/cursor.limit/#cursor.limit--) in the `readPipelines` query. Executing the following query below will return up to **10 pipelines** that have a tag key of `"owner"` with a tag value of `"harinlee83"`, sorted chronologically in **descending order**.
+
+```
+query QueryForOwner {
+  readPipelines(
+    filter: "{\"tags.key\":\"owner\",\"tags.value\":\"harinlee83\"}"
+    sort: "[(\"created_at\", -1)]"
+    limit: 10
+  ) {
+    pipelines {
+      tags {
+        key
+        value
+      }
+      name
+      id
+      createdAt
+    }
+  }
+}
+```
 
 ## Features
 
@@ -396,7 +412,7 @@ class ExampleSubscriptionTypePlugin():
             await asyncio.sleep(0.5)
 ```
 
-When starting the api server specify the import path using the 
+When starting the api server specify the import path using the
 ```--imports``` flag.
 
 ```
@@ -411,12 +427,10 @@ kedro gql --imports "kedro_graphql.plugins.plugins,example_pkg.example.my_types"
 
 Alternatively, use a ```.env``` file as described in the [General Configuration](#general-configuration) section.
 
-
 ### Configurable Application
 
-The base application is strawberry + FastAPI instance.  One can leverage the 
+The base application is strawberry + FastAPI instance.  One can leverage the
 additional features FastAPI offers by defining a custom application class.
-
 
 This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/#use-corsmiddleware).
 
@@ -448,7 +462,7 @@ class MyApp(KedroGraphQL):
 
 ```
 
-When starting the api server specify the import path using the 
+When starting the api server specify the import path using the
 ```--app``` flag.
 
 ```
@@ -461,7 +475,6 @@ Connected to the MongoDB database!
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
 ```
-
 
 Alternatively, use a ```.env``` file as described in the [General Configuration](#general-configuration) section.
 
@@ -485,9 +498,9 @@ kedro gql -w --reload
 ```
 
 The path to watch can be further refined using the `--reload-path` option.
-In the following examples a reload will be triggered when changes are 
+In the following examples a reload will be triggered when changes are
 made to files in the `src/kedro_graphql/src/runners` directory.
-Start the api server with auto-reload enabled. 
+Start the api server with auto-reload enabled.
 
 ```
 kedro gql --reload --reload-path ./src/kedro_graphql/runners
@@ -520,7 +533,7 @@ KEDRO_GRAPHQL_LOG_PATH_PREFIX=s3://my-bucket/
 ```
 
 The configuration can also be provided at startup through the cli interface.
-Configuration values can be mapped to the the appropriate cli option by 
+Configuration values can be mapped to the the appropriate cli option by
 removing the "KEDRO_GRAPHQL" prefix and using a lower case, hyphen format
 for the remaining string.  For example:
 
@@ -539,16 +552,13 @@ for the remaining string.  For example:
 |KEDRO_GRAPHQL_LOG_TMP_DIR |   --log-tmp-dir    | my_tmp_dir/ |
 |KEDRO_GRAPHQL_LOG_PATH_PREFIX |   --log-path-prefix    | s3://my-bucket/ |
 
-
 ## How to install dependencies
-
 
 To install them, run:
 
 ```
 pip install -r src/requirements.txt
 ```
-
 
 ## How to test
 
@@ -572,21 +582,19 @@ After this, if you'd like to update your project requirements, please update `sr
 
 [Further information about project dependencies](https://kedro.readthedocs.io/en/stable/kedro_project_setup/dependencies.html#project-specific-dependencies)
 
-
 ### TO DO
 
 - support custom runners e.g. Argo Workflows, AWS Batch, etc...
-- document plan for supporting custom IOResolverPlugins 
-- document pipeline tags and implement "search" via tags and/or other fields
+- document plan for supporting custom IOResolverPlugins
 - API paginations e.g. list pipelines and/or search results
 - support passing credentials via api
-
 
 ## Changelog
 
 ### [1.0.0] - 2025-02-21
 
 Added
+
 - `sort` argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
 - Support for presigned S3 urls for upload and download of `DataSet`
 - `tags` and `exists` fields to `DataSet` type
@@ -599,15 +607,17 @@ Added
   - `after_catalog_created`
   - `before_pipeline_run`
   - `after_pipeline_run`
-  - `on_pipeline_error` 
+  - `on_pipeline_error`
 - `project_version`, `pipeline_version`, and `kedro_graphql_version` fields to `Pipeline` type
 
 Changed
+
 - `Pipeline` status field refactored with `PipelineStatus`
 - Renamed schema fields to follow CRUD naming conventions (`createPipeline`, `readPipelines`, `readPipeline`)
 - Back-end interface refactored to improve `Pipeline` object updates and prevent race conditions
 
 Removed
+
 - The following fields of the `Pipeline` and `PipelineInput` types:
   - `filepath`
   - `load_args`
@@ -657,8 +667,8 @@ class DataSetInput:
     credentials: Optional[str] = None
 ```
 
-The `config` field should be used instead to specify a dataset configuration as a JSON 
-string.  The `config` field approach supports all dataset implementations. 
+The `config` field should be used instead to specify a dataset configuration as a JSON
+string.  The `config` field approach supports all dataset implementations.
 
 #### Pipeline and PipelineInput types
 
@@ -667,7 +677,6 @@ deprecation and will be removed in a future release:
 
 - `inputs`
 - `outputs`
-
 
 ```
 @strawberry.type
