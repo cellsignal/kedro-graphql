@@ -3,6 +3,7 @@
 """
 import pytest
 
+
 @pytest.mark.usefixtures('mock_celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
 @pytest.mark.usefixtures('depends_on_current_app')
@@ -14,7 +15,7 @@ class TestSchemaSubscriptions:
 
         query = """
     	  subscription {
-          	pipeline(id:"""+ '"' + str(mock_pipeline.id) + '"' + """) {
+          	pipeline(id:""" + '"' + str(mock_pipeline.id) + '"' + """) {
               id
               taskId
               status
@@ -34,12 +35,12 @@ class TestSchemaSubscriptions:
         """Requires Redis to run.
         This test runs two pipelines simultaneously to ensure logs messages are scoped
         to the correct pipeline.
-        
+
         """
 
         query = """
     	  subscription {
-          	pipelineLogs(id:"""+ '"' + str(mock_pipeline.id) + '"' + """) {
+          	pipelineLogs(id:""" + '"' + str(mock_pipeline.id) + '"' + """) {
               id
               message
               messageId
@@ -52,15 +53,14 @@ class TestSchemaSubscriptions:
         sub = await mock_app.schema.subscribe(query)
 
         async for result in sub:
-            #print(result)
+            # print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline.id)
             assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline.status[-1].task_id)
 
-
         query2 = """
     	  subscription {
-          	pipelineLogs(id:"""+ '"' + str(mock_pipeline2.id) + '"' + """) {
+          	pipelineLogs(id:""" + '"' + str(mock_pipeline2.id) + '"' + """) {
               id
               message
               messageId
@@ -73,7 +73,7 @@ class TestSchemaSubscriptions:
         sub2 = await mock_app.schema.subscribe(query2)
 
         async for result in sub2:
-            #print(result)
+            # print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline2.id)
             assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline2.status[-1].task_id)

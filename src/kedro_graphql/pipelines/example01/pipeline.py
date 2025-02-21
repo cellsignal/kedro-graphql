@@ -4,7 +4,8 @@ generated using Kedro 0.19.11
 """
 
 from kedro.pipeline import Pipeline, node, pipeline
-from .nodes import uppercase, reverse, append_timestamp
+
+from .nodes import append_timestamp, reverse, uppercase
 
 
 def create_pipeline(**kwargs) -> Pipeline:

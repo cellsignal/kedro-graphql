@@ -1,17 +1,18 @@
 from fastapi.middleware.cors import CORSMiddleware
+
 from kedro_graphql import KedroGraphQL
 
 
 class MyApp(KedroGraphQL):
 
-    def __init__(self): 
+    def __init__(self):
         super(MyApp, self).__init__()
 
         origins = [
             "http://localhost",
             "http://localhost:8080",
         ]
-        
+
         self.add_middleware(
             CORSMiddleware,
             allow_origins=origins,

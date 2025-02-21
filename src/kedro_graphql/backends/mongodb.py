@@ -1,22 +1,23 @@
-from .base import BaseBackend
-from pymongo import MongoClient
-from kedro_graphql.models import Pipeline
-import uuid
-from bson.objectid import ObjectId
-from fastapi.encoders import jsonable_encoder
-import json
 import ast
+import json
+import uuid
+
+from bson.objectid import ObjectId
+from pymongo import MongoClient
+
+from kedro_graphql.models import Pipeline
+
+from .base import BaseBackend
 
 
 class MongoBackend(BaseBackend):
 
-    def __init__(self, uri = None, db = None):
-        #self.client = MongoClient(app.config["MONGO_URI"])
+    def __init__(self, uri=None, db=None):
+        # self.client = MongoClient(app.config["MONGO_URI"])
         self.client = MongoClient(uri)
-        #self.db = self.client[app.config["MONGO_DB_NAME"]]
+        # self.db = self.client[app.config["MONGO_DB_NAME"]]
         self.db = self.client[db]
-        #self.app = app
-
+        # self.app = app
 
     def startup(self, **kwargs):
         """Startup hook."""
@@ -26,12 +27,12 @@ class MongoBackend(BaseBackend):
         """Shutdown hook."""
         self.client.close()
 
-    def list(self, cursor: uuid.UUID = None, limit = 10, filter = "", sort = ""):
-        query = {'_id': { '$gte': ObjectId(cursor)}}
+    def list(self, cursor: uuid.UUID = None, limit=10, filter="", sort=""):
+        query = {'_id': {'$gte': ObjectId(cursor)}}
         if len(filter) > 0:
             filter = json.loads(filter)
             query.update(filter)
-        
+
         if sort:
             try:
                 sort = ast.literal_eval(sort)
@@ -69,7 +70,7 @@ class MongoBackend(BaseBackend):
     def create(self, pipeline: Pipeline):
         """Save a pipeline"""
         values = pipeline.encode()
-        values.pop("id") ## we dont have an id yet, we will get it after insert
+        values.pop("id")  # we dont have an id yet, we will get it after insert
         created = self.db["pipelines"].insert_one(values)
         created = self.db["pipelines"].find_one({"_id": created.inserted_id})
         created["id"] = str(created["_id"])
@@ -81,14 +82,14 @@ class MongoBackend(BaseBackend):
         id = ObjectId(pipeline.id)
         filter = {'_id': id}
         values = pipeline.encode()
-        values.pop("id") ## we dont want to update the id
-        newvalues = { "$set": values }
+        values.pop("id")  # we dont want to update the id
+        newvalues = {"$set": values}
         self.db["pipelines"].update_one(filter, newvalues)
 
-        p = self.read(id = id)
+        p = self.read(id=id)
 
         return p
-    
+
     def delete(self, id: uuid.UUID = None):
         """Delete a pipeline using id"""
         self.db["pipelines"].delete_one({"_id": ObjectId(id)})

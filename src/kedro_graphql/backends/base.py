@@ -1,6 +1,8 @@
 import abc
-from kedro_graphql.models import Pipeline
 import uuid
+
+from kedro_graphql.models import Pipeline
+
 
 class BaseBackend(metaclass=abc.ABCMeta):
 
@@ -33,7 +35,7 @@ class BaseBackend(metaclass=abc.ABCMeta):
     def update(self, pipeline: Pipeline):
         """Update a pipeline"""
         raise NotImplementedError
-    
+
     @abc.abstractmethod
     def delete(self, id: uuid.UUID = None):
         """Delete a pipeline"""
