@@ -309,8 +309,55 @@ interface located here http://127.0.0.1:8082.  Pipelines are persisted in the
 ![mongo-express-pipeline](./docs/mongo-express-pipeline.png)
 
 ![mongo-express-pipeline-doc](./docs/mongo-express-pipeline-doc.png)
-## Features
 
+### Staging and updating a pipeline
+
+Execute the following mutation to stage a pipeline:
+
+```
+mutation MyMutation {
+  createPipeline(
+    pipeline: {name: "example00", state: STAGED}
+  ) {
+    id
+    name
+  }
+}
+```
+
+Expected response:
+
+```
+{
+  "data": {
+    "createPipeline": {
+      "id": "67b89343715a3291af455eac",
+      "name": "example00"
+    }
+  }
+}
+```
+
+Execute the following mutation to update the pipeline with a data catalog, tags, and a `READY` state which will run the pipeline:
+
+```
+mutation MyMutation {
+  updatePipeline(
+    id: "67b89343715a3291af455eac"
+    pipeline: {name: "example00", tags: [{key: "owner", value: "harinlee83"}], dataCatalog: [{name: "text_in", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/01_raw/text_in.txt\"}"}, {name: "text_out", config: "{\"type\": \"text.TextDataset\",\"filepath\": \"./data/02_intermediate/text_out.txt\"}"}], state: READY}
+  ) {
+    id
+    name
+  }
+}
+```
+
+### Slice a pipeline
+
+### Search for a pipeline
+
+
+## Features
 
 ### Extensible API
 
@@ -537,32 +584,41 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
-### v1.0.0
+### [1.0.0] - 2025-02-21
 
-- Added a `sort` argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
-- Added support for presigned S3 urls for upload and download of `DataSet`
-- Added `tags` and `exists` fields to `DataSet` type
-- Added  `parent`, `runner`, `created_at` fields to `Pipeline` type
-- Refactored `Pipeline` status field with new `PipelineStatus`
+Added
+- `sort` argument to pipelines Query so users could sort through mongodb document fields lexicographically (ascending/descending)
+- Support for presigned S3 urls for upload and download of `DataSet`
+- `tags` and `exists` fields to `DataSet` type
+- `parent`, `runner`, `created_at` fields to `Pipeline` type
+- `updatePipeline` and `deletePipeline` mutations
+- Universal logs handling with `gql_meta` and `gql_logs` DataSets, `KEDRO_GRAPHQL_LOG_TMP_DIR` and `KEDRO_GRAPHQL_LOG_PATH_PREFIX` env variables, and `DataLoggingHooks`
+- Support for `Pipeline` slicing with `PipelineSlice` and `PipelineSliceType` types and `slices` and `only_missing` fields
+- Nested parameters using dot-list notation in the `Parameter.name`
+- Kedro hook calls in `run_pipeline` task:
+  - `after_catalog_created`
+  - `before_pipeline_run`
+  - `after_pipeline_run`
+  - `on_pipeline_error` 
+- `project_version`, `pipeline_version`, and `kedro_graphql_version` fields to `Pipeline` type
+
+Changed
+- `Pipeline` status field refactored with `PipelineStatus`
 - Renamed schema fields to follow CRUD naming conventions (`createPipeline`, `readPipelines`, `readPipeline`)
-- Added `updatePipeline` and `deletePipeline` mutations
-- Refactored back-end interface to make updating pipeline objects easier and to prevent race conditions
-- Added universal logs handling with `gql_meta` and `gql_logs` DataSets, `KEDRO_GRAPHQL_LOG_TMP_DIR` and `KEDRO_GRAPHQL_LOG_PATH_PREFIX` env variables, and `DataLoggingHooks`
-- Added support for `Pipeline` slicing with `PipelineSlice` and `PipelineSliceType` types and `slices` and `only_missing` fields
-- Added support for nested parameters using dot-list notation in the `Parameter` type `name` field
-- Added `after_catalog_created`,`before_pipeline_run`, `after_pipeline_run`, and `on_pipeline_error` kedro hook calls in the `run_pipeline` task
-- Added `project_version`, `pipeline_version`, and `kedro_graphql_version` fields to `Pipeline` type
-- Removed the following fields of the `Pipeline` and `PipelineInput` types:
+- Back-end interface refactored to improve `Pipeline` object updates and prevent race conditions
+
+Removed
+- The following fields of the `Pipeline` and `PipelineInput` types:
   - `filepath`
   - `load_args`
   - `save_args`
   - `type`
   - `credentials`
-- Removed the following fields of the `Pipeline` and `PipelineInput` types:
+- The following fields of the `Pipeline` and `PipelineInput` types:
   - `inputs`
   - `outputs`
 
-### v0.5.0
+### [0.5.0] - 2024-07-17
 
 - support python3.11
 - support kedro ~=0.19.6
