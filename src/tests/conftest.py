@@ -20,7 +20,7 @@ def kedro_session():
 @pytest.fixture(scope="session")
 def mock_app(kedro_session):
     app = KedroGraphQL(kedro_session = kedro_session)
-    app.config["LOG_PATH_PREFIX"]="src/tests/tmp"
+    app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"]="src/tests/tmp"
     return app
 
 @pytest.fixture(scope="session", autouse=True)
