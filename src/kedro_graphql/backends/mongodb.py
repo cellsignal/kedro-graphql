@@ -47,7 +47,7 @@ class MongoBackend(BaseBackend):
 
         results = []
         for r in raw:
-            r["id"] = str(["_id"])
+            r["id"] = str(r["_id"])
             p = Pipeline.decode(r)
             results.append(p)
         return results
