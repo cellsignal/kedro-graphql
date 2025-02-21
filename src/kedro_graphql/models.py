@@ -439,7 +439,7 @@ class PipelineInput:
     #credentials: Optional[List[CredentialInput]] = None
     #credentials_nested: Optional[List[CredentialNestedInput]] = None
     parent: Optional[uuid.UUID] = None
-    runner: str = "kedro.runner.SequentialRunner"
+    runner: Optional[str] = None
     slices: Optional[List[PipelineSlice]] = None
     only_missing: Optional[bool] = False
 
@@ -518,7 +518,7 @@ class State(Enum):
 class PipelineStatus:
     state: State
     session: Optional[str] ## the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529 
-    runner: Optional[str] = "kedro.runner.SequentialRunner"
+    runner: Optional[str] = None
     filtered_nodes: Optional[List[str]] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
@@ -543,7 +543,7 @@ class Pipeline:
     id: Optional[uuid.UUID] = None
     name: str
     data_catalog: Optional[List[DataSet]] = None
-    parameters: List[Parameter]
+    parameters: Optional[List[Parameter]] = None
     status: List[PipelineStatus] = strawberry.field(default_factory=list)
     tags: Optional[List[Tag]] = None
     created_at: Optional[datetime] = None

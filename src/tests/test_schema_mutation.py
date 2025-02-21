@@ -45,6 +45,10 @@ class TestSchemaMutations:
               }
               parent
               createdAt
+              dataCatalog {
+                name
+                config
+              }
           }
         }
         """
@@ -89,6 +93,10 @@ class TestSchemaMutations:
             }
             parent
             createdAt
+            dataCatalog {
+                name
+                config
+            }
           }
         }
         """
@@ -134,6 +142,10 @@ class TestSchemaMutations:
             }
             parent
             createdAt
+            dataCatalog {
+                name
+                config
+            }
           }
         }
         """
@@ -280,13 +292,7 @@ class TestSchemaMutations:
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
-                                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
-                                                                                {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
-                                                                  ],
-                                                                 "parameters": [{"name": "example", "value": "hello"},
-                                                                                {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "STAGED",
-                                                                 "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
                                                              }})
 
         pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
@@ -295,12 +301,23 @@ class TestSchemaMutations:
                                                              variable_values={"id": pipeline_id,
                                                                               "pipeline": {
                                                                                   "name": "example00",
+                                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                                                  {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                                                    ],
+                                                                                  "parameters": [{"name": "example", "value": "hello"},
+                                                                                                {"name": "duration", "value": "0.1", "type": "FLOAT"}],
+                                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}],
                                                                                   "state": "READY",
                                                                               }
                                                                               })
         assert update_pipeline_resp.errors is None
-        pipeline_state = update_pipeline_resp.data["updatePipeline"]["status"][-1]["state"]
-        assert pipeline_state != "STAGED"
+        assert update_pipeline_resp.data["updatePipeline"]["status"][-1]["state"] != "STAGED"
+        assert update_pipeline_resp.data["updatePipeline"]["dataCatalog"][0] == {"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}
+        assert update_pipeline_resp.data["updatePipeline"]["dataCatalog"][1] == {"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+        assert update_pipeline_resp.data["updatePipeline"]["parameters"][0] == {"name": "example", "value": "hello", "type": "STRING"}
+        assert update_pipeline_resp.data["updatePipeline"]["parameters"][1] == {"name": "duration", "value": "0.1", "type": "FLOAT"}
+        assert update_pipeline_resp.data["updatePipeline"]["tags"][0] == {"key": "author", "value": "opensean"}
+        assert update_pipeline_resp.data["updatePipeline"]["tags"][1] == {"key": "package", "value": "kedro-graphql"}
 
     @pytest.mark.usefixtures('mock_celery_session_app')
     @pytest.mark.usefixtures('celery_session_worker')

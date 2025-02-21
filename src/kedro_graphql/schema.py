@@ -202,13 +202,20 @@ class Mutation:
 
         pipeline_input_dict = jsonable_encoder(pipeline)
 
+        # Update pipeline with new pipeline input
+        p.parameters = pipeline_input_dict.get("parameters")
+        p.data_catalog = pipeline_input_dict.get("data_catalog")
+        p.tags = pipeline_input_dict.get("tags")
+        p.parent = pipeline_input_dict.get("parent")
+        runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get("runner") else config["KEDRO_GRAPHQL_RUNNER"]
+
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
             if (p.status[-1].state.value != "STAGED"):
                 # Add new status object to pipeline because this is another run attempt
                 p.status.append(PipelineStatus(state=State.READY,
-                                               runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                               runner=runner,
                                                session=None,
                                                started_at=datetime.now(),
                                                finished_at=None,
@@ -217,12 +224,15 @@ class Mutation:
             else:
                 # Replace staged status with running status
                 p.status[-1] = PipelineStatus(state=State.READY,
-                                              runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                              runner=runner,
                                               session=None,
                                               started_at=datetime.now(),
                                               finished_at=None,
                                               task_id=None,
                                               task_name=str(run_pipeline))
+
+            # Update pipeline in backend before running task
+            p = info.context["request"].app.backend.update(p)
 
             serial = p.encode(encoder="kedro")
 
@@ -231,7 +241,7 @@ class Mutation:
                 name = serial["name"], 
                 parameters = serial["parameters"],
                 data_catalog = serial["data_catalog"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                runner = runner,
                 slices=pipeline_input_dict.get("slices", None),
                 only_missing=pipeline_input_dict.get("only_missing", False)
             )
@@ -242,15 +252,15 @@ class Mutation:
         # If PipelineInput is STAGED and pipeline is not already running or staged
         if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
-                                    runner=None,
+                                    runner=runner,
                                     session=None,
                                     started_at=None,
                                     finished_at=None,
                                     task_id=None,
                                     task_name=None))
             logger.info(f'Staging pipeline {p.name}')
-
         p = info.context["request"].app.backend.update(p)
+            
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return  p
     
