@@ -1,9 +1,10 @@
-from importlib import import_module
 import logging
+from importlib import import_module
+
 logger = logging.getLogger("kedro")
 
 
-def init_runner(runner = None):
+def init_runner(runner=None):
     module, class_name = runner.rsplit(".", 1)
 
     module = import_module(module)

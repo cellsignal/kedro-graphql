@@ -1,9 +1,10 @@
+import os
 from typing import Any
 
 from kedro.framework.hooks import hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
-import os
+
 from .config import config
 
 
@@ -48,7 +49,7 @@ class DataLoggingHooks:
 
     def save_meta(self, run_params: dict[str, Any], catalog: CatalogProtocol):
         d = catalog.load("gql_meta")
-        d["run_params"]= run_params
+        d["run_params"] = run_params
         catalog.save("gql_meta", d)
 
     def save_logs(self, catalog: CatalogProtocol, session_id: str, celery_task_id: str):
@@ -78,7 +79,10 @@ class DataLoggingHooks:
             self.save_meta(run_params, catalog)
 
     @hook_impl
-    def after_pipeline_run(self, run_params: dict[str, Any], run_result: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
+    def after_pipeline_run(
+            self, run_params: dict[str, Any],
+            run_result: dict[str, Any],
+            pipeline: Pipeline, catalog: CatalogProtocol):
         if config.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX'):
             self.save_logs(catalog, run_params["session_id"], run_params["celery_task_id"])
 

@@ -1,9 +1,17 @@
-from abc import ABC, abstractmethod
 import asyncio
-from kedro_graphql.decorators import gql_resolver, gql_query, gql_mutation, gql_subscription
-from kedro_graphql.models import ParameterInput, DataSetInput
-import strawberry
+from abc import ABC, abstractmethod
 from typing import AsyncGenerator
+
+import strawberry
+
+from kedro_graphql.decorators import (
+    gql_mutation,
+    gql_query,
+    gql_resolver,
+    gql_subscription,
+)
+from kedro_graphql.models import DataSetInput, ParameterInput
+
 
 class IOResolverPlugin(ABC):
     """
@@ -15,19 +23,21 @@ class IOResolverPlugin(ABC):
     def __input__(self, input: ParameterInput | DataSetInput) -> [ParameterInput | DataSetInput]:
         pass
 
-    @abstractmethod 
+    @abstractmethod
     def __submit__(self, input: ParameterInput | DataSetInput) -> ParameterInput | DataSetInput:
         pass
 
-@gql_resolver(name = "text_in")
+
+@gql_resolver(name="text_in")
 class ExampleTextInPlugin(IOResolverPlugin):
-    
+
     def __input__(self, input: ParameterInput | DataSetInput) -> [ParameterInput | DataSetInput]:
         print("plugin example", input)
         return [input]
 
     def __submit__(self, input: ParameterInput | DataSetInput) -> ParameterInput | DataSetInput:
         return input
+
 
 @gql_query()
 @strawberry.type
@@ -36,12 +46,14 @@ class ExampleQueryTypePlugin():
     def hello_world(self) -> str:
         return "Hello World"
 
+
 @gql_mutation()
 @strawberry.type
 class ExampleMutationTypePlugin():
     @strawberry.mutation
     def hello_world(self, message: str = "World") -> str:
         return "Hello " + message
+
 
 @gql_subscription()
 @strawberry.type
