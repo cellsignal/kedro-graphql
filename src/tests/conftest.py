@@ -86,7 +86,6 @@ def mock_info_context(mock_app):
 # refer to https://docs.pytest.org/en/7.1.x/how-to/tmp_path.html for info on tmp_path fixture
 @pytest.fixture
 def mock_text_in(tmp_path):
-    # tmp_path.mkdir()
     text_in = tmp_path / "text_in.txt"
     text_in.write_text("hello")
     return text_in
@@ -94,7 +93,6 @@ def mock_text_in(tmp_path):
 
 @pytest.fixture
 def mock_text_out(tmp_path):
-    # tmp_path.mkdir()
     text_out = tmp_path / "text_out.txt"
     text_out.write_text("good bye")
     return text_out
@@ -102,7 +100,6 @@ def mock_text_out(tmp_path):
 
 @pytest.fixture
 def mock_text_in_tsv(tmp_path):
-    # tmp_path.mkdir()
     text = tmp_path / "text_in.tsv"
     text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
@@ -110,7 +107,6 @@ def mock_text_in_tsv(tmp_path):
 
 @pytest.fixture
 def mock_text_out_tsv(tmp_path):
-    # tmp_path.mkdir()
     text = tmp_path / "text_out.tsv"
     text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text

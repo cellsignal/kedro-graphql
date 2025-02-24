@@ -13,11 +13,8 @@ from .base import BaseBackend
 class MongoBackend(BaseBackend):
 
     def __init__(self, uri=None, db=None):
-        # self.client = MongoClient(app.config["MONGO_URI"])
         self.client = MongoClient(uri)
-        # self.db = self.client[app.config["MONGO_DB_NAME"]]
         self.db = self.client[db]
-        # self.app = app
 
     def startup(self, **kwargs):
         """Startup hook."""

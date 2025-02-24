@@ -167,19 +167,3 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
                         env, metadata.package_name, metadata.project_path))
         else:
             start_app(app, config, conf_source, env, metadata.package_name, metadata.project_path)
-
-    # with KedroSession.create(metadata.package_name, project_path=metadata.project_path, env = env, conf_source = conf_source) as session:
-    # create app instance
-    # module, class_name = app.rsplit(".", 1)
-    # module = import_module(module)
-    # class_inst = getattr(module, class_name)
-    # a = class_inst(kedro_session = session, config = config)
-
-    # if worker:
-    # from .celeryapp import celery_app
-    # capp = celery_app(a.config, a.backend)
-    # worker = capp.Worker()
-    # worker.start()
-    # else:
-
-    # uvicorn.run(a, host="0.0.0.0", port=5000, log_level="info")

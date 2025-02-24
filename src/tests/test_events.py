@@ -18,7 +18,6 @@ from kedro_graphql.events import PipelineEventMonitor
 
 @pytest.mark.usefixtures('mock_celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
-# @pytest.mark.usefixtures('celery_includes')
 @pytest.mark.usefixtures('depends_on_current_app')
 class TestPipelineEventMonitor:
 

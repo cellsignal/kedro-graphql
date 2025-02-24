@@ -53,7 +53,6 @@ class TestSchemaSubscriptions:
         sub = await mock_app.schema.subscribe(query)
 
         async for result in sub:
-            # print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline.id)
             assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline.status[-1].task_id)
@@ -73,7 +72,6 @@ class TestSchemaSubscriptions:
         sub2 = await mock_app.schema.subscribe(query2)
 
         async for result in sub2:
-            # print(result)
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline2.id)
             assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline2.status[-1].task_id)

@@ -4,8 +4,6 @@ import os
 import shutil
 from datetime import date, datetime
 from pathlib import Path
-
-#from kedro.runner import SequentialRunner
 from typing import Dict, List
 
 from celery import Task, shared_task
@@ -30,7 +28,6 @@ class KedroGraphqlTask(Task):
     @property
     def db(self):
         if self._db is None:
-            #self._db = self._app.kedro_graphql_backend
             self._db = self.app.kedro_graphql_backend
         return self._db
 

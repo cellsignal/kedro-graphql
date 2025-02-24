@@ -3,11 +3,10 @@ from importlib import import_module
 from .logs.logger import logger
 
 RESOLVER_PLUGINS = {}
-# from .config import RESOLVER_PLUGINS
+
 TYPE_PLUGINS = {"query": [],
                 "mutation": [],
                 "subscription": []}
-# from .config import TYPE_PLUGINS
 
 
 def discover_plugins(config):
@@ -43,11 +42,6 @@ def gql_resolver(name):
 def gql_query():
     """
     """
-    # raise warning if same class is registered twice?
-    # if type not in TYPE_PLUGINS.keys():
-    # raise KeyError(
-    # f"Type plugin error: '{type}', must be one of ['query', 'mutation', or 'subscription']"
-    # )
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["query"].append(plugin_class)
@@ -60,11 +54,6 @@ def gql_query():
 def gql_mutation():
     """
     """
-    # raise warning if same class is registered twice?
-    # if type not in TYPE_PLUGINS.keys():
-    # raise KeyError(
-    # f"Type plugin error: '{type}', must be one of ['query', 'mutation', or 'subscription']"
-    # )
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["mutation"].append(plugin_class)
@@ -77,11 +66,6 @@ def gql_mutation():
 def gql_subscription():
     """
     """
-    # raise warning if same class is registered twice?
-    # if type not in TYPE_PLUGINS.keys():
-    # raise KeyError(
-    # f"Type plugin error: '{type}', must be one of ['query', 'mutation', or 'subscription']"
-    # )
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["subscription"].append(plugin_class)

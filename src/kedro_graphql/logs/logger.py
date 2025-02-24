@@ -3,9 +3,6 @@ import logging
 import os
 from inspect import currentframe, getframeinfo
 from logging import LogRecord
-
-# from celery.signals import task_prerun, task_postrun
-# from kedro_graphql.asgi import default_config as config
 from typing import AsyncGenerator
 
 import redis
@@ -35,7 +32,6 @@ class RedisLogStreamPublisher(object):
 
     def publish(self, data):
         data = {k: (str(v) if isinstance(v, bool) else v) for k, v in data.items()}
-        # print("PUBLISHING", type(data), data)
         self.connection.xadd(self.topic, data)
 
 
@@ -67,26 +63,6 @@ class KedroGraphQLLogHandler(logging.StreamHandler):
     def emit(self, record):
         msg = self.format(record)
         self.broker.publish(json.loads(msg))
-
-
-# @task_prerun.connect
-# def setup_task_logger(task_id, task, args, **kwargs):
-# logger = logging.getLogger("kedro")
-##
-# handler = KedroGraphQLLogHandler(task_id)
-# logger.addHandler(handler)
-
-# @task_postrun.connect
-# def cleanup_task_logger(task_id, task, args, **kwargs):
-# logger = logging.getLogger("kedro")
-# logger.info("Closing log stream")
-# for handler in logger.handlers:
-# if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
-# handler.flush()
-# handler.close()
-# handler.broker.connection.delete(task_id) ## delete stream
-# handler.broker.connection.close()
-# logger.handlers = []
 
 
 class PipelineLogStream():

@@ -4,9 +4,6 @@ from strawberry.fastapi import GraphQLRouter
 from .backends import init_backend
 from .celeryapp import celery_app
 from .config import config
-
-# from .backends import init_backend
-# from .schema import build_schema
 from .decorators import RESOLVER_PLUGINS, TYPE_PLUGINS, discover_plugins
 from .models import PipelineTemplates
 from .schema import build_schema
@@ -14,8 +11,6 @@ from .schema import build_schema
 
 class KedroGraphQL(FastAPI):
 
-    # def __init__(self, gql_conf = {}, package_name = None, project_path = None,
-    # conf_source = None, env = None):
     def __init__(self, kedro_session=None, config=config):
         super(KedroGraphQL, self).__init__()
 

@@ -51,4 +51,3 @@ async def test_run_pipeline(mock_app, mock_text_in, mock_text_out):
         runner="kedro.runner.SequentialRunner"
     )
     result = result.wait(timeout=None, interval=0.5)
-    # print(result)

@@ -149,30 +149,6 @@ class CredentialNestedInput:
             values.update(v.serialize())
         return {self.name: values}
 
-# def serialize(self) -> dict:
-# """
-# Returns serializable dict in format compatible with kedro.
-# """
-# values = {}
-# for v in self.value:
-# values.update(v.serialize())
-# return {self.name: values}
-##
-# def merge(self, a, b, path=None):
-# "merges nested dictionaries recursively.  Merges b into a."
-# if path is None: path = []
-# for key in b:
-# if key in a:
-# if isinstance(a[key], dict) and isinstance(b[key], dict):
-# self.merge(a[key], b[key], path + [str(key)])
-# elif a[key] == b[key]:
-# pass # same leaf value
-# else:
-# raise Exception('Conflict at %s' % '.'.join(path + [str(key)]))
-# else:
-# a[key] = b[key]
-# return a
-
 
 @strawberry.type
 class DataSet:
@@ -451,8 +427,6 @@ class PipelineInput:
     parameters: Optional[List[ParameterInput]] = None
     data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
-    # credentials: Optional[List[CredentialInput]] = None
-    # credentials_nested: Optional[List[CredentialNestedInput]] = None
     parent: Optional[uuid.UUID] = None
     runner: Optional[str] = None
     slices: Optional[List[PipelineSlice]] = None
@@ -532,7 +506,6 @@ class State(Enum):
 @strawberry.type
 class PipelineStatus:
     state: State
-    # the kedro session https://docs.kedro.org/en/stable/kedro_project_setup/session.html, tracking the session id allows us to find the related logs see https://cellsignal.atlassian.net/browse/BIOINDS-529
     session: Optional[str]
     runner: Optional[str] = None
     filtered_nodes: Optional[List[str]] = None
@@ -549,12 +522,8 @@ class PipelineStatus:
     task_result: Optional[str] = None
 
 
-# Should expand pipeline type to include pipeline version
 @strawberry.type
 class Pipeline:
-    # kedro_pipelines: strawberry.Private[Optional[dict]] = None
-    # kedro_catalog: strawberry.Private[Optional[dict]] = None
-    # kedro_parameters: strawberry.Private[Optional[dict]] = None
     kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
     id: Optional[uuid.UUID] = None
     name: str
