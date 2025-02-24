@@ -628,7 +628,8 @@ After this, if you'd like to update your project requirements, please update `sr
 
 Fixed
 
-- Fixed bug caused by an unused import in `__init__.py` that prevented the KedroGraphQL app from starting
+- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
+- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
 
 Changed
 
