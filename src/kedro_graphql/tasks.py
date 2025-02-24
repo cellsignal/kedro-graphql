@@ -248,14 +248,6 @@ def run_pipeline(self,
         io.add_feed_dict(conf_params)
 
         try:
-            hook_manager.hook.after_catalog_created(
-                catalog=io,
-                conf_catalog=None,
-                conf_creds=None,
-                feed_dict=None,
-                save_version=None,
-                load_versions=None
-            )
             # Populate the filtering parameters based on the slices input
             tags = None
             from_nodes = None
@@ -303,6 +295,15 @@ def run_pipeline(self,
                     "namespace": node_namespace, # Name of the node namespace to run.
                     "runner": getattr(runner, "__name__", str(runner)),
                 }
+            
+            hook_manager.hook.after_catalog_created(
+                catalog=io,
+                conf_catalog=None,
+                conf_creds=None,
+                feed_dict=None,
+                save_version=None,
+                load_versions=None
+            )
         
             hook_manager.hook.before_pipeline_run(
                     run_params=record_data,

@@ -634,6 +634,7 @@ Fixed
 Changed
 
 - Changed README.md img src to absolute URLs for PyPi's project description renderer
+- Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
 
 ### [1.0.0] - 2025-02-21
 
