@@ -1,23 +1,35 @@
-#from .config import PIPELINES, TYPE_PLUGINS
-from .events import PipelineEventMonitor
+import asyncio
+from base64 import b64decode, b64encode
+from datetime import datetime
+from importlib import import_module
+from typing import AsyncGenerator, Optional
+
 import strawberry
+from bson.objectid import ObjectId
+from celery.states import UNREADY_STATES
+from fastapi.encoders import jsonable_encoder
+from kedro.framework.project import pipelines
 from strawberry.tools import merge_types
 from strawberry.types import Info
-from typing import AsyncGenerator, Optional
-from .tasks import run_pipeline
-from .models import Pipeline, Pipelines, PipelineInput, PipelineEvent, PipelineLogMessage, PipelineTemplate, PipelineTemplates, PageMeta, PipelineStatus, State
-from .logs.logger import logger, PipelineLogStream
-from fastapi.encoders import jsonable_encoder
-from base64 import b64encode, b64decode
-from bson.objectid import ObjectId
-from datetime import datetime
-from kedro.framework.project import pipelines
-from .hooks import InvalidPipeline
-from celery.states import UNREADY_STATES
+
 from . import __version__ as kedro_graphql_version
-from importlib import import_module
 from .config import config
-import asyncio
+from .events import PipelineEventMonitor
+from .hooks import InvalidPipeline
+from .logs.logger import PipelineLogStream, logger
+from .models import (
+    PageMeta,
+    Pipeline,
+    PipelineEvent,
+    PipelineInput,
+    PipelineLogMessage,
+    Pipelines,
+    PipelineStatus,
+    PipelineTemplate,
+    PipelineTemplates,
+    State,
+)
+from .tasks import run_pipeline
 
 
 def encode_cursor(id: int) -> str:
@@ -59,10 +71,11 @@ class Query:
             # decode the user ID from the given cursor.
             pipe_id = ObjectId(decode_cursor(cursor=cursor))
         else:
-            pipe_id = ObjectId("100000000000000000000000") ## unix epoch Jan 1, 1970 as objectId
+            pipe_id = ObjectId("100000000000000000000000")  # unix epoch Jan 1, 1970 as objectId
 
         # filter the pipeline template data, going through the next set of results.
-        filtered_data = [pipe for pipe in info.context["request"].app.kedro_pipelines_index if pipe.id.generation_time >= pipe_id.generation_time]
+        filtered_data = [pipe for pipe in info.context["request"].app.kedro_pipelines_index
+                         if pipe.id.generation_time >= pipe_id.generation_time]
 
         # slice the relevant pipeline template data (Here, we also slice an
         # additional pipe instance, to prepare the next cursor).
@@ -81,7 +94,7 @@ class Query:
             pipeline_templates=sliced_pipes, page_meta=PageMeta(next_cursor=next_cursor)
         )
 
-    @strawberry.field(description = "Get a pipeline instance.")
+    @strawberry.field(description="Get a pipeline instance.")
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -89,19 +102,20 @@ class Query:
                 raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
-        
+
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
-    @strawberry.field(description = "Get a list of pipeline instances.")
-    def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "", sort: Optional[str] = "") -> Pipelines:
+    @strawberry.field(description="Get a list of pipeline instances.")
+    def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
+                       sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)
         else:
-            pipe_id = "000000000000000000000000" ## unix epoch Jan 1, 1970 as objectId
+            pipe_id = "000000000000000000000000"  # unix epoch Jan 1, 1970 as objectId
 
-        results = info.context["request"].app.backend.list(cursor = pipe_id, limit = limit + 1, filter = filter, sort = sort)
+        results = info.context["request"].app.backend.list(cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
 
         if len(results) > limit:
             # calculate the client's next cursor.
@@ -116,9 +130,10 @@ class Query:
             pipelines=results, page_meta=PageMeta(next_cursor=next_cursor)
         )
 
+
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description = "Execute a pipeline.")
+    @strawberry.mutation(description="Execute a pipeline.")
     def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
@@ -126,16 +141,16 @@ class Mutation:
 
         if pipeline.name not in pipelines.keys():
             raise InvalidPipeline(f"Pipeline {pipeline.name} does not exist in the project.")
-        
+
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
 
         serial = p.encode(encoder="kedro")
 
-        ## credentials not supported yet
-        ## merge any credentials with inputs and outputs
-        ## credentials are intentionally not persisted
-        ## NOTE celery result may persist creds in task result?
+        # credentials not supported yet
+        # merge any credentials with inputs and outputs
+        # credentials are intentionally not persisted
+        # NOTE celery result may persist creds in task result?
 
         started_at = datetime.now()
         p.created_at = started_at
@@ -166,31 +181,30 @@ class Mutation:
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
-                                            runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
-                                            session=None,
-                                            started_at=started_at,
-                                            finished_at=None,
-                                            task_id=None,
-                                            task_name=str(run_pipeline)))
+                                           runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                           session=None,
+                                           started_at=started_at,
+                                           finished_at=None,
+                                           task_id=None,
+                                           task_name=str(run_pipeline)))
 
             p = info.context["request"].app.backend.create(p)
- 
+
             result = run_pipeline.delay(
-                id = str(p.id),
-                name = serial["name"], 
-                parameters = serial["parameters"],
-                data_catalog = serial["data_catalog"],
-                runner = info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                id=str(p.id),
+                name=serial["name"],
+                parameters=serial["parameters"],
+                data_catalog=serial["data_catalog"],
+                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
                 slices=d.get("slices", None),
                 only_missing=d.get("only_missing", False)
             )
-            
+
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
-    
 
-    @strawberry.mutation(description = "Update a pipeline.")
+    @strawberry.mutation(description="Update a pipeline.")
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         try:
@@ -210,7 +224,7 @@ class Mutation:
         runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get("runner") else config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
-        if pipeline_input_dict.get("state",None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
+        if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
             if (p.status[-1].state.value != "STAGED"):
                 # Add new status object to pipeline because this is another run attempt
@@ -237,34 +251,33 @@ class Mutation:
             serial = p.encode(encoder="kedro")
 
             result = run_pipeline.delay(
-                id = str(p.id),
-                name = serial["name"], 
-                parameters = serial["parameters"],
-                data_catalog = serial["data_catalog"],
-                runner = runner,
+                id=str(p.id),
+                name=serial["name"],
+                parameters=serial["parameters"],
+                data_catalog=serial["data_catalog"],
+                runner=runner,
                 slices=pipeline_input_dict.get("slices", None),
                 only_missing=pipeline_input_dict.get("only_missing", False)
             )
 
             logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
-
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        if pipeline_input_dict.get("state",None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
+        if pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
-                                    runner=runner,
-                                    session=None,
-                                    started_at=None,
-                                    finished_at=None,
-                                    task_id=None,
-                                    task_name=None))
+                                           runner=runner,
+                                           session=None,
+                                           started_at=None,
+                                           finished_at=None,
+                                           task_id=None,
+                                           task_name=None))
             logger.info(f'Staging pipeline {p.name}')
         p = info.context["request"].app.backend.update(p)
-            
+
         p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
-        return  p
-    
-    @strawberry.mutation(description = "Delete a pipeline.")
+        return p
+
+    @strawberry.mutation(description="Delete a pipeline.")
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -281,7 +294,7 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
-    @strawberry.subscription(description = "Subscribe to pipeline events.")
+    @strawberry.subscription(description="Subscribe to pipeline events.")
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
@@ -296,13 +309,13 @@ class Subscription:
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
             p = info.context["request"].app.backend.read(id=id)
-        
+
         if p:
-            async for e in PipelineEventMonitor(app = info.context["request"].app.celery_app, task_id = p.status[-1].task_id).start(interval=interval):
+            async for e in PipelineEventMonitor(app=info.context["request"].app.celery_app, task_id=p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
 
-    @strawberry.subscription(description = "Subscribe to pipeline logs.")
+    @strawberry.subscription(description="Subscribe to pipeline logs.")
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:
@@ -318,15 +331,15 @@ class Subscription:
             p = info.context["request"].app.backend.read(id=id)
 
         if p:
-            stream = await PipelineLogStream().create(task_id = p.status[-1].task_id, broker_url = info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"] )
+            stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"])
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)
+
 
 def build_schema(type_plugins):
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
     ComboMutation = merge_types("Mutation", tuple([Mutation] + type_plugins["mutation"]))
     ComboSubscription = merge_types("Subscription", tuple([Subscription] + type_plugins["subscription"]))
-    
-    return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
 
+    return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)

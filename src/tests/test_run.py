@@ -1,21 +1,10 @@
-"""
-This module contains an example test.
-
-Tests should be placed in ``src/tests``, in modules that mirror your
-project's structure, and in files named test_*.py. They are simply functions
-named ``test_*`` which test a unit of logic.
-
-To run the tests, run ``kedro test`` from the project root directory.
-"""
-
 from pathlib import Path
 
 import pytest
-
-from kedro.framework.project import settings
 from kedro.config import OmegaConfigLoader
 from kedro.framework.context import KedroContext
 from kedro.framework.hooks import _create_hook_manager
+from kedro.framework.project import settings
 
 
 @pytest.fixture

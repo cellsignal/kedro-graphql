@@ -4,7 +4,7 @@ https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html."""
 
 # Instantiated project hooks.
 from kedro_graphql.hooks import DataValidationHooks, DataLoggingHooks
-HOOKS = (DataValidationHooks(),DataLoggingHooks())
+HOOKS = (DataValidationHooks(), DataLoggingHooks())
 
 # Installed plugins for which to disable hook auto-registration.
 # DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
@@ -17,7 +17,7 @@ HOOKS = (DataValidationHooks(),DataLoggingHooks())
 #     "path": "./sessions"
 # }
 
-# Class that manages Kedro's library components.
+# Class that manages Kedro's library components.∏
 # from kedro.framework.context import KedroContext
 # CONTEXT_CLASS = KedroContext
 

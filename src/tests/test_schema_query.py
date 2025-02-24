@@ -1,6 +1,3 @@
-"""
-
-"""
 import pytest
 
 
@@ -16,7 +13,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values = {"id": str(mock_pipeline.id)})
+        resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
         assert resp.errors is None
 
     @pytest.mark.asyncio
@@ -34,7 +31,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values = {"limit": 3, "filter": "{\"tags\": {\"key\": \"author\", \"value\": \"opensean\"}}"})
+        resp = await mock_app.schema.execute(query, variable_values={"limit": 3, "filter": "{\"tags\": {\"key\": \"author\", \"value\": \"opensean\"}}"})
         assert resp.errors is None
 
     @pytest.mark.asyncio
@@ -69,6 +66,6 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values = {"limit": 5})
-        
+        resp = await mock_app.schema.execute(query, variable_values={"limit": 5})
+
         assert resp.errors is None

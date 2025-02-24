@@ -1,22 +1,23 @@
-from kedro.framework.project import pipelines
-from kedro.io import DataCatalog
-#from kedro.runner import SequentialRunner
-from typing import List, Dict
-from kedro import __version__ as kedro_version
-from kedro_graphql.runners import init_runner
-from kedro_graphql.logs.logger import KedroGraphQLLogHandler
-from celery import shared_task, Task
-from .models import State, DataSet
-from datetime import datetime, date
-from kedro.framework.session import KedroSession
-from .config import config as CONFIG
 import json
-from omegaconf import OmegaConf
-from kedro.io import AbstractDataset
-from pathlib import Path
 import logging
 import os
 import shutil
+from datetime import date, datetime
+from pathlib import Path
+from typing import Dict, List
+
+from celery import Task, shared_task
+from kedro import __version__ as kedro_version
+from kedro.framework.project import pipelines
+from kedro.framework.session import KedroSession
+from kedro.io import AbstractDataset, DataCatalog
+from omegaconf import OmegaConf
+
+from kedro_graphql.logs.logger import KedroGraphQLLogHandler
+from kedro_graphql.runners import init_runner
+
+from .config import config as CONFIG
+from .models import DataSet, State
 
 logger = logging.getLogger("kedro")
 
@@ -27,7 +28,6 @@ class KedroGraphqlTask(Task):
     @property
     def db(self):
         if self._db is None:
-            #self._db = self._app.kedro_graphql_backend
             self._db = self.app.kedro_graphql_backend
         return self._db
 
