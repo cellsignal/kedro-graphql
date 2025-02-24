@@ -355,7 +355,7 @@ def run_pipeline(self,
             return "success"
         except Exception as e:
             logger.exception(f"Error running pipeline: {e}")
-            hook_manager.hook.on_pipline_error(
+            hook_manager.hook.on_pipeline_error(
                 error = e,
                 run_params=record_data,
                 pipeline=pipelines.get(name, None),
