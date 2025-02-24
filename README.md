@@ -624,6 +624,16 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
+### [1.0.1] - 2025-02-24
+
+Fixed
+
+- Fixed bug caused by an unused import in `__init__.py` that prevented the KedroGraphQL app from starting
+
+Changed
+
+- Changed README.md img src to absolute URLs for PyPi's project description renderer
+
 ### [1.0.0] - 2025-02-21
 
 Added
