@@ -79,8 +79,6 @@ class PipelineEventMonitor:
         return worker
 
     async def consume(self) -> AsyncGenerator[dict, None]:
-        """
-        """
         q = Queue()
 
         event_thread = self._start_task_event_receiver_thread(q)

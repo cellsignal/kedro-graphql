@@ -4,7 +4,9 @@ from urllib.parse import urlparse
 
 
 def merge(a, b, path=None):
-    "merges nested dictionaries recursively.  Merges b into a."
+    """
+    Merges nested dictionaries recursively.  Merges b into a.
+    """
     if path is None:
         path = []
     for key in b:

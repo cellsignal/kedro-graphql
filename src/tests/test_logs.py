@@ -1,6 +1,3 @@
-"""
-
-"""
 import pytest
 
 from kedro_graphql.logs.logger import PipelineLogStream

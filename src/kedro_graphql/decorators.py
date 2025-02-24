@@ -21,8 +21,6 @@ class NameConflictError(BaseException):
 
 
 def gql_resolver(name):
-    """
-    """
 
     if name in RESOLVER_PLUGINS:
         raise NameConflictError(
@@ -40,8 +38,6 @@ def gql_resolver(name):
 
 
 def gql_query():
-    """
-    """
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["query"].append(plugin_class)
@@ -52,8 +48,6 @@ def gql_query():
 
 
 def gql_mutation():
-    """
-    """
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["mutation"].append(plugin_class)
@@ -64,8 +58,6 @@ def gql_mutation():
 
 
 def gql_subscription():
-    """
-    """
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["subscription"].append(plugin_class)
