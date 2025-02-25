@@ -472,7 +472,7 @@ This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/
 ```
 ## src/kedro_graphql/example/app.py
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql import KedroGraphQL
+from kedro_graphql.asgi import KedroGraphQL
 
 
 
@@ -635,6 +635,7 @@ Changed
 
 - Changed README.md img src to absolute URLs for PyPi's project description renderer
 - Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
+- KedroGraphQL configurable application import to `from kedro_graphql.asgi import KedroGraphQL`
 
 ### [1.0.0] - 2025-02-21
 
