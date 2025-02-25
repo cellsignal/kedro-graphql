@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/light-logo.png">
-    <source media="(prefers-color-scheme: dark)" srcset="docs/dark-logo.png">
-    <img src="docs/light-logo.png" alt="KedroGraphQL Light Logo">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/light-logo.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/dark-logo.png">
+    <img src="https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/light-logo.png" alt="KedroGraphQL Light Logo">
   </picture>
 </p>
 
@@ -69,7 +69,7 @@ kedro gql -w
 
 Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
 
-![strawberry-ui](docs/strawberry-ui.png)
+![strawberry-ui](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/strawberry-ui.png)
 
 The [docker-compose.yaml](./docker-compose.yaml) includes
 [mongo-express](https://github.com/mongo-express/mongo-express) and
@@ -78,13 +78,13 @@ to provide easy acess to MongoDB and redis.
 
 Navigate to <http://127.0.0.1:8082> to access mongo-express interface.
 
-![mongo-express-ui](docs/mongo-express-ui.png)
+![mongo-express-ui](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/mongo-express-ui.png)
 
 Navigate to <http://127.0.0.1:8081> to access the redis-commander interface.
 One can access the task queues created and managed by
 [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
-![redis-commander-ui](docs/redis-commander-ui.png)
+![redis-commander-ui](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/redis-commander-ui.png)
 
 ## Example
 
@@ -193,7 +193,7 @@ subscription MySubscription {
 }
 ```
 
-![subscription](docs/subscription.gif)
+![subscription](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/subscription.gif)
 
 ### Susbscribe to pipeline logs
 
@@ -211,7 +211,7 @@ subscription MySubscriptionLogs {
 }
 ```
 
-![logs subscription](docs/logs-subscription.gif)
+![logs subscription](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/logs-subscription.gif)
 
 ### Get the pipeline result
 
@@ -311,9 +311,9 @@ One can explore how the pipeline is persisted using the mongo-express
 interface located here <http://127.0.0.1:8082>.  Pipelines are persisted in the
 "pipelines" collection of the "pipelines" database.
 
-![mongo-express-pipeline](./docs/mongo-express-pipeline.png)
+![mongo-express-pipeline](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/mongo-express-pipeline.png)
 
-![mongo-express-pipeline-doc](./docs/mongo-express-pipeline-doc.png)
+![mongo-express-pipeline-doc](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/mongo-express-pipeline-doc.png)
 
 ### Staging and updating a pipeline
 
@@ -623,6 +623,18 @@ After this, if you'd like to update your project requirements, please update `sr
 - support passing credentials via api
 
 ## Changelog
+
+### [1.0.1] - 2025-02-24
+
+Fixed
+
+- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
+- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
+
+Changed
+
+- Changed README.md img src to absolute URLs for PyPi's project description renderer
+- Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
 
 ### [1.0.0] - 2025-02-21
 
