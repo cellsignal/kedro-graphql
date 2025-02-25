@@ -472,7 +472,7 @@ This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/
 ```
 ## src/kedro_graphql/example/app.py
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql import KedroGraphQL
+from kedro_graphql.asgi import KedroGraphQL
 
 
 
