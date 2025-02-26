@@ -624,7 +624,7 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
-### [1.0.1] - unreleased
+### [1.0.1] - 2025-02-26
 
 Added
 
