@@ -90,3 +90,6 @@ class DataLoggingHooks:
     def on_pipline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         if config.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX'):
             self.save_logs(catalog, run_params["session_id"], run_params["celery_task_id"])
+
+
+hooks = (DataValidationHooks(), DataLoggingHooks())
