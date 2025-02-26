@@ -92,4 +92,5 @@ class DataLoggingHooks:
             self.save_logs(catalog, run_params["session_id"], run_params["celery_task_id"])
 
 
-hooks = (DataValidationHooks(), DataLoggingHooks())
+validation_hooks = DataValidationHooks()
+logging_hooks = DataLoggingHooks()
