@@ -24,6 +24,9 @@ kedro-graphql = "kedro_graphql.__main__:main"
 [project.entry-points."kedro.project_commands"]
 kedro-graphql = "kedro_graphql.commands:commands"
 
+[project.entry-points."kedro.hooks"]
+kedro-graphql = "kedro_graphql.hooks:hooks"
+
 [project.urls]
 Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
