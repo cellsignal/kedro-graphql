@@ -636,6 +636,10 @@ Changed
 - Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
 - KedroGraphQL configurable application import to `from kedro_graphql.asgi import KedroGraphQL`
 
+Removed
+
+- Default rich handler from `logging.yml` so that saved log files and streamed subscription logs do not show colorized console markup
+
 Fixed
 
 - Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
