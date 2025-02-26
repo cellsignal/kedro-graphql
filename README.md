@@ -624,18 +624,22 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
-### [1.0.1] - 2025-02-24
+### [1.0.1] - unreleased
 
-Fixed
+Added
 
-- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
-- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
+- Auto register `DataValidationHooks` and `DataLoggingHooks` in pyproject.toml using multiple entrypoints
 
 Changed
 
 - Changed README.md img src to absolute URLs for PyPi's project description renderer
 - Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
 - KedroGraphQL configurable application import to `from kedro_graphql.asgi import KedroGraphQL`
+
+Fixed
+
+- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
+- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
 
 ### [1.0.0] - 2025-02-21
 
