@@ -472,7 +472,7 @@ This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/
 ```
 ## src/kedro_graphql/example/app.py
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql import KedroGraphQL
+from kedro_graphql.asgi import KedroGraphQL
 
 
 
@@ -624,17 +624,26 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
-### [1.0.1] - 2025-02-24
+### [1.0.1] - 2025-02-26
 
-Fixed
+Added
 
-- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
-- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
+- Auto register `DataValidationHooks` and `DataLoggingHooks` in pyproject.toml using multiple entrypoints
 
 Changed
 
 - Changed README.md img src to absolute URLs for PyPi's project description renderer
 - Moved `after_catalog_created` kedro hook call after `record_data` is loaded into memory in `tasks.py` because it's needed in the `on_pipeline_error` kedro hook call
+- KedroGraphQL configurable application import to `from kedro_graphql.asgi import KedroGraphQL`
+
+Removed
+
+- Default rich handler from `logging.yml` so that saved log files and streamed subscription logs do not show colorized console markup
+
+Fixed
+
+- Critical bug caused by an unused import in `__init__.py` that prevented KedroGraphQL app from starting
+- `on_pipline_error` kedro hook typo. changed to `on_pipeline_error`
 
 ### [1.0.0] - 2025-02-21
 

@@ -24,6 +24,10 @@ kedro-graphql = "kedro_graphql.__main__:main"
 [project.entry-points."kedro.project_commands"]
 kedro-graphql = "kedro_graphql.commands:commands"
 
+[project.entry-points."kedro.hooks"]
+kedro-graphql-validation = "kedro_graphql.hooks:validation_hooks"
+kedro-graphql-logging = "kedro_graphql.hooks:logging_hooks"
+
 [project.urls]
 Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
@@ -36,8 +40,6 @@ ui = ["panel~=1.6.1", "kedro-viz~=10.2.0", "sh~=2.2.2"]
 readme = {file = "README.md", content-type = "text/markdown"}
 version = {attr = "kedro_graphql.__version__"}
 dependencies = {file = "src/requirements.txt"}
-
-
 
 [tool.kedro]
 package_name = "kedro_graphql"

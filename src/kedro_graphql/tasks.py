@@ -19,7 +19,7 @@ from kedro_graphql.runners import init_runner
 from .config import config as CONFIG
 from .models import DataSet, State
 
-logger = logging.getLogger("kedro")
+logger = logging.getLogger(__name__)
 
 class KedroGraphqlTask(Task):
 
@@ -46,7 +46,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
-        logger.addHandler(handler)
+        logging.getLogger("kedro").addHandler(handler)
 
         p = self.db.read(id=kwargs["id"])
         p.status[-1].state = State.STARTED
@@ -65,8 +65,8 @@ class KedroGraphqlTask(Task):
             error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a') 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
-            logger.addHandler(info_handler)
-            logger.addHandler(error_handler)
+            logging.getLogger("kedro").addHandler(info_handler)
+            logging.getLogger("kedro").addHandler(error_handler)
             logger.info(f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             
             # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
