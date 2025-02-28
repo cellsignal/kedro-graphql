@@ -4,6 +4,7 @@ generated using Kedro 0.19.11
 """
 import time
 
+
 def uppercase(text: str) -> str:
     """Converts text to uppercase."""
     return text.upper()

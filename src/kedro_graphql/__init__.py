@@ -1,5 +1,3 @@
 """kedro-graphql
 """
-__version__ = "0.5.1"
-
-from .asgi import KedroGraphQL
+__version__ = "1.0.1"

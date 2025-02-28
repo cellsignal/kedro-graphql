@@ -1,29 +1,9 @@
 from setuptools import find_packages, setup
 
-#entry_point = (
-#    "kedro-graphql = kedro_graphql.__main__:main"
-#)
-
-
-# get the dependencies and installs
-##with open("requirements.txt", encoding="utf-8") as f:
-##    # Make sure we strip all comments and options (e.g "--extra-index-url")
-##    # that arise from a modified pip.conf file that configure global options
-##    # when running kedro build-reqs
-##    requires = []
-##    for line in f:
-##        req = line.split("#", 1)[0].strip()
-##        if req and not req.startswith("--"):
-##            requires.append(req)
 
 setup(
     name="kedro_graphql",
     packages=find_packages(exclude=["tests"]),
-    ##entry_points={
-    ##    "console_scripts": [entry_point],
-    ##    "kedro.project_commands": ["kedro-graphql = kedro_graphql.commands:commands"]
-    ##    },
-#    install_requires=requires,
     extras_require={
         "docs": [
             "docutils<0.18.0",
