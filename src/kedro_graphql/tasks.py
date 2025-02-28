@@ -3,7 +3,7 @@ from kedro.io import DataCatalog
 #from kedro.runner import SequentialRunner
 from typing import List, Dict
 from kedro import __version__ as kedro_version
-from kedro_graphql.runners import init_runner
+from kedro_graphql.runners import instantiate_runner
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from celery import shared_task, Task
 from .models import State, DataSet
@@ -12,6 +12,7 @@ from kedro.framework.session import KedroSession
 from .config import config as CONFIG
 import json
 from omegaconf import OmegaConf
+from kedro.config import OmegaConfigLoader
 from kedro.io import AbstractDataset
 from pathlib import Path
 import logging
@@ -220,7 +221,24 @@ def run_pipeline(self,
     with KedroSession.create(project_path = Path(__file__).resolve().parent.parent.parent,
                             env = CONFIG["KEDRO_GRAPHQL_ENV"],
                             conf_source = CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
-        
+
+        config_loader = session.load_context().config_loader
+
+        if isinstance(config_loader, OmegaConfigLoader):
+            config_loader.config_patterns.update(
+                {
+                    "runner_config": [
+                        "runner-config*",
+                        "runner-config*/**",
+                        "**/runner-config*",
+                    ]
+                }
+            )
+        else:
+            logger.warning(
+                "Config loader is not an instance of OmegaConfigLoader. Runner configuration defined in conf source directory will be ignored"
+            )
+
         hook_manager = session._hook_manager
         
         p = self.db.read(id=id)
@@ -310,7 +328,7 @@ def run_pipeline(self,
                     catalog=io
                 )
             
-            runner = init_runner(runner = runner)
+            runner_obj = instantiate_runner(runner, config_loader = config_loader)
 
             # Filter the pipeline based on the slices and only_missing parameters
             if only_missing:
@@ -343,7 +361,7 @@ def run_pipeline(self,
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
             self.db.update(p)
 
-            run_result = runner().run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session.session_id)
+            run_result = runner_obj.run(filtered_pipeline, catalog = io, hook_manager=hook_manager, session_id=session.session_id)
 
             hook_manager.hook.after_pipeline_run(
                     run_params=record_data,
