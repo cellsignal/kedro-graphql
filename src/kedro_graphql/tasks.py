@@ -263,14 +263,6 @@ def run_pipeline(self,
         io.add_feed_dict(feed_dict)
 
         try:
-            hook_manager.hook.after_catalog_created(
-                catalog=io,
-                conf_catalog=None,
-                conf_creds=None,
-                feed_dict=None,
-                save_version=None,
-                load_versions=None
-            )
             # Populate the filtering parameters based on the slices input
             tags = None
             from_nodes = None
