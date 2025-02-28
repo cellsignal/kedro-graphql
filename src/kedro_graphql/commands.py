@@ -121,6 +121,13 @@ def commands():
     help="Path to watch for file changes, defaults to <project path>/src"
 )
 @click.option(
+    "--ui",
+    "-u",
+    is_flag=True,
+    default=False,
+    help="Start a viz app."
+)
+@click.option(
     "--worker",
     "-w",
     is_flag=True,
@@ -128,7 +135,7 @@ def commands():
     help="Start a celery worker."
 )
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
-        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir, log_path_prefix, reload, reload_path, worker):
+        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir, log_path_prefix, reload, reload_path, ui, worker):
     """Commands for working with kedro-graphql."""
 
     config.update({
@@ -154,7 +161,14 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
     if reload:
         logger.info("AUTO-RELOAD ACTIVATED, watching '" + str(reload_path) + "' for changes")
 
-    if worker:
+    if ui:
+        from .ui.app import start_ui
+        if reload:
+            run_process(str(reload_path), target = start_ui)
+        else:
+            start_ui()
+
+    elif worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
                 app, config, conf_source, env, metadata.package_name, metadata.project_path))

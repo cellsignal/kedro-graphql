@@ -12,6 +12,7 @@ from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from strawberry.scalars import JSON
+from strawberry.utils.str_converters import to_snake_case
 
 from .config import config as CONFIG
 from .utils import parse_s3_filepath
@@ -52,7 +53,7 @@ class Parameter:
         """
         Returns a Parameter object from a dictionary.
         """
-        if input_dict.get("type", True):
+        if input_dict.get("type", False ):
             return Parameter(
                 name=input_dict["name"],
                 value=input_dict["value"],
@@ -586,9 +587,23 @@ class Pipeline:
             return self.serialize()
         else:
             raise TypeError("encoder must be 'dict' or 'kedro'")
+        
+    @classmethod
+    def decode(cls, payload, decoder = "dict"):
+        """Factory method to create a new Pipeline from a dictionary or graphql api response.
+        """
+        if decoder == "graphql":
+            payload = {to_snake_case(k):v for k,v in payload.items()}
+            if payload["status"]:
+                payload["status"] = [{to_snake_case(k):v for k,v in s.items()} for s in payload["status"]]
+            
+            return cls.decode_dict(payload)
+        
+        elif decoder == "dict":
+            return cls.decode_dict(payload)
 
     @staticmethod
-    def decode(payload):
+    def decode_dict(payload):
         if payload.get("tags", None):
             tags = [Tag(**t) for t in payload["tags"]]
         else:
