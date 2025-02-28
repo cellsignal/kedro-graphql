@@ -1,24 +1,12 @@
-"""
-This module contains an example test.
-
-Tests should be placed in ``src/tests``, in modules that mirror your
-project's structure, and in files named test_*.py. They are simply functions
-named ``test_*`` which test a unit of logic.
-
-To run the tests, run ``kedro test`` from the project root directory.
-"""
-
-
 import pytest
-from kedro_graphql.events import PipelineEventMonitor
+from celery.result import AsyncResult
 from celery.states import ALL_STATES
-from celery.result import AsyncResult 
 
+from kedro_graphql.events import PipelineEventMonitor
 
 
 @pytest.mark.usefixtures('mock_celery_session_app')
 @pytest.mark.usefixtures('celery_session_worker')
-#@pytest.mark.usefixtures('celery_includes')
 @pytest.mark.usefixtures('depends_on_current_app')
 class TestPipelineEventMonitor:
 
@@ -33,7 +21,7 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.on_failure")
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id).start():
+        async for e in PipelineEventMonitor(app=mock_celery_session_app, task_id=mock_pipeline.status[-1].task_id).start():
             print(e)
             assert e["status"] in ALL_STATES
 
@@ -50,10 +38,10 @@ class TestPipelineEventMonitor:
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.on_failure")
         mocker.patch("kedro_graphql.tasks.KedroGraphqlTask.after_return")
 
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id, timeout = 0.01).start():
+        async for e in PipelineEventMonitor(app=mock_celery_session_app, task_id=mock_pipeline.status[-1].task_id, timeout=0.01).start():
             print(e)
             assert e["status"] in ALL_STATES
-        
+
     @pytest.mark.asyncio
     async def test_consume_exception(self, mocker, mock_celery_session_app, mock_app, mock_pipeline):
         """
@@ -69,6 +57,6 @@ class TestPipelineEventMonitor:
 
         result = AsyncResult(mock_pipeline.status[-1].task_id).wait()
 
-        async for e in PipelineEventMonitor(app = mock_celery_session_app, task_id = mock_pipeline.status[-1].task_id).start():
+        async for e in PipelineEventMonitor(app=mock_celery_session_app, task_id=mock_pipeline.status[-1].task_id).start():
             print(e)
             assert e["status"] in ALL_STATES

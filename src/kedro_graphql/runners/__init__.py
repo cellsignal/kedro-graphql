@@ -1,5 +1,6 @@
-from importlib import import_module
 import logging
+from importlib import import_module
+
 logger = logging.getLogger("kedro")
 from kedro.runner import AbstractRunner
 from kedro.config import AbstractConfigLoader

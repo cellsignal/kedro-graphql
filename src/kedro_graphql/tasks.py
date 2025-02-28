@@ -1,25 +1,26 @@
-from kedro.framework.project import pipelines
-from kedro.io import DataCatalog
-#from kedro.runner import SequentialRunner
-from typing import List, Dict
-from kedro import __version__ as kedro_version
-from kedro_graphql.runners import instantiate_runner
-from kedro_graphql.logs.logger import KedroGraphQLLogHandler
-from celery import shared_task, Task
-from .models import State, DataSet
-from datetime import datetime, date
-from kedro.framework.session import KedroSession
-from .config import config as CONFIG
 import json
-from omegaconf import OmegaConf
-from kedro.config import OmegaConfigLoader
-from kedro.io import AbstractDataset
-from pathlib import Path
 import logging
 import os
 import shutil
+from datetime import date, datetime
+from pathlib import Path
+from typing import Dict, List
 
-logger = logging.getLogger("kedro")
+from celery import Task, shared_task
+from kedro import __version__ as kedro_version
+from kedro.framework.project import pipelines
+from kedro.framework.session import KedroSession
+from kedro.io import AbstractDataset, DataCatalog
+from omegaconf import OmegaConf
+
+from kedro_graphql.logs.logger import KedroGraphQLLogHandler
+from kedro_graphql.runners import instantiate_runner
+from kedro.config import OmegaConfigLoader
+
+from .config import config as CONFIG
+from .models import DataSet, State
+
+logger = logging.getLogger(__name__)
 
 class KedroGraphqlTask(Task):
 
@@ -28,7 +29,6 @@ class KedroGraphqlTask(Task):
     @property
     def db(self):
         if self._db is None:
-            #self._db = self._app.kedro_graphql_backend
             self._db = self.app.kedro_graphql_backend
         return self._db
 
@@ -47,7 +47,7 @@ class KedroGraphqlTask(Task):
             None: The return value of this handler is ignored.
         """
         handler = KedroGraphQLLogHandler(task_id, broker_url = self._app.conf["broker_url"])
-        logger.addHandler(handler)
+        logging.getLogger("kedro").addHandler(handler)
 
         p = self.db.read(id=kwargs["id"])
         p.status[-1].state = State.STARTED
@@ -66,8 +66,8 @@ class KedroGraphqlTask(Task):
             error_handler = logging.FileHandler(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a') 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
-            logger.addHandler(info_handler)
-            logger.addHandler(error_handler)
+            logging.getLogger("kedro").addHandler(info_handler)
+            logging.getLogger("kedro").addHandler(error_handler)
             logger.info(f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             
             # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
@@ -266,14 +266,6 @@ def run_pipeline(self,
         io.add_feed_dict(conf_params)
 
         try:
-            hook_manager.hook.after_catalog_created(
-                catalog=io,
-                conf_catalog=None,
-                conf_creds=None,
-                feed_dict=None,
-                save_version=None,
-                load_versions=None
-            )
             # Populate the filtering parameters based on the slices input
             tags = None
             from_nodes = None
@@ -321,6 +313,15 @@ def run_pipeline(self,
                     "namespace": node_namespace, # Name of the node namespace to run.
                     "runner": getattr(runner, "__name__", str(runner)),
                 }
+            
+            hook_manager.hook.after_catalog_created(
+                catalog=io,
+                conf_catalog=None,
+                conf_creds=None,
+                feed_dict=None,
+                save_version=None,
+                load_versions=None
+            )
         
             hook_manager.hook.before_pipeline_run(
                     run_params=record_data,
@@ -373,7 +374,7 @@ def run_pipeline(self,
             return "success"
         except Exception as e:
             logger.exception(f"Error running pipeline: {e}")
-            hook_manager.hook.on_pipline_error(
+            hook_manager.hook.on_pipeline_error(
                 error = e,
                 run_params=record_data,
                 pipeline=pipelines.get(name, None),
