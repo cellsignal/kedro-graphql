@@ -29,7 +29,7 @@ def start_server():
             app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
             app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
             uvicorn.run(app,
-                        host="0.0.0.0",
+                        host="localhost",
                         port=5000)
 
 
@@ -44,8 +44,8 @@ def setup():
 
 @pytest.fixture
 def mock_client(setup):
-    return KedroGraphqlClient(uri="http://0.0.0.0:5000/graphql",
-                              ws="ws://0.0.0.0:5000/graphql")
+    return KedroGraphqlClient(uri="http://localhost:5000/graphql",
+                              ws="ws://localhost:5000/graphql")
 
 
 @pytest.fixture
@@ -178,8 +178,6 @@ class TestKedroGraphqlClient:
 
         async for result in mock_client.pipeline_events(id=pipeline.id):
             assert result.status in ALL_STATES
-            if result.status == "SUCCESS":
-                break
 
     @pytest.mark.usefixtures('mock_celery_session_app')
     @pytest.mark.usefixtures('celery_session_worker')
