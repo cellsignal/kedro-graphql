@@ -1,8 +1,9 @@
-import celery
+from celery import Celery
+from celery import signals
 
 
 def celery_app(config, backend):
-    app = celery.Celery()
+    app = Celery()
 
     class Config:
         broker_url = config["KEDRO_GRAPHQL_BROKER"]
@@ -21,7 +22,7 @@ def celery_app(config, backend):
     return app
 
 
-@celery.signals.setup_logging.connect
+@signals.setup_logging.connect
 def on_setup_logging(**kwargs):
     #  Disable Celery logging configuration so logs are captured in info.log and error.log
     # https://docs.celeryq.dev/en/latest/userguide/tasks.html#logging

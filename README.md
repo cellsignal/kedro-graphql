@@ -624,6 +624,59 @@ After this, if you'd like to update your project requirements, please update `sr
 
 ## Changelog
 
+### [1.1.0] - unreleased
+
+Added
+
+- a python client with CRUD support to facilitate integration with other python applications 
+  ```
+  import json
+  from kedro_graphql.models import Pipeline, PipelineInput, TagInput
+  from kedro_graphl.client import KedroGraphqlClient
+  
+  client = KedroGraphqlClient(uri="http://0.0.0.0:5000/graphql",
+                              ws="ws://0.0.0.0:5000/graphql")
+  
+  input_dict = {"type": "text.TextDataset", "filepath": "s3://example/text_in.txt"}
+  output_dict = {"type": "text.TextDataset", "filepath": "s3://example/text_out.txt"}
+
+  pipeline_input = PipelineInput(**{
+      "name": "example00",
+      "state": "STAGED",
+      "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
+                       {"name": "text_out", "config": json.dumps(output_dict)}],
+      "parameters": [{"name": "example", "value": "hello"},
+                     {"name": "duration", "value": "0", "type": "FLOAT"}],
+      "tags": [{"key": "author", "value": "opensean"},
+               {"key": "package", "value": "kedro-graphql"}]
+  })
+
+  ## create a pipeline
+  pipeline = await client.create_pipeline(pipeline_input)
+
+  ## read a pipeline
+  pipeline = await client.read_pipeline(id=pipeline.id)
+
+  ## read pipelines
+  pipelines = await client.read_pipelines(limit=5, filter="{\"tags.key\": \"package\", \"tags.value\": \"kedro-graphql\"}")
+
+  ## update a pipeline
+  pipeline_input.tags.append(TagInput(key="test-update", value="updated"))
+  pipeline = await client.update_pipeline(id=pipeline.id, pipeline_input=pipeline_input)
+
+  ## delete a pipeline
+  pipeline = await client.delete_pipeline(id=pipeline.id)
+  ```
+- [gql](https://gql.readthedocs.io/en/stable/) dependency in requirements.txt for the client
+- a `def delete_pipeline_collection` pytest fixture that will drop the "pipelines" collection after all tests have finished
+- encode and decode functions for the Pipelines, Pipeline, PipelineEvent, PipelineLogs, and PipelineInput objects 
+
+Changed
+
+- using python's tempfile in pytest fixtures for efficient cleanup after testing
+- Removed the private `kedro_pipelines_index` field from the Pipeline object to decouple from application
+  - the `nodes` and `describe` fields of the Pipeline object are now set when the `create_pipeline` mutation is called rather than resovled upon query 
+
 ### [1.0.1] - 2025-02-26
 
 Added

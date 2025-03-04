@@ -71,7 +71,8 @@ class Query:
             # decode the user ID from the given cursor.
             pipe_id = ObjectId(decode_cursor(cursor=cursor))
         else:
-            pipe_id = ObjectId("100000000000000000000000")  # unix epoch Jan 1, 1970 as objectId
+            # unix epoch Jan 1, 1970 as objectId
+            pipe_id = ObjectId("100000000000000000000000")
 
         # filter the pipeline template data, going through the next set of results.
         filtered_data = [pipe for pipe in info.context["request"].app.kedro_pipelines_index
@@ -103,7 +104,6 @@ class Query:
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
     @strawberry.field(description="Get a list of pipeline instances.")
@@ -115,7 +115,8 @@ class Query:
         else:
             pipe_id = "000000000000000000000000"  # unix epoch Jan 1, 1970 as objectId
 
-        results = info.context["request"].app.backend.list(cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
+        results = info.context["request"].app.backend.list(
+            cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
 
         if len(results) > limit:
             # calculate the client's next cursor.
@@ -140,11 +141,13 @@ class Mutation:
         """
 
         if pipeline.name not in pipelines.keys():
-            raise InvalidPipeline(f"Pipeline {pipeline.name} does not exist in the project.")
+            raise InvalidPipeline(
+                f"Pipeline {pipeline.name} does not exist in the project.")
 
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
-
+        p.describe = info.context["request"].app.kedro_pipelines[p.name].describe()
+        p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
         serial = p.encode(encoder="kedro")
 
         # credentials not supported yet
@@ -162,7 +165,8 @@ class Mutation:
         package_name = config.get("KEDRO_PROJECT_NAME", None)
         if package_name:
             try:
-                module = import_module(f".pipelines.{pipeline.name}", package=package_name)
+                module = import_module(
+                    f".pipelines.{pipeline.name}", package=package_name)
                 p.pipeline_version = getattr(module, "__version__", None)
             except Exception as e:
                 logger.info(f"Could not find pipeline version: {e}")
@@ -177,7 +181,6 @@ class Mutation:
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
             p = info.context["request"].app.backend.create(p)
-            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
@@ -200,8 +203,8 @@ class Mutation:
                 only_missing=d.get("only_missing", False)
             )
 
-            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
-            p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
+            logger.info(
+                f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             return p
 
     @strawberry.mutation(description="Update a pipeline.")
@@ -221,7 +224,8 @@ class Mutation:
         p.data_catalog = pipeline_input_dict.get("data_catalog")
         p.tags = pipeline_input_dict.get("tags")
         p.parent = pipeline_input_dict.get("parent")
-        runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get("runner") else config["KEDRO_GRAPHQL_RUNNER"]
+        runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get(
+            "runner") else config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
@@ -260,7 +264,8 @@ class Mutation:
                 only_missing=pipeline_input_dict.get("only_missing", False)
             )
 
-            logger.info(f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+            logger.info(
+                f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
         if pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
@@ -274,7 +279,6 @@ class Mutation:
             logger.info(f'Staging pipeline {p.name}')
         p = info.context["request"].app.backend.update(p)
 
-        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
     @strawberry.mutation(description="Delete a pipeline.")
@@ -288,7 +292,6 @@ class Mutation:
 
         info.context["request"].app.backend.delete(id=id)
         logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
-        p.kedro_pipelines_index = info.context["request"].app.kedro_pipelines_index
         return p
 
 
@@ -339,7 +342,9 @@ class Subscription:
 
 def build_schema(type_plugins):
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
-    ComboMutation = merge_types("Mutation", tuple([Mutation] + type_plugins["mutation"]))
-    ComboSubscription = merge_types("Subscription", tuple([Subscription] + type_plugins["subscription"]))
+    ComboMutation = merge_types("Mutation", tuple(
+        [Mutation] + type_plugins["mutation"]))
+    ComboSubscription = merge_types("Subscription", tuple(
+        [Subscription] + type_plugins["subscription"]))
 
     return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
