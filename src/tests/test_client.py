@@ -37,7 +37,6 @@ def start_server():
 def setup():
     proc = Process(target=start_server, args=())
     proc.start()
-    time.sleep(2)
     yield
     proc.terminate()
 

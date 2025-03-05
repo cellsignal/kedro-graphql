@@ -628,7 +628,7 @@ After this, if you'd like to update your project requirements, please update `sr
 
 Added
 
-- a python client with CRUD support to facilitate integration with other python applications 
+- a python client with CRUD and subscription support to facilitate integration with other python applications 
   ```
   import json
   from kedro_graphql.models import Pipeline, PipelineInput, TagInput
@@ -653,6 +653,14 @@ Added
 
   ## create a pipeline
   pipeline = await client.create_pipeline(pipeline_input)
+
+  ## subscribe to pipeline events
+  async for event in client.pipeline_events(id=pipeline.id):
+      print(event.timestamp, event.status)
+
+  ## subscribe to pipeline logs
+  async for log in client.pipeline_logs(id=pipeline.id):
+      print(log.time, log.message)
 
   ## read a pipeline
   pipeline = await client.read_pipeline(id=pipeline.id)
