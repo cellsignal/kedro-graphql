@@ -54,7 +54,7 @@ PIPELINE_GQL = """{
 
 class KedroGraphqlClient():
 
-    def __init__(self, uri=None, ws=None):
+    def __init__(self, uri=None, ws=None, pipeline_gql=None):
         """
         Kwargs:
             uri (str): uri to api [default: http://localhost:5000/graphql]
@@ -68,6 +68,7 @@ class KedroGraphqlClient():
         self._aio_session = None
         self._web_client = Client(transport=self._web_transport)
         self._web_session = None
+        self.pipeline_gql = pipeline_gql or PIPELINE_GQL
 
     async def create_pipeline(self, pipeline_input: PipelineInput = None):
         """Create a pipeline
@@ -85,7 +86,7 @@ class KedroGraphqlClient():
             query = gql(
                 """
                 mutation createPipeline($pipeline: PipelineInput!) {
-                  createPipeline(pipeline: $pipeline) """ + PIPELINE_GQL + """
+                  createPipeline(pipeline: $pipeline) """ + self.pipeline_gql + """
                 }
             """
             )
@@ -108,14 +109,14 @@ class KedroGraphqlClient():
             query = gql(
                 """
                 query readPipeline($id: String!) {
-                  readPipeline(id: $id) """ + PIPELINE_GQL + """
+                  readPipeline(id: $id) """ + self.pipeline_gql + """
                 }
             """
             )
             result = await gql_session.execute(query, variable_values={"id": str(id)})
             return Pipeline.decode(result["readPipeline"], decoder="graphql")
 
-    async def read_pipelines(self, limit: int = 10, cursor: str = None, filter: str = None):
+    async def read_pipelines(self, limit: int = 10, cursor: str = None, filter: str = "", sort: str = ""):
         """Read pipelines.
 
         Kwargs:
@@ -133,17 +134,17 @@ class KedroGraphqlClient():
 
             query = gql(
                 """
-                query readPipelines($limit: Int!, $cursor: String, $filter: String!) {
-                  readPipelines(limit: $limit, cursor: $cursor, filter: $filter) { 
+                query readPipelines($limit: Int!, $cursor: String, $filter: String, $sort: String) {
+                  readPipelines(limit: $limit, cursor: $cursor, filter: $filter, sort: $sort) { 
                     pageMeta {
                       nextCursor
                     }
-                    pipelines """ + PIPELINE_GQL + """
+                    pipelines """ + self.pipeline_gql + """
                   }
                 }
             """
             )
-            result = await gql_session.execute(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter})
+            result = await gql_session.execute(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
             return Pipelines.decode(result, decoder="graphql")
 
     async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None):
@@ -163,50 +164,7 @@ class KedroGraphqlClient():
             query = gql(
                 """
                 mutation updatePipeline($id: String!, $pipeline: PipelineInput!) {
-                  updatePipeline(id: $id, pipeline: $pipeline) {
-                    id
-                    name
-                    describe
-                    dataCatalog {
-                      name
-                      config
-                      tags {
-                        key
-                        value
-                      }
-                    }
-                    nodes {
-                      name
-                      inputs
-                      outputs
-                      tags
-                    }
-                    parameters {
-                      name
-                      value
-                      type
-                    }
-                    status {
-                      session
-                      state
-                      runner
-                      startedAt
-                      finishedAt
-                      taskId
-                      taskName
-                      taskArgs
-                      taskKwargs
-                      taskRequest
-                      taskException
-                      taskTraceback
-                      taskEinfo
-                      taskResult
-                    }
-                    tags {
-                      key
-                      value
-                    }
-                  }
+                  updatePipeline(id: $id, pipeline: $pipeline) """ + self.pipeline_gql + """
                 }
             """
             )
@@ -230,51 +188,7 @@ class KedroGraphqlClient():
             query = gql(
                 """
                 mutation deletePipeline($id: String!) {
-                  deletePipeline(id: $id) {
-                    id
-                    name
-                    describe
-                    dataCatalog {
-                      name
-                      config
-                      tags {
-                        key
-                        value
-                      }
-                    }
-                    nodes {
-                      name
-                      inputs
-                      outputs
-                      tags
-                    }
-                    parameters {
-                      name
-                      value
-                      type
-                    }
-                    status {
-                      session
-                      state
-                      runner
-                      startedAt
-                      finishedAt
-                      taskId
-                      taskName
-                      taskArgs
-                      taskKwargs
-                      taskRequest
-                      taskException
-                      taskTraceback
-                      taskEinfo
-                      taskResult
-                    }
-                    tags {
-                      key
-                      value
-                    }
- 
-                  }
+                  deletePipeline(id: $id) """ + self.pipeline_gql + """ 
                 }
             """
             )

@@ -146,7 +146,8 @@ class TestKedroGraphqlClient:
         limit = 1
         filter = "{\"tags.key\": \"unique\", \"tags.value\": \"unique\"}"
         cursor = encode_cursor(pipeline.id)
-        r = await mock_client.read_pipelines(filter=filter, limit=limit, cursor=cursor)
+        sort = "[(\"created_at\", -1)]"
+        r = await mock_client.read_pipelines(filter=filter, limit=limit, cursor=cursor, sort=sort)
         assert r.pipelines[0].name == expected.name
         assert r.pipelines[0].data_catalog == expected.data_catalog
         assert r.pipelines[0].parameters == expected.parameters
