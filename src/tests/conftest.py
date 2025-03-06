@@ -1,9 +1,8 @@
 import json
-import os
-import shutil
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+import tempfile
 
 import pytest
 from kedro.framework.session import KedroSession
@@ -29,21 +28,12 @@ def kedro_session():
 
 @pytest.fixture(scope="session")
 def mock_app(kedro_session):
-    app = KedroGraphQL(kedro_session=kedro_session)
-    app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = "src/tests/tmp"
-    return app
-
-
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_tmp_directory():
-    """Fixture to clean up all files in src/tests/tmp after each test."""
-    tmp_dir = "src/tests/tmp"  # Should match LOG_PATH_PREFIX
-
-    yield  # The test runs here
-
-    # Clean up the tmp directory after the test completes
-    if os.path.exists(tmp_dir):
-        shutil.rmtree(tmp_dir)
+    with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp2:
+            app = KedroGraphQL(kedro_session=kedro_session)
+            app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
+            app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
+            yield app
 
 
 @pytest.fixture(scope='session')
@@ -101,14 +91,16 @@ def mock_text_out(tmp_path):
 @pytest.fixture
 def mock_text_in_tsv(tmp_path):
     text = tmp_path / "text_in.tsv"
-    text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
+    text.write_text(
+        "Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
 
 
 @pytest.fixture
 def mock_text_out_tsv(tmp_path):
     text = tmp_path / "text_out.tsv"
-    text.write_text("Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
+    text.write_text(
+        "Some parameter\tOther parameter\tLast parameter\nCONST\t123456\t12.45")
     return text
 
 
@@ -139,10 +131,13 @@ def mock_timestamped_txt(tmp_path):
 @pytest.fixture
 def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
-    outputs = [{"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
+    inputs = [{"name": "text_in", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name": "text_out", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name": "example", "value": "hello"}]
-    tags = [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
+    tags = [{"key": "author", "value": "opensean"}, {
+        "key": "package", "value": "kedro-graphql"}]
 
     p = Pipeline(
         name="example00",
@@ -177,10 +172,13 @@ def mock_pipeline(mock_app, tmp_path, mock_text_in, mock_text_out):
 @pytest.fixture
 def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
-    outputs = [{"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
+    inputs = [{"name": "text_in", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name": "text_out", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name": "example", "value": "hello"}]
-    tags = [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
+    tags = [{"key": "author", "value": "opensean"}, {
+        "key": "package", "value": "kedro-graphql"}]
 
     p = Pipeline(
         name="example00",
@@ -215,10 +213,13 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 @pytest.fixture
 def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
 
-    inputs = [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
-    outputs = [{"name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
+    inputs = [{"name": "text_in", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
+    outputs = [{"name": "text_out", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": str(mock_text_out)})}]
     parameters = [{"name": "example", "value": "hello"}]
-    tags = [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
+    tags = [{"key": "author", "value": "opensean"}, {
+        "key": "package", "value": "kedro-graphql"}]
 
     p = Pipeline(
         name="example00",
@@ -235,3 +236,11 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
 
     p.created_at = datetime.now()
     return p
+
+
+@pytest.fixture(autouse=True)
+def delete_pipeline_collection(mock_app):
+    # Will be executed before the first test
+    yield
+    # Will be executed after the last test
+    mock_app.backend.db["pipelines"].drop()

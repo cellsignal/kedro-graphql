@@ -12,7 +12,7 @@ from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from strawberry.scalars import JSON
-from strawberry.utils.str_converters import to_snake_case
+from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
 from .config import config as CONFIG
 from .utils import parse_s3_filepath
@@ -53,7 +53,7 @@ class Parameter:
         """
         Returns a Parameter object from a dictionary.
         """
-        if input_dict.get("type", False ):
+        if input_dict.get("type", False):
             return Parameter(
                 name=input_dict["name"],
                 value=input_dict["value"],
@@ -73,7 +73,8 @@ class Parameter:
             elif value == "false":
                 value = False
             else:
-                raise ValueError("Parameter of type BOOL must be one of 'True', 'true', 'False', or 'false'")
+                raise ValueError(
+                    "Parameter of type BOOL must be one of 'True', 'true', 'False', or 'false'")
 
         elif self.type == "integer":
             value = int(self.value)
@@ -377,7 +378,8 @@ class PageMeta:
 
 @strawberry.type
 class PipelineTemplates:
-    pipeline_templates: List[PipelineTemplate] = strawberry.field(description="The list of pipeline templates.")
+    pipeline_templates: List[PipelineTemplate] = strawberry.field(
+        description="The list of pipeline templates.")
 
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
 
@@ -490,6 +492,15 @@ class PipelineInput:
                              data_catalog=data_catalog,
                              tags=tags)
 
+    def encode(self, encoder="graphql"):
+        if encoder == "dict":
+            return jsonable_encoder(self)
+        elif encoder == "graphql":
+            p = jsonable_encoder(self)
+            return {to_camel_case(k): v for k, v in p.items()}
+        else:
+            raise TypeError("encoder must be 'dict' or 'graphql'")
+
 
 @strawberry.enum
 class State(Enum):
@@ -525,10 +536,11 @@ class PipelineStatus:
 
 @strawberry.type
 class Pipeline:
-    kedro_pipelines_index: strawberry.Private[Optional[List[PipelineTemplate]]] = None
     id: Optional[uuid.UUID] = None
     name: str
     data_catalog: Optional[List[DataSet]] = None
+    describe: Optional[str] = None
+    nodes: Optional[List[Node]] = None
     parameters: Optional[List[Parameter]] = None
     status: List[PipelineStatus] = strawberry.field(default_factory=list)
     tags: Optional[List[Tag]] = None
@@ -537,20 +549,6 @@ class Pipeline:
     project_version: Optional[str] = None
     pipeline_version: Optional[str] = None
     kedro_graphql_version: Optional[str] = None
-
-    @strawberry.field
-    def template(self) -> PipelineTemplate:
-        for p in self.kedro_pipelines_index:
-            if p.name == self.name:
-                return p
-
-    @strawberry.field
-    def describe(self) -> str:
-        return self.template().describe()
-
-    @strawberry.field
-    def nodes(self) -> List[Node]:
-        return self.template().nodes()
 
     def serialize(self):
         parameters = {}
@@ -577,30 +575,48 @@ class Pipeline:
 
         if encoder == "dict":
             p = deepcopy(self)
-            p.id = str(p.id)  # if type ObjectID the jsonable_encoder will throw an error
+            # if type ObjectID the jsonable_encoder will throw an error
+            p.id = str(p.id)
             encoded_pipeline = jsonable_encoder(p)
 
-            # remove fields we dont want to encode
-            encoded_pipeline.pop("kedro_pipelines_index")
             return encoded_pipeline
         elif encoder == "kedro":
             return self.serialize()
         else:
             raise TypeError("encoder must be 'dict' or 'kedro'")
-        
+
     @classmethod
-    def decode(cls, payload, decoder = "dict"):
+    def decode(cls, payload, decoder="dict"):
         """Factory method to create a new Pipeline from a dictionary or graphql api response.
         """
         if decoder == "graphql":
-            payload = {to_snake_case(k):v for k,v in payload.items()}
+            payload = {to_snake_case(k): v for k, v in payload.items()}
             if payload["status"]:
-                payload["status"] = [{to_snake_case(k):v for k,v in s.items()} for s in payload["status"]]
-            
+                payload["status"] = [
+                    {to_snake_case(k): v for k, v in s.items()} for s in payload["status"]]
+
             return cls.decode_dict(payload)
-        
+
         elif decoder == "dict":
             return cls.decode_dict(payload)
+
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new Pipeline from a dictionary or graphql api response.
+        """
+        if decoder == "graphql":
+            payload = {to_snake_case(k): v for k, v in payload.items()}
+            if payload["status"]:
+                payload["status"] = [
+                    {to_snake_case(k): v for k, v in s.items()} for s in payload["status"]]
+
+            return cls.decode_dict(payload)
+
+        elif decoder == "dict" or isinstance(payload, dict):
+            return cls.decode_dict(payload)
+
+        elif isinstance(payload, PipelineInput):
+            return cls.decode_pipeline_input(payload)
 
     @staticmethod
     def decode_dict(payload):
@@ -620,8 +636,10 @@ class Pipeline:
                 session=s["session"],
                 runner=s.get("runner", "kedro.runner.SequentialRunner"),
                 filtered_nodes=s.get("filtered_nodes"),
-                started_at=datetime.fromisoformat(s["started_at"]) if s.get("started_at") else None,
-                finished_at=datetime.fromisoformat(s["finished_at"]) if s.get("finished_at") else None,
+                started_at=datetime.fromisoformat(
+                    s["started_at"]) if s.get("started_at") else None,
+                finished_at=datetime.fromisoformat(
+                    s["finished_at"]) if s.get("finished_at") else None,
                 task_name=s.get("task_name"),
                 task_id=s.get("task_id"),
                 task_args=s.get("task_args"),
@@ -647,18 +665,39 @@ class Pipeline:
             parameters=parameters,
             status=status,
             tags=tags,
-            created_at=datetime.fromisoformat(payload["created_at"]) if payload.get("created_at", None) else None,
+            created_at=datetime.fromisoformat(
+                payload["created_at"]) if payload.get("created_at", None) else None,
             parent=payload.get("parent", None),
             project_version=payload.get("project_version", None),
             pipeline_version=payload.get("pipeline_version", None),
             kedro_graphql_version=payload.get("kedro_graphql_version", None)
         )
 
+    @classmethod
+    def decode_pipeline_input(cls, payload):
+        """Factory method to create a new Pipeline from a PipelineInput object.
+        """
+        d = jsonable_encoder(payload)
+        return cls.decode_dict(d)
+
 
 @strawberry.type
 class Pipelines:
-    pipelines: List[Pipeline] = strawberry.field(description="The list of pipeline instances.")
+    pipelines: List[Pipeline] = strawberry.field(
+        description="The list of pipeline instances.")
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
+
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new Pipelines from a graphql api response.
+        """
+        if decoder == "graphql":
+            meta = {to_snake_case(k): v for k,
+                    v in payload["readPipelines"]["pageMeta"].items()}
+            return Pipelines(page_meta=PageMeta(**meta),
+                             pipelines=[Pipeline.decode(p, decoder="graphql") for p in payload["readPipelines"]["pipelines"]])
+        else:
+            raise TypeError("decoder must be 'graphql'")
 
 
 @strawberry.type
@@ -670,6 +709,16 @@ class PipelineEvent:
     timestamp: str
     traceback: Optional[str] = None
 
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new PipelineEvent from a graphql api response.
+        """
+        if decoder == "graphql":
+            result = {to_snake_case(k): v for k, v in payload["pipeline"].items()}
+            return PipelineEvent(**result)
+        else:
+            raise TypeError("decoder must be 'graphql'")
+
 
 @strawberry.type
 class PipelineLogMessage:
@@ -678,3 +727,17 @@ class PipelineLogMessage:
     message_id: str
     task_id: str
     time: str
+
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new PipelineLogMessage from a graphql api response.
+        """
+        if decoder == "graphql":
+            result = {to_snake_case(k): v for k, v in payload["pipelineLogs"].items()}
+            return PipelineLogMessage(id=result["id"],
+                                      message=result.get("message", ""),
+                                      message_id=result.get("message_id", ""),
+                                      task_id=result.get("task_id", ""),
+                                      time=result.get("time", ""))
+        else:
+            raise TypeError("decoder must be 'graphql'")
