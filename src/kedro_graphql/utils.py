@@ -1,7 +1,6 @@
 import json
 from functools import reduce
 from urllib.parse import urlparse
-import json
 from typing import Any
 
 def merge(a, b, path=None):
