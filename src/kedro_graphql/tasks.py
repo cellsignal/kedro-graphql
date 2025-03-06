@@ -30,6 +30,8 @@ from kedro.io import AbstractDataset, DataCatalog
 from omegaconf import OmegaConf
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
+from kedro_graphql.runners import instantiate_runner
+from kedro.config import OmegaConfigLoader
 from kedro_graphql.runners import init_runner
 
 from .config import config as CONFIG

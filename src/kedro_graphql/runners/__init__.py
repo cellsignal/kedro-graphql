@@ -24,7 +24,7 @@ def instantiate_runner(runner, config_loader) -> AbstractRunner:
 
     logger.info("Using runner " + str(runner_cls))
     
-    if not isinstance(runner_cls, ConfigurableRunner):
+    if not issubclass(runner_cls, ConfigurableRunner):
         return runner_cls()
     else:
         try:
