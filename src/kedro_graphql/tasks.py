@@ -1,16 +1,3 @@
-from kedro.framework.project import pipelines
-from kedro.io import DataCatalog
-#from kedro.runner import SequentialRunner
-from typing import List, Dict
-from kedro import __version__ as kedro_version
-from kedro_graphql.runners import init_runner
-from kedro_graphql.logs.logger import KedroGraphQLLogHandler
-from kedro_graphql.utils import add_param_to_feed_dict
-from celery import shared_task, Task
-from .models import State, DataSet
-from datetime import datetime, date
-from kedro.framework.session import KedroSession
-from .config import config as CONFIG
 import json
 import logging
 import os
