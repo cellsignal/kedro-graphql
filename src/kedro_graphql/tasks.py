@@ -27,6 +27,7 @@ from kedro.io import AbstractDataset, DataCatalog
 from omegaconf import OmegaConf
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
+from kedro_graphql.utils import add_param_to_feed_dict
 from kedro_graphql.runners import init_runner
 
 from .config import config as CONFIG
