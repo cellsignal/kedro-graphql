@@ -674,6 +674,9 @@ Added
 
   ## delete a pipeline
   pipeline = await client.delete_pipeline(id=pipeline.id)
+
+  ## close all sessions
+  await client.close_sessions()
   ```
 - [gql](https://gql.readthedocs.io/en/stable/) dependency in requirements.txt for the client
 - a `def delete_pipeline_collection` pytest fixture that will drop the "pipelines" collection after all tests have finished
