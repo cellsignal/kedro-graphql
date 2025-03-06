@@ -18,11 +18,10 @@ config = {
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
     "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
     "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
-    "KEDRO_GRAPHQL_VIZ_API_ENDPOINT": "http://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_VIZ_WS_ENDPOINT": "ws://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_VIZ_BASEPATH": "/pipeline",
-    "KEDRO_GRAPHQL_VIZ_TITLE": "kedro-graphql viz demo",
-    "KEDRO_GRAPHQL_VIZ_BUILD_DIR": str(pathlib.Path(__file__).parent.resolve() / "ui" / "build"),
+    "KEDRO_GRAPHQL_UI_API_ENDPOINT": "http://localhost:5000/graphql",
+    "KEDRO_GRAPHQL_UI_WS_ENDPOINT": "ws://localhost:5000/graphql",
+    "KEDRO_GRAPHQL_UI_BASEPATH": "/pipeline",
+    "KEDRO_GRAPHQL_UI_TITLE": "kedro-graphql viz demo",
 }
 
 config = {

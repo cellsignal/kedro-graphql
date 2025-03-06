@@ -164,9 +164,9 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
     if ui:
         from .ui.app import start_ui
         if reload:
-            run_process(str(reload_path), target = start_ui)
+            run_process(str(reload_path), target = start_ui, kwargs={"config":config})
         else:
-            start_ui()
+            start_ui(config)
 
     elif worker:
         if reload:
