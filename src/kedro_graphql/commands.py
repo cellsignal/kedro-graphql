@@ -152,18 +152,21 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         reload_path = metadata.project_path.joinpath("src")
 
     if reload:
-        logger.info("AUTO-RELOAD ACTIVATED, watching '" + str(reload_path) + "' for changes")
+        logger.info("AUTO-RELOAD ACTIVATED, watching '" +
+                    str(reload_path) + "' for changes")
 
     if worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
                 app, config, conf_source, env, metadata.package_name, metadata.project_path))
         else:
-            start_worker(app, config, conf_source, env, metadata.package_name, metadata.project_path)
+            start_worker(app, config, conf_source, env,
+                         metadata.package_name, metadata.project_path)
 
     else:
         if reload:
             run_process(reload_path, target=start_app, args=(app, config, conf_source,
                         env, metadata.package_name, metadata.project_path))
         else:
-            start_app(app, config, conf_source, env, metadata.package_name, metadata.project_path)
+            start_app(app, config, conf_source, env,
+                      metadata.package_name, metadata.project_path)
