@@ -12,16 +12,17 @@ config = {
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
     "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
-    "KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",  # kedro_graphql.runner.argo.ArgoWorkflowsRunner
+    # kedro_graphql.runner.argo.ArgoWorkflowsRunner
+    "KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",
     "KEDRO_GRAPHQL_ENV": "local",
     "KEDRO_GRAPHQL_CONF_SOURCE": None,
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
     "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
     "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
-    "KEDRO_GRAPHQL_UI_API_ENDPOINT": "http://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_UI_WS_ENDPOINT": "ws://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_UI_BASEPATH": "/pipeline",
-    "KEDRO_GRAPHQL_UI_TITLE": "kedro-graphql viz demo",
+    "KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL": "http://localhost:5000/graphql",
+    "KEDRO_GRAPHQL_CLIENT_URI_WS": "ws://localhost:5000/graphql",
+    "KEDRO_GRAPHQL_UI_BASEPATH": "/",
+    "KEDRO_GRAPHQL_UI_TITLE": "kedro-graphql UI demo",
 }
 
 config = {
