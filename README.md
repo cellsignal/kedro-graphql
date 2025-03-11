@@ -628,6 +628,8 @@ After this, if you'd like to update your project requirements, please update `sr
 
 Added
 
+- an experimental UI, see the [UI](./docs/ui.md) docs.
+
 - a python client with CRUD and subscription support to facilitate integration with other python applications 
   ```
   import json

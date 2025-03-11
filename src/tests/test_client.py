@@ -44,8 +44,8 @@ def setup():
 
 @pytest_asyncio.fixture
 async def mock_client(setup):
-    client = KedroGraphqlClient(uri="http://localhost:5000/graphql",
-                                ws="ws://localhost:5000/graphql")
+    client = KedroGraphqlClient(uri_graphql="http://localhost:5000/graphql",
+                                uri_ws="ws://localhost:5000/graphql")
     yield client
     await client.close_sessions()
 

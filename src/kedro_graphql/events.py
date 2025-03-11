@@ -116,7 +116,7 @@ class PipelineEventMonitor:
 
         while True:
             task = self.app.AsyncResult(self.task_id)
-            yield {"task_id": task.id, "status": task.state, "result": task.result, "timestamp": time.time(), "traceback": task.traceback}
+            yield {"task_id": task.id, "status": task.state, "result": str(task.result), "timestamp": time.time(), "traceback": task.traceback}
             if self.app.AsyncResult(self.task_id).status in READY_STATES:
                 break
             await asyncio.sleep(interval)

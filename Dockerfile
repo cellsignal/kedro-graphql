@@ -1,6 +1,6 @@
 FROM python:3.11.9-alpine3.19
 
-COPY . /opt/kedro-graphql-viz
+COPY . /opt/kedro-graphql
 
 ## required to build psutil
 RUN apk add gcc python3-dev musl-dev linux-headers
@@ -14,11 +14,11 @@ RUN apk add --no-cache --virtual .build-dependencies build-base curl-dev \
     && pip install pycurl \
     && apk del .build-dependencies
 
-RUN pip install -r /opt/kedro-graphql-viz/src/requirements.txt
+RUN pip install -r /opt/kedro-graphql/src/requirements.txt
 
-WORKDIR /opt/kedro-graphql-viz
+WORKDIR /opt/kedro-graphql
 
-RUN pip install -e .
+RUN pip install -e .[viz]
 
 EXPOSE 5000
 
