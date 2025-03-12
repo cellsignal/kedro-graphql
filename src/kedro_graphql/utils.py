@@ -55,7 +55,7 @@ def parse_s3_filepath(filepath: str) -> tuple[str, str]:
     return bucket_name, s3_key
 
 
-def add_param_to_feed_dict(feed_dict, param_name: str, param_value: Any, add_prefix = False) -> None:
+def add_param_to_feed_dict(feed_dict, param_name: str, param_value: Any, add_prefix = True) -> None:
     """Context-free version of utility found inside KedroContext._get_feed_dict method. Option to add params: prefix if desired.
 
     Example:
