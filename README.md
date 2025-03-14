@@ -628,7 +628,8 @@ After this, if you'd like to update your project requirements, please update `sr
 
 Added
 
-- a python client with CRUD and subscription support to facilitate integration with other python applications 
+- a python client with CRUD and subscription support to facilitate integration with other python applications
+
   ```
   import json
   from kedro_graphql.models import Pipeline, PipelineInput, TagInput
@@ -678,15 +679,21 @@ Added
   ## close all sessions
   await client.close_sessions()
   ```
+
 - [gql](https://gql.readthedocs.io/en/stable/) dependency in requirements.txt for the client
 - a `def delete_pipeline_collection` pytest fixture that will drop the "pipelines" collection after all tests have finished
-- encode and decode functions for the Pipelines, Pipeline, PipelineEvent, PipelineLogs, and PipelineInput objects 
+- encode and decode functions for the Pipelines, Pipeline, PipelineEvent, PipelineLogs, and PipelineInput objects
 
 Changed
 
 - using python's tempfile in pytest fixtures for efficient cleanup after testing
 - Removed the private `kedro_pipelines_index` field from the Pipeline object to decouple from application
-  - the `nodes` and `describe` fields of the Pipeline object are now set when the `create_pipeline` mutation is called rather than resovled upon query 
+  - the `nodes` and `describe` fields of the Pipeline object are now set when the `create_pipeline` mutation is called rather than resovled upon query
+
+Security
+
+- Upgraded `strawberry-graphql` from `~=0.233.0` to `~=0.262.5` to address [CVE-2024-47874](https://github.com/advisories/GHSA-f96h-pmfr-66vw)
+- Upgraded `fastapi` from `~=0.111.0` to `~=0.115.11` to address [CVE-2024-47082](https://github.com/advisories/GHSA-79gp-q4wv-33fr) and [CVE-2025-22151](https://github.com/advisories/GHSA-5xh2-23cc-5jc6)
 
 ### [1.0.1] - 2025-02-26
 
