@@ -59,6 +59,7 @@ Added
 - [gql](https://gql.readthedocs.io/en/stable/) dependency in requirements.txt for the client
 - a `def delete_pipeline_collection` pytest fixture that will drop the "pipelines" collection after all tests have finished
 - encode and decode functions for the Pipelines, Pipeline, PipelineEvent, PipelineLogs, and PipelineInput objects
+- support for native `strawberry.Schema` keyword arguments in `kedro_graphql.schema.build_schema` wrapper
 
 Changed
 
