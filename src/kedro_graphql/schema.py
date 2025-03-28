@@ -2,15 +2,22 @@ import asyncio
 from base64 import b64decode, b64encode
 from datetime import datetime
 from importlib import import_module
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Union
+from collections.abc import AsyncGenerator,  Iterable
+from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
 from bson.objectid import ObjectId
 from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
+from strawberry.extensions import SchemaExtension
 from strawberry.tools import merge_types
 from strawberry.types import Info
+from strawberry.directive import StrawberryDirective
+from strawberry.types.base import StrawberryType
+from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
+from strawberry.schema.config import StrawberryConfig
 
 from . import __version__ as kedro_graphql_version
 from .config import config
@@ -340,11 +347,31 @@ class Subscription:
                 yield PipelineLogMessage(**e)
 
 
-def build_schema(type_plugins):
+def build_schema(
+        type_plugins: dict[str, list],
+        directives: Iterable[StrawberryDirective] = (),
+        types: Iterable[Union[type, StrawberryType]] = (),
+        extensions: Iterable[Union[type[SchemaExtension], SchemaExtension]] = (),
+        execution_context_class: Optional[type[GraphQLExecutionContext]] = None,
+        config: Optional[StrawberryConfig] = None,
+        scalar_overrides: Optional[
+            dict[object, Union[type, ScalarWrapper, ScalarDefinition]]
+        ] = None,
+        schema_directives: Iterable[object] = ()
+):
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
     ComboMutation = merge_types("Mutation", tuple(
         [Mutation] + type_plugins["mutation"]))
     ComboSubscription = merge_types("Subscription", tuple(
         [Subscription] + type_plugins["subscription"]))
 
-    return strawberry.Schema(query=ComboQuery, mutation=ComboMutation, subscription=ComboSubscription)
+    return strawberry.Schema(query=ComboQuery,
+                             mutation=ComboMutation,
+                             subscription=ComboSubscription,
+                             directives=directives,
+                             types=types,
+                             extensions=extensions,
+                             execution_context_class=execution_context_class,
+                             config=config,
+                             scalar_overrides=scalar_overrides,
+                             schema_directives=schema_directives)
