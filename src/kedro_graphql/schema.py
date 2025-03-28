@@ -2,8 +2,8 @@ import asyncio
 from base64 import b64decode, b64encode
 from datetime import datetime
 from importlib import import_module
-from typing import AsyncGenerator, Optional, Union
-from collections.abc import AsyncGenerator,  Iterable
+from typing import Optional, Union
+from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
