@@ -108,7 +108,7 @@ class KedroGraphqlClient():
             await self._web_client.close_async()
 
 
-    async def execute_query(self, query: str, vars: Optional[dict] = None):
+    async def execute_query(self, query: str, variable_values: Optional[dict] = None):
         """Make a query to the GraphQL API.
 
         Kwargs:
@@ -118,9 +118,9 @@ class KedroGraphqlClient():
         Returns:
             dict: response
         """
-        vars = vars or {}
+        variable_values = variable_values or {}
         session = await self._get_aio_session()
-        result = await session.execute(gql(query), variable_values=vars)
+        result = await session.execute(gql(query), variable_values=variable_values)
         return result
 
     async def create_pipeline(self, pipeline_input: PipelineInput = None):
