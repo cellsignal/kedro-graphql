@@ -1,7 +1,6 @@
 import panel as pn
 import param
 import pandas as pd
-import datetime as dt
 from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.models import Pipeline
 

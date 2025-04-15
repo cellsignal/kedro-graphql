@@ -2,7 +2,6 @@
 import panel as pn
 import param
 import json
-from kedro_graphql.config import config
 
 
 class PipelineViz(pn.viewable.Viewer):

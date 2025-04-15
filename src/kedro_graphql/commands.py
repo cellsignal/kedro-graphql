@@ -128,6 +128,28 @@ def commands():
     help="Start a viz app."
 )
 @click.option(
+    "--ui-basepath",
+    default=config["KEDRO_GRAPHQL_UI_BASEPATH"],
+    help="Basepath for UI"
+)
+@click.option(
+    "--ui-title",
+    default=config["KEDRO_GRAPHQL_UI_TITLE"],
+    help="UI title"
+)
+@click.option(
+    "--client-uri-graphql",
+    "-c",
+    default=config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"],
+    help="URI to graphql endpoint e.g. 'http://localhost:5000/graphql, this value is used to configure the client for the UI"
+)
+@click.option(
+    "--client-uri-ws",
+    "-s",
+    default=config["KEDRO_GRAPHQL_CLIENT_URI_WS"],
+    help="URI to websocket endpoint e.g. 'ws://localhost:5000/graphql, this value is used to configure the client for the UI"
+)
+@click.option(
     "--worker",
     "-w",
     is_flag=True,
@@ -135,7 +157,9 @@ def commands():
     help="Start a celery worker."
 )
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
-        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir, log_path_prefix, reload, reload_path, ui, worker):
+        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir,
+        log_path_prefix, reload, reload_path, ui, ui_basepath, ui_title, client_uri_graphql, client_uri_ws,
+        worker):
     """Commands for working with kedro-graphql."""
 
     config.update({
@@ -152,7 +176,11 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         "KEDRO_GRAPHQL_LOG_TMP_DIR": log_tmp_dir,
         "KEDRO_GRAPHQL_LOG_PATH_PREFIX": log_path_prefix,
         "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name), "__version__", None),
-        "KEDRO_PROJECT_NAME": metadata.package_name
+        "KEDRO_PROJECT_NAME": metadata.package_name,
+        "KEDRO_GRAPHQL_UI_BASEPATH": ui_basepath,
+        "KEDRO_GRAPHQL_UI_TITLE": ui_title,
+        "KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL": client_uri_graphql,
+        "KEDRO_GRAPHQL_CLIENT_URI_WS": client_uri_ws,
     })
 
     if not reload_path:
@@ -165,7 +193,7 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
     if ui:
         from .ui.app import start_ui
         if reload:
-            run_process(str(reload_path), target = start_ui, kwargs={"config":config})
+            run_process(str(reload_path), target=start_ui, kwargs={"config": config})
         else:
             start_ui(config)
 

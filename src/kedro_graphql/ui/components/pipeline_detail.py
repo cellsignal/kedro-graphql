@@ -3,7 +3,6 @@ import panel as pn
 import param
 import pandas as pd
 import json
-from fastapi.encoders import jsonable_encoder
 from kedro_graphql.models import Pipeline
 
 pn.extension('ace', 'jsoneditor')

@@ -2,7 +2,6 @@ import param
 import panel as pn
 from kedro_graphql.ui.decorators import discover_plugins, UI_PLUGINS
 from kedro_graphql.config import config
-import pandas as pd
 
 
 class PipelineCards(pn.viewable.Viewer):

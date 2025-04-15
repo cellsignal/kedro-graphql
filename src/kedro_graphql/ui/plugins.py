@@ -161,7 +161,8 @@ class Example00Data01(pn.viewable.Viewer):
         p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
 
         p1.line([1, 2, 3], [1, 2, 3])
-        p2.circle([1, 2, 3], [1, 2, 3])
+        p2.circle([1, 2, 3], [1, 2, 3], radius=0.1,
+                  fill_color="orange", line_color="black")
 
         c1 = pn.Card(p1, pn.layout.Divider(), p2,
                      title="An example pipeline dashboard", sizing_mode='stretch_width')
