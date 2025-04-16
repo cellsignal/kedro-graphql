@@ -5,6 +5,7 @@ from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEve
 from kedro_graphql.config import config
 import backoff
 from gql.transport.exceptions import TransportQueryError
+from typing import Optional
 import logging
 
 logger = logging.getLogger("kedro-graphql")
@@ -87,7 +88,7 @@ class KedroGraphqlClient():
             return self._aio_session
 
     async def close_sessions(self):
-        """
+        """Close any open aio and web sessions.
         """
         if self._aio_session:
             logger.info("closing aio session")
@@ -95,6 +96,21 @@ class KedroGraphqlClient():
         if self._web_session:
             logger.info("closing web session")
             await self._web_client.close_async()
+
+    async def execute_query(self, query: str, variable_values: Optional[dict] = None):
+        """Make a query to the GraphQL API.
+
+        Kwargs:
+            query (str): GraphQL query
+            variables (dict): GraphQL variables
+
+        Returns:
+            dict: response
+        """
+        variable_values = variable_values or {}
+        session = await self._get_aio_session()
+        result = await session.execute(gql(query), variable_values=variable_values)
+        return result
 
     async def create_pipeline(self, pipeline_input: PipelineInput = None):
         """Create a pipeline
@@ -105,16 +121,13 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = gql(
-            """
+        query = """
             mutation createPipeline($pipeline: PipelineInput!) {
               createPipeline(pipeline: $pipeline) """ + self.pipeline_gql + """
             }
         """
-        )
 
-        session = await self._get_aio_session()
-        result = await session.execute(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql")})
+        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql")})
         return Pipeline.decode(result["createPipeline"], decoder="graphql")
 
     async def read_pipeline(self, id: str = None):
@@ -125,16 +138,13 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = gql(
-            """
+        query = """
             query readPipeline($id: String!) {
               readPipeline(id: $id) """ + self.pipeline_gql + """
             }
         """
-        )
 
-        session = await self._get_aio_session()
-        result = await session.execute(query, variable_values={"id": str(id)})
+        result = await self.execute_query(query, variable_values={"id": str(id)})
         return Pipeline.decode(result["readPipeline"], decoder="graphql")
 
     async def read_pipelines(self, limit: int = 10, cursor: str = None, filter: str = "", sort: str = ""):
@@ -148,9 +158,7 @@ class KedroGraphqlClient():
         Returns:
             Pipelines (list): an list of pipeline objects
         """
-        session = await self._get_aio_session()
-        query = gql(
-            """
+        query = """
             query readPipelines($limit: Int!, $cursor: String, $filter: String, $sort: String) {
               readPipelines(limit: $limit, cursor: $cursor, filter: $filter, sort: $sort) { 
                 pageMeta {
@@ -160,9 +168,8 @@ class KedroGraphqlClient():
               }
             }
         """
-        )
 
-        result = await session.execute(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
+        result = await self.execute_query(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
         return Pipelines.decode(result, decoder="graphql")
 
     async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None):
@@ -175,16 +182,13 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = gql(
-            """
+        query = """
             mutation updatePipeline($id: String!, $pipeline: PipelineInput!) {
               updatePipeline(id: $id, pipeline: $pipeline) """ + self.pipeline_gql + """
             }
         """
-        )
 
-        session = await self._get_aio_session()
-        result = await session.execute(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql")})
+        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql")})
         return Pipeline.decode(result["updatePipeline"], decoder="graphql")
 
     async def delete_pipeline(self, id: str = None):
@@ -196,16 +200,13 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object that was deleted.
         """
-        query = gql(
-            """
+        query = """
             mutation deletePipeline($id: String!) {
               deletePipeline(id: $id) """ + self.pipeline_gql + """ 
             }
         """
-        )
 
-        session = await self._get_aio_session()
-        result = await session.execute(query, variable_values={"id": str(id)})
+        result = await self.execute_query(query, variable_values={"id": str(id)})
         return Pipeline.decode(result["deletePipeline"], decoder="graphql")
 
     @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))
