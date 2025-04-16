@@ -71,6 +71,7 @@ class KedroGraphqlTask(Task):
             
             # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
             log_path_prefix = CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
+            print(log_path_prefix)
             if log_path_prefix:
 
                 today = date.today()

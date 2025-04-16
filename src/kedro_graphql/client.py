@@ -59,18 +59,18 @@ PIPELINE_GQL = """{
 
 class KedroGraphqlClient():
 
-    def __init__(self, uri=None, ws=None, pipeline_gql=None):
+    def __init__(self, uri_graphql=None, uri_ws=None, pipeline_gql=None):
         """
         Kwargs:
-            uri (str): uri to api [default: http://localhost:5000/graphql]
-            ws (str): uri to websocket [default: ws://localhost:5000/graphql]
+            uri_graphql (str): uri to api [default: http://localhost:5000/graphql]
+            uri_ws (str): uri to websocket [default: ws://localhost:5000/graphql]
             pipeline_gql (str): pipeline graphql query [default: kedro_graphql.client.PIPELINE_GQL]
 
         """
-        self.url = uri or config["KEDRO_GRAPHQL_UI_API_ENDPOINT"]
-        self.ws = ws or config["KEDRO_GRAPHQL_UI_WS_ENDPOINT"]
-        self._aio_transport = AIOHTTPTransport(url=self.url)
-        self._web_transport = WebsocketsTransport(url=self.ws)
+        self.uri_graphql = uri_graphql or config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
+        self.uri_ws = uri_ws or config["KEDRO_GRAPHQL_CLIENT_URI_WS"]
+        self._aio_transport = AIOHTTPTransport(url=self.uri_graphql)
+        self._web_transport = WebsocketsTransport(url=self.uri_ws)
         self._aio_client = Client(transport=self._aio_transport)
         self._aio_session = None
         self._web_client = Client(transport=self._web_transport)
@@ -86,16 +86,6 @@ class KedroGraphqlClient():
             return self._aio_session
         else:
             return self._aio_session
-
-    async def _get_web_session(self):
-        """Get or create a web session.
-        """
-        if not self._web_session:
-            logger.info("connecting web session")
-            self._web_session = await self._web_client.connect_async(reconnecting=True)
-            return self._web_session
-        else:
-            return self._web_session
 
     async def close_sessions(self):
         """
@@ -240,24 +230,26 @@ class KedroGraphqlClient():
         Returns:
             PipelineEvent (generator): a generator of PipelineEvent objects
         """
-        query = gql(
+        async with Client(
+            transport=WebsocketsTransport(url=self.uri_ws),
+        ) as session:
+            query = gql(
+                """
+                subscription pipelineEvents($id: String!) {
+                  pipeline(id: $id) {
+                    id
+                    taskId
+                    status
+                    result
+                    timestamp
+                    traceback
+                  }
+                }
             """
-            subscription pipelineEvents($id: String!) {
-              pipeline(id: $id) {
-                id
-                taskId
-                status
-                result
-                timestamp
-                traceback
-              }
-            }
-        """
-        )
-
-        session = await self._get_web_session()
-        async for result in session.subscribe(query, variable_values={"id": str(id)}):
-            yield PipelineEvent.decode(result, decoder="graphql")
+            )
+            logger.info("started pipeline events subscription")
+            async for result in session.subscribe(query, variable_values={"id": str(id)}):
+                yield PipelineEvent.decode(result, decoder="graphql")
 
     @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))
     async def pipeline_logs(self, id: str = None):
@@ -269,20 +261,23 @@ class KedroGraphqlClient():
         Returns:
             PipelineLogMessage (generator): a generator of PipelineLogMessage objects
         """
-        query = gql(
-            """
-            subscription pipelineLogs($id: String!) {
-              pipelineLogs(id: $id) {
-                id
-                message
-                messageId
-                taskId
-                time
-              }
-            }
-        """
-        )
+        async with Client(
+            transport=WebsocketsTransport(url=self.uri_ws),
+        ) as session:
 
-        session = await self._get_web_session()
-        async for result in session.subscribe(query, variable_values={"id": str(id)}):
-            yield PipelineLogMessage.decode(result, decoder="graphql")
+            query = gql(
+                """
+                subscription pipelineLogs($id: String!) {
+                  pipelineLogs(id: $id) {
+                    id
+                    message
+                    messageId
+                    taskId
+                    time
+                  }
+                }
+            """
+            )
+            logger.info("started pipeline logs subscription")
+            async for result in session.subscribe(query, variable_values={"id": str(id)}):
+                yield PipelineLogMessage.decode(result, decoder="graphql")
