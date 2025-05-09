@@ -24,25 +24,22 @@ class PipelineFormFactory(pn.viewable.Viewer):
     async def build_form(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
-        options = []
-        if not UI_PLUGINS["FORMS"].get(self.pipeline, None):
-            options = []
-        else:
-            form = None
-            for f in UI_PLUGINS["FORMS"][self.pipeline]:
-                options.append(f.__name__)
-                if f.__name__ == self.form:
-                    form = f
+        form = None
+        for f in UI_PLUGINS["FORMS"][self.pipeline]:
+            if f.__name__ == self.form:
+                form = f
         f = pn.bind(form, client=self.param.client)
         yield f
 
     def __panel__(self):
-
         pn.state.location.sync(self, {"pipeline": "pipeline", "form": "form"})
         select = pn.widgets.Select.from_param(self.param.form,
                                               name='Select a form', options=self.options, value=self.param.form)
 
-        return pn.Column(
-            pn.Row(select),
-            pn.Row(self.build_form)
-        )
+        if len(self.options) > 1:
+            return pn.Column(
+                pn.Row(select),
+                pn.Row(self.build_form)
+            )
+        else:
+            return pn.Row(self.build_form)

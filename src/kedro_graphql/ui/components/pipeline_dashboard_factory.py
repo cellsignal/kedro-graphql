@@ -11,15 +11,21 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
     viz_static = param.String(default="")
     id = param.String(default="")
     pipeline = param.String(default="")
+    options = param.List(default=[])
     client = param.ClassSelector(class_=KedroGraphqlClient)
+    dashboard_name = param.String(default=None)
 
-    @param.depends("pipeline", "client")
-    async def build_data(self):
+    def __init__(self, **params):
+        super().__init__(**params)
 
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        if not UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):
+            self.options = []
+        else:
+            for f in UI_PLUGINS["DASHBOARD"][self.pipeline]:
+                self.options.append(f.__name__)
+            self.dashboard_name = self.options[0]
 
-        p = await self.client.read_pipeline(id=self.id)
-
+    def build_default_dashboard(self, p):
         monitor = PipelineMonitor(client=self.client, pipeline=p)
         detail = PipelineDetail(pipeline=p)
         viz = PipelineViz(pipeline=p.name, viz_static=self.viz_static)
@@ -32,9 +38,38 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
                 d.pipeline = p
                 d.client = self.param.client
                 tabs.append((d.title, d))
-        yield tabs
+        return tabs
+
+    @param.depends("dashboard_name", "pipeline", "client")
+    async def build_dashboard(self):
+
+        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+
+        p = await self.client.read_pipeline(id=self.id)
+
+        if UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):
+            dash = None
+            for d in UI_PLUGINS["DASHBOARD"][self.pipeline]:
+                if d.__name__ == self.dashboard_name:
+                    dash = d
+            dash.client = self.param.client
+            dash.viz_static = self.param.viz_static
+            dash.pipeline = p
+            dash.id = self.param.id
+            yield dash
+
+        else:
+            yield self.build_default_dashboard(p)
 
     def __panel__(self):
-        pn.state.location.sync(self, {"id": "id", "pipeline": "pipeline"})
-
-        return self.build_data
+        pn.state.location.sync(
+            self, {"id": "id", "pipeline": "pipeline", "dashboard_name": "dashboard_name"})
+        select = pn.widgets.Select.from_param(self.param.dashboard_name,
+                                              name='Select a dashboard', options=self.options, value=self.param.dashboard_name)
+        if len(self.options) > 1:
+            return pn.Column(
+                pn.Row(select),
+                pn.Row(self.build_dashboard)
+            )
+        else:
+            return pn.Row(self.build_dashboard)

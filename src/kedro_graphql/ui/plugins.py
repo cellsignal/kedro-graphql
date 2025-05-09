@@ -1,5 +1,6 @@
 # ui plugin examples
 
+import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
 from bokeh.plotting import figure
@@ -8,7 +9,10 @@ from tempfile import _TemporaryFileWrapper
 import param
 import panel as pn
 from kedro_graphql.models import Pipeline
-from kedro_graphql.ui.decorators import ui_data, ui_form
+from kedro_graphql.ui.decorators import ui_data, ui_form, ui_dashboard
+from kedro_graphql.ui.components.pipeline_detail import PipelineDetail
+from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
+from kedro_graphql.ui.components.pipeline_viz import PipelineViz
 from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.models import PipelineInput
 import json
@@ -256,3 +260,81 @@ class Example01PipelineFormV1(BaseExample01Form):
             title='Form')
 
         return form
+
+
+pn.extension('plotly')
+
+
+@ui_dashboard(pipeline="example01")
+class Example00PipelineUIV1(pn.viewable.Viewer):
+
+    client = param.ClassSelector(class_=KedroGraphqlClient)
+    pipeline = param.ClassSelector(class_=Pipeline)
+    id = param.String(default="")
+
+    def __init__(self, **params):
+        super().__init__(**params)
+
+    def draw_pipeline(self):
+        nodes = ["stage 1", "stage 2", "stage 3"]
+        # it would be nice to get nodes from the pipeline object instead
+
+        # Define node colors, default color is blue
+        node_colors = ['blue'] * len(nodes)
+        node_colors[1] = 'green'  # Change color of the second node to green
+
+        # Define edges as tuples of node indices
+        edges = [(0, 1), (1, 2)]
+        node_trace = go.Scatter(
+            x=[0, 1, 2],
+            y=[0, 0, 0],
+            mode='markers+text',
+            text=[nodes],
+            marker=dict(
+                size=20,
+                color=node_colors
+            ),
+            textposition='bottom center'
+        )
+        # Create edge traces
+        edge_traces = []
+        for edge in edges:
+            x0, y0 = node_trace['x'][edge[0]], node_trace['y'][edge[0]]
+            x1, y1 = node_trace['x'][edge[1]], node_trace['y'][edge[1]]
+            edge_trace = go.Scatter(
+                x=[x0, x1],
+                y=[y0, y1],
+                mode='lines',
+                line=dict(width=2, color='gray'),
+                showlegend=False
+            )
+            edge_traces.append(edge_trace)
+
+        # Create figure
+        fig = go.Figure(data=[node_trace] + edge_traces,
+                        layout=go.Layout(showlegend=False))
+        fig.update_layout({
+            "plot_bgcolor": "rgba(0, 0, 0, 0)",
+            "paper_bgcolor": "rgba(0, 0, 0, 0)",
+            'xaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+            'yaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+            'hovermode': False,
+            'height': 100,
+            'margin': dict(t=0, b=0, l=0, r=0),
+        })
+        return pn.pane.Plotly(fig, config={'displayModeBar': False, 'scrollZoom': False})
+
+    @param.depends("client", "pipeline")
+    async def build_ui(self):
+        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        ui = pn.Column(
+            pn.Row(self.draw_pipeline()),
+            pn.Row(PipelineMonitor(client=self.client, pipeline=self.pipeline)),
+            sizing_mode="stretch_width")
+
+        yield ui
+
+    def __panel__(self):
+        print(self.pipeline, self.id, self.client)
+        pn.state.location.sync(self, {"id": "id"})
+        return self.build_ui

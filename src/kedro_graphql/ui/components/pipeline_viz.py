@@ -12,7 +12,7 @@ class PipelineViz(pn.viewable.Viewer):
 
     def __init__(self, **params):
         super().__init__(**params)
-        self.viz_json = self.load_viz_json()
+        # self.viz_json = self.load_viz_json()
 
     def load_viz_json(self):
         with open(self.viz_static + "api/main") as f:

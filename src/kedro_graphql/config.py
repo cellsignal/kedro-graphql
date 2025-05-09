@@ -23,6 +23,13 @@ config = {
     "KEDRO_GRAPHQL_CLIENT_URI_WS": "ws://localhost:5000/graphql",
     "KEDRO_GRAPHQL_UI_BASEPATH": "/",
     "KEDRO_GRAPHQL_UI_TITLE": "kedro-graphql UI demo",
+    "KEDRO_GRAPHQL_UI_COMPONENT_MAP": {
+        "dashboard": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory", "params": ["client", "pipeline", "viz_static"]},
+        "pipelines": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_cards.PipelineCards", "params": []},
+        "form": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory", "params": ["client", "pipeline"]},
+        "search": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_search.PipelineSearch", "params": ["client"]},
+        "explore": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_viz.PipelineViz", "params": ["viz_static, pipeline"]},
+    },
 }
 
 config = {
@@ -30,3 +37,11 @@ config = {
     **dotenv_values(".env"),  # load
     **os.environ,  # override loaded values with environment variables
 }
+
+
+# import components specified in component map
+for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
+    module_path, class_name = value["component"].rsplit(".", 1)
+    module = __import__(module_path, fromlist=[class_name])
+    component_class = getattr(module, class_name)
+    config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][key]["component"] = component_class
