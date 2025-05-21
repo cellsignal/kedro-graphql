@@ -70,10 +70,10 @@ to use from the dropdown menu.
 ![pipeline forms](./02_ui_pipeline_form.png)
 
 
-### Dashboards
+### Default Dashboard
 
 After completing the form and clicking the "Run" button the
-pipeline dashboard will load with the following tabs:
+pipeline dashboard will load a default dashboard with the following tabs:
 
 **Monitor**
 
@@ -93,12 +93,16 @@ Visualize the pipeline with [kedro-viz](https://github.com/kedro-org/kedro-viz).
 
 ![pipeline viz](./05_ui_pipeline_viz_00.png)
 
-**Custom Tabs**
+**Adding Custom Tabs the default dashboard**
 
 Additional tabs with custom components can be added to a pipeline's dashboard 
 by registering one or more `@ui_data` [plugins](#plugins).
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
+
+### Custom Dashboards
+
+The default dashboard can be replaced using the `@ui_dashboard` decorator.
 
 ### Search
 
@@ -107,16 +111,19 @@ The search component can be used to search the entire pipeline collection.
 ![pipeline viz](./01_ui_pipeline_search.png)
 
 
-## Plugins
+## Plugins & Customization
 
-Currently, the functionality of the UI can be extended by registering 
-`@ui_form` and `@ui_data` plugins.  Plugins can be imported when starting
-the UI application using the `-i` or `--imports` cli flags.  For example:
+Currently, the functionality of the UI can be customized using the following approaches:
+
+- Use the `@ui_form` and `@ui_data` plugins to add custom tabs to the default dashboard of a pipeline.  
+- Use the `@ui_dashboard` plugin to replace the default dashboard with your own implementation.  
+
+Plugins can be imported when starting the UI application using the `-i` or 
+`--imports` cli flags.  For example:
 
 ```
 kedro gql --ui --imports "kedro_graphql.ui.plugins"
 ```
-
 
 ### @ui_form
 
@@ -336,3 +343,124 @@ class Example00Data01(pn.viewable.Viewer):
 ```
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
+
+
+### @ui_dashboard
+
+The `@ui_dashboard` decorator can be used to register one or more dashboards to
+a pipeline that replace the default dashboard.  The specification of 
+`@ui_dashboard` plugin is as follows:
+
+```
+class ExampleDashboard(pn.viewable.Viewer):
+    client = param.ClassSelector(class_=KedroGraphqlClient)
+    id = param.String(default="")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    viz_static = param.String(default="")
+
+    def __panel__(self):
+        raise NotImplementedError
+```
+
+The example shown below will register one custom dashboard to the 
+`example01` pipeline that will replace the default dashboard.
+
+```
+# kedro_graphql.ui.plugins
+import panel as pn
+import numpy as np
+import param
+import plotly.graph_objects as go
+from kedro_graphql.models import Pipeline
+from kedro_graphql.ui.decorators import ui_dashboard
+
+pn.extension('plotly')
+
+@ui_dashboard(pipeline="example01")
+class Example00PipelineUIV1(pn.viewable.Viewer):
+
+    client = param.ClassSelector(class_=KedroGraphqlClient)
+    id = param.String(default="")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    viz_static = param.String(default="")
+
+    def __init__(self, **params):
+        super().__init__(**params)
+
+    def draw_pipeline(self):
+        nodes = ["stage 1", "stage 2", "stage 3"]
+        # it would be nice to get nodes from the pipeline object instead
+
+        # Define node colors, default color is blue
+        node_colors = ['blue'] * len(nodes)
+        node_colors[1] = 'green'  # Change color of the second node to green
+
+        # Define edges as tuples of node indices
+        node_trace = go.Scatter(
+            x=nodes,
+            y=[0, 0, 0],
+            mode='lines+markers',
+            text=[nodes],
+            marker=dict(
+                size=20,
+                color=node_colors
+            ),
+            line=dict(width=2, color='gray'),
+            textposition='bottom center'
+        )
+        fig = go.Figure(data=[node_trace],
+                        layout=go.Layout(showlegend=False))
+
+        fig.update_layout({
+            "plot_bgcolor": "rgba(0, 0, 0, 0)",
+            "paper_bgcolor": "rgba(0, 0, 0, 0)",
+            'xaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': True},
+            'yaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+            'hovermode': False,
+            'height': 100,
+            'margin': dict(t=0, b=0, l=0, r=0),
+        })
+        return pn.pane.Plotly(fig, config={'displayModeBar': False, 'scrollZoom': False})
+
+    @param.depends("client", "pipeline")
+    async def build_ui(self):
+        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        monitor = PipelineMonitor(client=self.client, pipeline=self.pipeline)
+        ui = pn.Column(
+            pn.Row(self.draw_pipeline()),
+            pn.Row(monitor),
+            sizing_mode="stretch_width")
+
+        yield ui
+
+    def __panel__(self):
+
+        pn.state.location.sync(self, {"id": "id"})
+        return self.build_ui
+```
+
+### Component Map
+
+The layout and registration of components can also be specified in the 
+`KEDRO_GRAPHQL_UI_COMPONENT_MAP` configuration value.  The default 
+configration is as follows:
+
+```
+"KEDRO_GRAPHQL_UI_COMPONENT_MAP": {
+    "dashboard": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory", "params": ["client", "pipeline", "viz_static"]},
+    "pipelines": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_cards.PipelineCards", "params": []},
+    "form": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory", "params": ["component", "client", "pipeline"]},
+    "search": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_search.PipelineSearch", "params": ["client"]},
+    "explore": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_viz.PipelineViz", "params": ["viz_static, pipeline"]},
+}
+```
+
+- Each key in the dictionary is the name displayed on the button in the navigation sidebar
+  (if "sidebar": True) and  to use for the url parameters when loaded e.g. `http://localhost:5006/?component=dashboard`
+- `component`: a valid import path
+- `params`: a list of parameters the parent application should pass to the component, can include ["client", "component", "id", "pipeline", "viz_static"]
+  - `client` (kedro_graphql.client.KedroGraphqlClient): a KedroGraphqlClient instance
+  - `component` (str): name of the component
+  - `id` (str): id of the pipeline
+  - `pipeline` (str): name of the pipeline
+  - `viz_static` (str): path to static build of kedro viz 

@@ -19,6 +19,7 @@ class PipelineViz(pn.viewable.Viewer):
             data = json.load(f)
         return data
 
+    @param.depends("pipeline")
     async def build_viz(self):
         iframe = """
         <iframe frameBorder="0"  style="height:100%; width:100%" src="http://localhost:5006/pipeline/viz-build/index.html?pid={pipeline}"></iframe>

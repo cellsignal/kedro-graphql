@@ -9,6 +9,9 @@ class PipelineCards(pn.viewable.Viewer):
     form = param.String(default="form")
     explore = param.String(default="explore")
 
+    def __init__(self, **params):
+        super().__init__(**params)
+
     def _get_gql_forms(self):
         """
         Return allthe @gql_form plugins registered in the project.
@@ -28,7 +31,7 @@ class PipelineCards(pn.viewable.Viewer):
             pn.state.location.search = "?component="+self.explore + \
                 "&pipeline=" + pipeline
 
-    def __panel__(self):
+    async def build_component(self):
         plugins = self._get_gql_forms()
         p_cards = []
         for pipeline, forms in plugins.items():
@@ -46,4 +49,7 @@ class PipelineCards(pn.viewable.Viewer):
             pn.bind(self.navigate, explore_button, event="explore",
                     pipeline=pipeline, form=forms[0], watch=True)
 
-        return pn.FlexBox(*p_cards)
+        yield pn.FlexBox(*p_cards)
+
+    def __panel__(self):
+        return self.build_component

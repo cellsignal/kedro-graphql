@@ -32,7 +32,8 @@ class PipelineFormFactory(pn.viewable.Viewer):
         yield f
 
     def __panel__(self):
-        pn.state.location.sync(self, {"pipeline": "pipeline", "form": "form"})
+        pn.state.location.sync(
+            self, {"pipeline": "pipeline", "form": "form"})
         select = pn.widgets.Select.from_param(self.param.form,
                                               name='Select a form', options=self.options, value=self.param.form)
 

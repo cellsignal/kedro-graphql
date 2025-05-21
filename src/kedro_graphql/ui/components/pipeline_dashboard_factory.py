@@ -35,37 +35,57 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         tabs.append(("Viz", viz))
         if UI_PLUGINS["DATA"].get(self.pipeline, None):
             for d in UI_PLUGINS["DATA"][self.pipeline]:
-                d.pipeline = p
-                d.client = self.param.client
-                tabs.append((d.title, d))
+                data = d(id=self.id, client=self.client,
+                         pipeline=p, viz_static=self.viz_static)
+                tabs.append((data.title, data))
         return tabs
 
-    @param.depends("dashboard_name", "pipeline", "client")
-    async def build_dashboard(self):
+    def build_custom_dashboard(self, p):
+        dash = None
+        for d in UI_PLUGINS["DASHBOARD"][self.pipeline]:
+            if d.__name__ == self.dashboard_name:
+                dash = d
+        dash = dash(id=self.id, pipeline=p, client=self.client,
+                    viz_static=self.viz_static)
+        print("DASHBOARD", dash.__dict__)
+        return dash
 
+    @param.depends("client", "dashboard_name", "id", "pipeline", "viz_static")
+    async def build_dashboard(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
         p = await self.client.read_pipeline(id=self.id)
 
         if UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):
-            dash = None
-            for d in UI_PLUGINS["DASHBOARD"][self.pipeline]:
-                if d.__name__ == self.dashboard_name:
-                    dash = d
-            dash.client = self.param.client
-            dash.viz_static = self.param.viz_static
-            dash.pipeline = p
-            dash.id = self.param.id
-            yield dash
-
+            yield self.build_custom_dashboard(p)
         else:
             yield self.build_default_dashboard(p)
+
+    # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+
+    # p = await self.client.read_pipeline(id=self.id)
+
+    # if UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):
+    # dash = None
+    # for d in UI_PLUGINS["DASHBOARD"][self.pipeline]:
+    # if d.__name__ == self.dashboard_name:
+    # dash = d
+    # dash.pipeline = p
+    # dash.client = self.param.client
+    # dash.viz_static = self.param.viz_static
+    # dash.id = self.id
+    # print("DASHBOARD", dash.client)
+    # yield dash
+
+    # else:
+    # yield self.build_default_dashboard(p)
 
     def __panel__(self):
         pn.state.location.sync(
             self, {"id": "id", "pipeline": "pipeline", "dashboard_name": "dashboard_name"})
         select = pn.widgets.Select.from_param(self.param.dashboard_name,
                                               name='Select a dashboard', options=self.options, value=self.param.dashboard_name)
+
         if len(self.options) > 1:
             return pn.Column(
                 pn.Row(select),
