@@ -1,7 +1,6 @@
 """A python panel app for visualizing Kedro pipelines."""
 import panel as pn
 import param
-from kedro_graphql.config import config
 from kedro_graphql.client import KedroGraphqlClient
 
 # pn.extension(theme="dark")
@@ -10,9 +9,10 @@ from kedro_graphql.client import KedroGraphqlClient
 class NavigationSidebarButton(pn.viewable.Viewer):
     component = param.String(default="pipelines")
     name = param.String(default="pipelines")
+    config = param.Dict(default={})
 
     def navigate(self, event):
-        pn.state.location.pathname = config["KEDRO_GRAPHQL_UI_BASEPATH"]
+        pn.state.location.pathname = self.config["KEDRO_GRAPHQL_UI_BASEPATH"]
         pn.state.location.search = "?component="+self.name.lower()
 
     async def build_button(self):
@@ -34,6 +34,7 @@ class NavigationSidebarButton(pn.viewable.Viewer):
 
 class TemplateMainFactory(pn.viewable.Viewer):
     component = param.String(default="pipelines")
+    config = param.Dict(default={})
     id = param.String(default=None)
     pipeline = param.String(default=None)
     client = param.ClassSelector(class_=KedroGraphqlClient)
@@ -47,7 +48,7 @@ class TemplateMainFactory(pn.viewable.Viewer):
     async def build_component(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         params = {}
-        required_params = config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][self.component]["params"]
+        required_params = self.config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][self.component]["params"]
         for param in required_params:
             if param == "client":
                 params[param] = self.client
@@ -72,18 +73,17 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
     id = param.String(default="")
     pipeline = param.String(default="")
 
-    def __init__(self, title="kedro-graphql", client=None, viz_static=None):
+    def __init__(self, title="kedro-graphql", config=None, client=None, viz_static=None):
         super().__init__(
             title=config["KEDRO_GRAPHQL_UI_TITLE"],
             sidebar_width=200)
-
         for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
             if value["sidebar"]:
-                next_button = NavigationSidebarButton(name=key)
+                next_button = NavigationSidebarButton(name=key, config=config)
                 pn.state.location.sync(next_button, {"component": "component"})
                 self.sidebar.append(next_button)
 
-        self.main.append(TemplateMainFactory(client=client, viz_static=viz_static,
+        self.main.append(TemplateMainFactory(client=client, viz_static=viz_static, config=config,
                          component_map=config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"]))
 
         pn.state.location.pathname = config["KEDRO_GRAPHQL_UI_BASEPATH"]

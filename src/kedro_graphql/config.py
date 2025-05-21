@@ -37,11 +37,3 @@ config = {
     **dotenv_values(".env"),  # load
     **os.environ,  # override loaded values with environment variables
 }
-
-
-# import components specified in component map
-for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
-    module_path, class_name = value["component"].rsplit(".", 1)
-    module = __import__(module_path, fromlist=[class_name])
-    component_class = getattr(module, class_name)
-    config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][key]["component"] = component_class
