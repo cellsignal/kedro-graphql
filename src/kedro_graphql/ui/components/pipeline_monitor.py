@@ -13,12 +13,17 @@ class PipelineMonitor(pn.viewable.Viewer):
     pipeline = param.ClassSelector(class_=Pipeline)
     client = param.ClassSelector(class_=KedroGraphqlClient)
 
+    def __init__(self, **params):
+        super().__init__(**params)
+
+    @param.depends('pipeline', 'client')
     async def build_table(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        p = await self.client.read_pipeline(id=self.pipeline.id)
         df = pd.DataFrame({
-            'name': [self.pipeline.name],
-            'id': [self.pipeline.id],
-            'status': str(self.pipeline.status[-1].state),
+            'name': [p.name],
+            'id': [p.id],
+            'status': str(p.status[-1].state),
         }, index=[0])
 
         df_widget = pn.widgets.Tabulator(df,
@@ -36,6 +41,7 @@ class PipelineMonitor(pn.viewable.Viewer):
             if event.status == "COMPLETED":
                 break
 
+    @param.depends('pipeline', 'client')
     async def build_terminal(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 

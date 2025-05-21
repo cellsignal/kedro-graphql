@@ -12,13 +12,14 @@ class PipelineViz(pn.viewable.Viewer):
 
     def __init__(self, **params):
         super().__init__(**params)
-        self.viz_json = self.load_viz_json()
+        # self.viz_json = self.load_viz_json()
 
     def load_viz_json(self):
         with open(self.viz_static + "api/main") as f:
             data = json.load(f)
         return data
 
+    @param.depends("pipeline")
     async def build_viz(self):
         iframe = """
         <iframe frameBorder="0"  style="height:100%; width:100%" src="http://localhost:5006/pipeline/viz-build/index.html?pid={pipeline}"></iframe>

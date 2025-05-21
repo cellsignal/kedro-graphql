@@ -15,6 +15,10 @@ PIPELINE_GQL = """{
                     parent
                     name
                     describe
+                    createdAt
+                    projectVersion
+                    pipelineVersion
+                    kedroGraphqlVersion
                     dataCatalog {
                       name
                       config

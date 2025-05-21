@@ -29,6 +29,7 @@ class PipelineSearch(pn.viewable.Viewer):
         if event.column == "Open":
             pn.state.location.search = "?component="+self.dashboard+"&pipeline=" + \
                 df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
+            pn.state.location.reload = True
 
     def build_filter(self, raw):
         """Build a filter string from  a raw string.
