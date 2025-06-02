@@ -43,24 +43,26 @@ class TemplateMainFactory(pn.viewable.Viewer):
     def __init__(self, **params):
         super().__init__(**params)
 
-    @param.depends("client", "pipeline", "component")
+    @param.depends("client", "id", "pipeline", "component", "viz_static")
     async def build_component(self):
-        print(self.viz_static)
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         params = {}
         required_params = config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][self.component]["params"]
         for param in required_params:
             if param == "client":
                 params[param] = self.client
-            elif param == "pipeline":
+            if param == "id":
+                params[param] = self.id
+            if param == "pipeline":
                 params[param] = self.pipeline
-            elif param == "viz_static":
+            if param == "viz_static":
                 params[param] = self.viz_static
         yield self.component_map[self.component]["component"](**params)
 
     def __panel__(self):
         pn.state.location.sync(
             self, {"component": "component", "id": "id", "pipeline": "pipeline"})
+
         return self.build_component
 
 
