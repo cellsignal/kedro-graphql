@@ -7,16 +7,32 @@ from kedro_graphql.client import KedroGraphqlClient
 
 
 class NavigationSidebarButton(pn.viewable.Viewer):
-    component = param.String(default="pipelines")
+    """A button for navigating the sidebar in the Kedro GraphQL UI.
+    This button is used to navigate to different pages in the UI, such as pipelines, nodes, or data catalog.
+    It updates the URL to reflect the current page and changes its appearance based on whether it is the active page.
+
+    Attributes:
+        page (str): The name of the page this button navigates to.
+        name (str): The display name of the button.
+        spec (dict): The specification for the UI, including configuration and pages.
+    """
+    page = param.String(default="pipelines")
     name = param.String(default="pipelines")
-    config = param.Dict(default={})
+    spec = param.Dict(default={})
 
     def navigate(self, event):
-        pn.state.location.pathname = self.config["KEDRO_GRAPHQL_UI_BASEPATH"]
-        pn.state.location.search = "?component="+self.name.lower()
+        """Navigate to the specified page."""
+        pn.state.location.pathname = self.spec["config"]["base_url"]
+        pn.state.location.search = "?page="+self.name.lower()
 
     async def build_button(self):
-        if self.component == self.name.lower():
+        """Builds the navigation button for the sidebar.
+        This button will change its appearance based on whether it is the current page.
+
+        Returns:
+            pn.widgets.Button: A button that navigates to the specified page.
+        """
+        if self.page == self.name.lower():
             b0_type = "primary"
             b0_icon = "chevron-right-pipe"
         else:
@@ -33,59 +49,64 @@ class NavigationSidebarButton(pn.viewable.Viewer):
 
 
 class TemplateMainFactory(pn.viewable.Viewer):
-    component = param.String(default="pipelines")
-    config = param.Dict(default={})
-    id = param.String(default=None)
-    pipeline = param.String(default=None)
-    client = param.ClassSelector(class_=KedroGraphqlClient)
-    component_map = param.Dict(default={})
-    viz_static = param.String(default="")
+    """A factory for building the main content of the Kedro GraphQL UI template.
+    This component dynamically builds the main content based on the current page specified in the URL.
+    It uses the `spec` dictionary to determine which module to load for each page.
+
+    Attributes:
+        page (str): The current page to display in the main content.
+        spec (dict): The specification for the UI, including configuration and pages.
+    """
+    page = param.String(default="pipelines")
+    spec = param.Dict(default={})
 
     def __init__(self, **params):
         super().__init__(**params)
 
-    @param.depends("client", "id", "pipeline", "component", "viz_static")
-    async def build_component(self):
+    @param.depends("page", "spec")
+    async def build_page(self):
+        """Builds the main content of the template based on the current page."""
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        params = {}
-        required_params = self.config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][self.component]["params"]
-        for param in required_params:
-            if param == "client":
-                params[param] = self.client
-            if param == "id":
-                params[param] = self.id
-            if param == "pipeline":
-                params[param] = self.pipeline
-            if param == "viz_static":
-                params[param] = self.viz_static
-        yield self.component_map[self.component]["component"](**params)
+        if self.spec["pages"][self.page].get("params", False):
+            params = self.spec["pages"][self.page]["params"]
+        else:
+            params = {}
+        yield self.spec["pages"][self.page]["module"](spec=self.spec, **params)
 
     def __panel__(self):
         pn.state.location.sync(
-            self, {"component": "component", "id": "id", "pipeline": "pipeline"})
+            self, {"page": "page"})
 
-        return self.build_component
+        return self.build_page
 
 
 class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
+    """A Material Design template for the Kedro GraphQL UI.
+    This template includes a sidebar for navigation and a main content area that 
+    displays different pages based on the current URL.
+    It uses the `spec` dictionary to configure the sidebar and main content.
 
-    component = param.String(default="pipelines")
-    id = param.String(default="")
-    pipeline = param.String(default="")
+    Attributes:
+        title (str): The title of the template.
+        sidebar_width (int): The width of the sidebar in pixels.
+        page (str): The current page to display in the main content.
+        spec (dict): The specification for the UI, including configuration and pages.
+    """
 
-    def __init__(self, title="kedro-graphql", config=None, client=None, viz_static=None):
+    page = param.String(default="pipelines")
+    spec = param.Dict(default={})
+
+    def __init__(self, title="kedro-graphql", spec=None):
         super().__init__(
-            title=config["KEDRO_GRAPHQL_UI_TITLE"],
+            title=spec["config"]["site_name"],
             sidebar_width=200)
-        for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
-            if value["sidebar"]:
-                next_button = NavigationSidebarButton(name=key, config=config)
-                pn.state.location.sync(next_button, {"component": "component"})
-                self.sidebar.append(next_button)
+        for nav in spec["nav"]["sidebar"]:
+            next_button = NavigationSidebarButton(name=nav["name"], spec=spec)
+            pn.state.location.sync(next_button, {"page": "page"})
+            self.sidebar.append(next_button)
 
-        self.main.append(TemplateMainFactory(client=client, viz_static=viz_static, config=config,
-                         component_map=config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"]))
+        self.main.append(TemplateMainFactory(spec=spec))
 
-        pn.state.location.pathname = config["KEDRO_GRAPHQL_UI_BASEPATH"]
+        pn.state.location.pathname = spec["config"]["base_url"]
         pn.state.location.sync(
-            self, {"component": "component", "id": "id", "pipeline": "pipeline"})
+            self, {"page": "page"})
