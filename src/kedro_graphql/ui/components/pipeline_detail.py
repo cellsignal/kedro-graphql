@@ -14,8 +14,17 @@ class PipelineDetail(pn.viewable.Viewer):
     pipeline = param.ClassSelector(class_=Pipeline)
 
     async def build_detail(self, raw):
-        # NEED TO HANDLE BATCH VIEW
-        # MAYBE add Dataset browser for bulk select and download
+        """Builds the detail view for the pipeline, showing its parameters, tags, data catalog, and status.
+
+        TO DO:
+            - Implement a more user-friendly way to view and interact with the pipeline's data catalog.
+            - Support for "batch" view. View child pipelines or parent pipelines if applicable.
+
+        Args:
+            raw (pn.widgets.CheckButtonGroup): A widget to toggle between raw JSON view and structured view.
+        Yields:
+            pn.Row: A row containing the detail view of the pipeline.
+        """
         if "json" in raw:
             yield pn.Row(pn.widgets.JSONEditor(value=self.pipeline.encode(encoder="dict"), mode="view", width=600))
         else:

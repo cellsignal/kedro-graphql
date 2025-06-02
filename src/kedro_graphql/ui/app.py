@@ -2,29 +2,59 @@
 import panel as pn
 from kedro_graphql.ui.components.template import KedroGraphqlMaterialTemplate
 from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.ui.decorators import discover_plugins
+# from kedro_graphql.ui.decorators import discover_plugins
+from importlib import import_module
 import tempfile
+import yaml
 
 pn.extension(design='material', global_css=[
              ':root { --design-primary-color: black; }'])
 
 
-def template_factory(config={}, client=None, viz_static=None):
+def template_factory(spec={}):
+    """Factory function to create a Kedro GraphQL UI template.
+
+    Args:
+        spec (dict): The specification for the UI, containing configuration and pages.
+    Returns:
+        dict: A dictionary mapping the base URL to a function that builds the template.
+    """
 
     def build_template():
-        return KedroGraphqlMaterialTemplate(client=client, config=config, viz_static=viz_static)
+        return KedroGraphqlMaterialTemplate(spec=spec)
 
-    return {config["KEDRO_GRAPHQL_UI_BASEPATH"]: build_template}
+    return {spec["config"]["base_url"]: build_template}
 
 
-def start_ui(config={}):
+def start_ui(config={}, spec=""):
+    """Start the Kedro GraphQL UI application.
 
-    # import components specified in component map
-    for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
-        module_path, class_name = value["component"].rsplit(".", 1)
+    Args:
+        config (dict): Configuration dictionary.
+        spec (str): Path to the YAML specification file for the UI.
+    """
+
+    # load the UI yaml specification
+    with open(spec) as stream:
+        try:
+            spec = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    # import components specified in UI spec for pages
+    for key, value in spec["pages"].items():
+        module_path, class_name = value["module"].rsplit(".", 1)
         module = __import__(module_path, fromlist=[class_name])
-        component_class = getattr(module, class_name)
-        config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][key]["component"] = component_class
+        module_class = getattr(module, class_name)
+        spec["pages"][key]["module"] = module_class
+        print("imported module: " +
+              str(module_class) + " for page: " + str(key))
+
+    # import additinal modules to enable plugin discovery
+    # e.g. @gql_form, @gql_data, etc...
+    imports = [i.strip() for i in spec["config"]["imports"]]
+    for i in imports:
+        import_module(i)
 
     import sh
 
@@ -35,9 +65,17 @@ def start_ui(config={}):
         pn.config.reuse_sessions = True
         pn.config.admin = True
         pn.config.global_loading_spinner = True
-        discover_plugins(config)
 
         client = KedroGraphqlClient(
             uri_graphql=config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"], uri_ws=config["KEDRO_GRAPHQL_CLIENT_URI_WS"])
-        pn.serve(template_factory(config=config, client=client, viz_static=tmpdirname +
-                 "/build/"), admin=True, port=5006, static_dirs={"/pipeline/viz-build": str(tmpdirname + "/build")})
+
+        # override values provided in the UI spec with config values provided via the cli or env vars
+        spec["config"]["site_name"] = config["KEDRO_GRAPHQL_UI_SITE_NAME"]
+        spec["config"]["base_url"] = config["KEDRO_GRAPHQL_UI_BASE_URL"]
+        spec["config"]["client_uri_graphql"] = config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
+        spec["config"]["client_uri_ws"] = config["KEDRO_GRAPHQL_CLIENT_URI_WS"]
+        spec["config"]["viz_static"] = tmpdirname + "/build/"
+        spec["config"]["client"] = client
+
+        pn.serve(template_factory(spec=spec), admin=True, port=5006,
+                 static_dirs={"/pipeline/viz-build": str(tmpdirname + "/build")})

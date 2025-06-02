@@ -8,8 +8,10 @@ UI_PLUGINS = {"FORMS": {},
 
 
 def discover_plugins(config):
-    # call this when starting app to discover plugins
-    # discover plugins e.g. decorated functions e.g @gql_form, etc...
+    """Discover and import plugins based on the configuration.
+    Args:
+        config (dict): Configuration dictionary containing the imports.
+    """
     imports = [i.strip()
                for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
     for i in imports:
@@ -17,10 +19,12 @@ def discover_plugins(config):
 
 
 def ui_form(pipeline):
-    """
+    """Register a UI form plugin for a specific pipeline.
+
     Args:
-        pipeline (str): name of pipeline.
+        pipeline (str): Name of the pipeline for which the form is registered.
     """
+
     def register_plugin(plugin_class):
         if UI_PLUGINS["FORMS"].get(pipeline, False):
             UI_PLUGINS["FORMS"][pipeline].append(plugin_class)
@@ -33,9 +37,10 @@ def ui_form(pipeline):
 
 
 def ui_data(pipeline):
-    """
+    """Register a UI data plugin for a specific pipeline.
+
     Args:
-        pipeline (str): name of pipeline
+        pipeline (str): Name of the pipeline for which the data plugin is registered.
     """
     def register_plugin(plugin_class):
         if UI_PLUGINS["DATA"].get(pipeline, False):
@@ -49,9 +54,10 @@ def ui_data(pipeline):
 
 
 def ui_dashboard(pipeline):
-    """
+    """Register a UI dashboard plugin for a specific pipeline.
+
     Args:
-        pipeline (str): name of pipeline
+        pipeline (str): Name of the pipeline for which the dashboard plugin is registered.
     """
     def register_plugin(plugin_class):
         if UI_PLUGINS["DASHBOARD"].get(pipeline, False):
