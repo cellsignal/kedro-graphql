@@ -25,16 +25,17 @@ pip install kedro_graphql[ui]
 
 ### Start the UI
 
-Start the UI server.
+Start the UI server.  Use the [UI YAML Specification](#ui-specification) provided in the documentation
+section below or grab it from the repository.
 
 ```
-kedro gql --ui --imports "kedro_graphql.ui.plugins"
+kedro gql --ui --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
 ```
-kedro gql -r -u -i "kedro_graphql.ui.plugins"
+kedro gql -r -u --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Start the GraphQL API.
@@ -113,10 +114,11 @@ The search component can be used to search the entire pipeline collection.
 
 ## Plugins & Customization
 
-Currently, the functionality of the UI can be customized using the following approaches:
+Currently, the functionality and layout of the UI can be customized using the following approaches:
 
+- The [UI YAML specification](#ui-specification)
 - Use the `@ui_form` and `@ui_data` plugins to add custom tabs to the default dashboard of a pipeline.  
-- Use the `@ui_dashboard` plugin to replace the default dashboard with your own implementation.  
+- Use the `@ui_dashboard` plugin to replace the default dashboard with your own implementation.
 
 Plugins can be imported when starting the UI application using the `-i` or 
 `--imports` cli flags.  For example:
@@ -133,7 +135,7 @@ a pipeline.  The specification of `@ui_form` plugin is as follows:
 ```
 class ExampleForm(pn.viewable.Viewer):
     client = param.ClassSelector(class_=KedroGraphqlClient)
-    dashboard = param.String(default="dashboard")
+    spec = param.Dict(default={})
 
     def __panel__(self):
         raise NotImplementedError
@@ -147,42 +149,54 @@ The example shown below will register two forms to the
 ```
 # kedro_graphql.ui.plugins
 
-import tempfile
-from tempfile import _TemporaryFileWrapper
-import param
-import panel as pn
-from kedro_graphql.ui.decorators import ui_form
-from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.models import PipelineInput
-import json
-pn.extension('filedropper')
-
-
 class BaseExample00Form(pn.viewable.Viewer):
-    client = param.ClassSelector(class_=KedroGraphqlClient)
-    dashboard = param.String(default="dashboard")
+    """Base class for example00 pipeline forms.
+    This class provides the basic functionality for uploading files, running the pipeline,
+    and navigating to the pipeline dashboard.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        text_in (_TemporaryFileWrapper): A temporary file wrapper for the input text file.
+        text_out (_TemporaryFileWrapper): A temporary file wrapper for the output text file.
+        duration (int): The duration parameter for the pipeline.
+        example (str): An example string parameter for the pipeline.
+        button_disabled (bool): A flag to disable the run button until a file is uploaded.
+
+    Methods:
+        navigate(pipeline_id: str): Navigate to the pipeline dashboard with the given ID.
+        upload(file_dropper): Write the contents of the uploaded file to a temporary file.
+        pipeline_input(): Create a PipelineInput object with the current parameters.
+        run(event): Run the pipeline with the current input and parameters.
+        __panel__(): Return a Panel component for the form.
+
+    This class should be subclassed to implement specific forms for the example00 pipeline.
+    """
+    spec = param.Dict(default={})
     text_in = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     text_out = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     duration = param.Number(default=3)
     example = param.String(default="hello")
+    button_disabled = param.Boolean(default=True)
 
     def navigate(self, pipeline_id: str):
-        pn.state.location.search = "?component=" + \
-            self.dashboard+"&pipeline=example00&id=" + pipeline_id
+        """Navigate to the pipeline dashboard with the given ID."""
+        pn.state.location.search = "?page=dashboard&pipeline=example00&id=" + pipeline_id
 
     async def upload(self, file_dropper):
-        """write a files contens to a temporary file"""
+        """write a files contents to a temporary file"""
         for k, v in file_dropper.items():
             self.text_in = tempfile.NamedTemporaryFile(delete=False)
             self.text_out = tempfile.NamedTemporaryFile(delete=False)
             with open(self.text_in.name, "w") as f:
                 f.write(v)
             print(f"Uploaded {k} to {self.text_in.name}")
+            self.button_disabled = False
 
     @param.depends("text_in", "text_out", 'duration', 'example')
     async def pipeline_input(self):
+        """Create a PipelineInput object with the current parameters."""
 
         input_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
         output_dict = {"type": "text.TextDataset",
@@ -200,8 +214,9 @@ class BaseExample00Form(pn.viewable.Viewer):
         })
 
     async def run(self, event):
+        """Run the pipeline with the current input and parameters."""
         p_input = await self.pipeline_input()
-        result = await self.client.create_pipeline(p_input)
+        result = await self.spec["config"]["client"].create_pipeline(p_input)
         self.navigate(result.id)
 
     def __panel__(self):
@@ -210,15 +225,21 @@ class BaseExample00Form(pn.viewable.Viewer):
 
 @ui_form(pipeline="example00")
 class Example00PipelineFormV1(BaseExample00Form):
+    """Form for the example00 pipeline.
+    This form allows users to upload a file, run the pipeline, and navigate to the pipeline dashboard.
+    It inherits from BaseExample00Form and implements the __panel__ method to create the form layout.
+    """
 
     def __init__(self, **params):
         super().__init__(**params)
 
     def __panel__(self):
+        """Create the Panel component for the example00 pipeline form."""
         run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
         pn.bind(self.run, run_button, watch=True)
+        pn.bind(self.button_disabled, run_button.disabled, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
@@ -236,11 +257,16 @@ class Example00PipelineFormV1(BaseExample00Form):
 
 @ui_form(pipeline="example00")
 class Example00PipelineFormV2(BaseExample00Form):
+    """Another example form for the example00 pipeline.
+    This form allows users to enter additional parameters and upload a file.
+    It inherits from BaseExample00Form and implements the __panel__ method to create the form layout.
+    """
 
     def __init__(self, **params):
         super().__init__(**params)
 
     def __panel__(self):
+        """Create the Panel component for the example00 pipeline form with additional parameters."""
         run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
@@ -277,6 +303,7 @@ a pipeline's dashboard. The specification of `@ui_data` plugin is as follows:
 
 ```
 class ExampleData(pn.viewable.Viewer):
+    spec = param.Dict(default={})
     client = param.ClassSelector(class_=KedroGraphqlClient)
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Table 1")
@@ -302,9 +329,20 @@ pn.extension('tabulator', css_files=[
 
 @ui_data(pipeline="example00")
 class Example00Data00(pn.viewable.Viewer):
+    """Data viewer for the example00 pipeline.
+    This viewer displays a sample DataFrame in a Tabulator widget.
+    It inherits from pn.viewable.Viewer and implements the __panel__ method to create the data view.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        id (str): The ID of the data viewer.
+        pipeline (Pipeline): The Kedro pipeline associated with this data viewer.
+        title (str): The title of the data viewer.
+    """
+    spec = param.Dict(default={})
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
-    title = param.String(default="Table 1")
+    title = param.String(default="Plot 1")
 
     def __panel__(self):
 
@@ -325,6 +363,17 @@ class Example00Data00(pn.viewable.Viewer):
 
 @ui_data(pipeline="example00")
 class Example00Data01(pn.viewable.Viewer):
+    """Another data viewer for the example00 pipeline.
+    This viewer displays a sample plot using Bokeh figures.
+    It inherits from pn.viewable.Viewer and implements the __panel__ method to create the plot view.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        id (str): The ID of the data viewer.
+        pipeline (Pipeline): The Kedro pipeline associated with this data viewer.
+        title (str): The title of the data viewer.
+    """
+    spec = param.Dict(default={})
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Plot 1")
@@ -335,11 +384,13 @@ class Example00Data01(pn.viewable.Viewer):
         p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
 
         p1.line([1, 2, 3], [1, 2, 3])
-        p2.circle([1, 2, 3], [1, 2, 3])
+        p2.circle([1, 2, 3], [1, 2, 3], radius=0.1,
+                  fill_color="orange", line_color="black")
 
         c1 = pn.Card(p1, pn.layout.Divider(), p2,
                      title="An example pipeline dashboard", sizing_mode='stretch_width')
         return c1
+
 ```
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
@@ -353,6 +404,7 @@ a pipeline that replace the default dashboard.  The specification of
 
 ```
 class ExampleDashboard(pn.viewable.Viewer):
+    spec = param.Dict(default = {})
     client = param.ClassSelector(class_=KedroGraphqlClient)
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
@@ -377,12 +429,19 @@ from kedro_graphql.ui.decorators import ui_dashboard
 pn.extension('plotly')
 
 @ui_dashboard(pipeline="example01")
-class Example00PipelineUIV1(pn.viewable.Viewer):
+class Example01PipelineUIV1(pn.viewable.Viewer):
+    """Dashboard for the example01 pipeline.
+    This dashboard displays the pipeline stages and allows users to monitor the pipeline's progress.
+    It inherits from pn.viewable.Viewer and implements the __panel__ method to create the dashboard layout.
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        id (str): The ID of the pipeline.
+        pipeline (Pipeline): The Kedro pipeline associated with this dashboard.
+    """
 
-    client = param.ClassSelector(class_=KedroGraphqlClient)
+    spec = param.Dict(default={})
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
-    viz_static = param.String(default="")
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -422,10 +481,11 @@ class Example00PipelineUIV1(pn.viewable.Viewer):
         })
         return pn.pane.Plotly(fig, config={'displayModeBar': False, 'scrollZoom': False})
 
-    @param.depends("client", "pipeline")
+    @param.depends("spec", "pipeline")
     async def build_ui(self):
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        monitor = PipelineMonitor(client=self.client, pipeline=self.pipeline)
+        monitor = PipelineMonitor(
+            client=self.spec["config"]["client"], pipeline=self.pipeline)
         ui = pn.Column(
             pn.Row(self.draw_pipeline()),
             pn.Row(monitor),
@@ -439,28 +499,40 @@ class Example00PipelineUIV1(pn.viewable.Viewer):
         return self.build_ui
 ```
 
-### Component Map
+### UI Specification
 
-The layout and registration of components can also be specified in the 
-`KEDRO_GRAPHQL_UI_COMPONENT_MAP` configuration value.  The default 
-configration is as follows:
+The layout and registration of components is done in the UI YAML specification:
 
 ```
-"KEDRO_GRAPHQL_UI_COMPONENT_MAP": {
-    "dashboard": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory", "params": ["client", "pipeline", "viz_static"]},
-    "pipelines": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_cards.PipelineCards", "params": []},
-    "form": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory", "params": ["component", "client", "pipeline"]},
-    "search": {"sidebar": True, "component": "kedro_graphql.ui.components.pipeline_search.PipelineSearch", "params": ["client"]},
-    "explore": {"sidebar": False, "component": "kedro_graphql.ui.components.pipeline_viz.PipelineViz", "params": ["viz_static, pipeline"]},
-}
+## Kedro GraphQL UI configuration file
+# This file defines the structure and components of the Kedro GraphQL UI.
+config:
+  base_url: /
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
+  site_name: "kedro-graphql UI demo"
+  imports:
+    - "kedro_graphql.ui.plugins"
+pages:
+  pipelines:
+    module: kedro_graphql.ui.components.pipeline_cards.PipelineCards
+    params:
+      form_page: form
+      explore_page: explore
+  search:
+    module: kedro_graphql.ui.components.pipeline_search.PipelineSearch
+    params:
+      dashboard_page: dashboard
+  dashboard:
+    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+  form:
+    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
+  explore:
+    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+nav:
+  sidebar:
+    - name: Pipelines
+      page: pipelines
+    - name: Search 
+      page: search
 ```
-
-- Each key in the dictionary is the name displayed on the button in the navigation sidebar
-  (if "sidebar": True) and  to use for the url parameters when loaded e.g. `http://localhost:5006/?component=dashboard`
-- `component`: a valid import path
-- `params`: a list of parameters the parent application should pass to the component, can include ["client", "component", "id", "pipeline", "viz_static"]
-  - `client` (kedro_graphql.client.KedroGraphqlClient): a KedroGraphqlClient instance
-  - `component` (str): name of the component
-  - `id` (str): id of the pipeline
-  - `pipeline` (str): name of the pipeline
-  - `viz_static` (str): path to static build of kedro viz 
