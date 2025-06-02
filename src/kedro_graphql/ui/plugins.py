@@ -16,6 +16,7 @@ from kedro_graphql.ui.components.pipeline_viz import PipelineViz
 from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.models import PipelineInput
 import json
+
 pn.extension('filedropper')
 
 

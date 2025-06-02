@@ -12,12 +12,20 @@ pn.extension(design='material', global_css=[
 def template_factory(config={}, client=None, viz_static=None):
 
     def build_template():
-        return KedroGraphqlMaterialTemplate(client=client, viz_static=viz_static)
+        return KedroGraphqlMaterialTemplate(client=client, config=config, viz_static=viz_static)
 
     return {config["KEDRO_GRAPHQL_UI_BASEPATH"]: build_template}
 
 
 def start_ui(config={}):
+
+    # import components specified in component map
+    for key, value in config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"].items():
+        module_path, class_name = value["component"].rsplit(".", 1)
+        module = __import__(module_path, fromlist=[class_name])
+        component_class = getattr(module, class_name)
+        config["KEDRO_GRAPHQL_UI_COMPONENT_MAP"][key]["component"] = component_class
+
     import sh
 
     with tempfile.TemporaryDirectory() as tmpdirname:
