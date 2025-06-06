@@ -49,7 +49,7 @@ class BaseExample00Form(pn.viewable.Viewer):
         class_=_TemporaryFileWrapper, default=None)
     duration = param.Number(default=3)
     example = param.String(default="hello")
-    button_disabled = param.Boolean(default=True)
+    disabled = param.Boolean(default=True)
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
@@ -63,7 +63,7 @@ class BaseExample00Form(pn.viewable.Viewer):
             with open(self.text_in.name, "w") as f:
                 f.write(v)
             print(f"Uploaded {k} to {self.text_in.name}")
-            self.button_disabled = False
+            self.disabled = False
 
     @param.depends("text_in", "text_out", 'duration', 'example')
     async def pipeline_input(self):
@@ -83,6 +83,13 @@ class BaseExample00Form(pn.viewable.Viewer):
                            {"name": "duration", "value": str(self.duration), "type": "FLOAT"}],
             "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
         })
+
+    @param.depends('disabled')
+    async def build_run_button(self):
+        button = pn.widgets.Button(
+            name='Run', button_type='success', disabled=self.disabled)
+        pn.bind(self.run, button, watch=True)
+        yield button
 
     async def run(self, event):
         """Run the pipeline with the current input and parameters."""
@@ -106,11 +113,8 @@ class Example00PipelineFormV1(BaseExample00Form):
 
     def __panel__(self):
         """Create the Panel component for the example00 pipeline form."""
-        run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
-        pn.bind(self.run, run_button, watch=True)
-        pn.bind(self.button_disabled, run_button.disabled, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
@@ -118,7 +122,7 @@ class Example00PipelineFormV1(BaseExample00Form):
                 file_dropper
             ),
             pn.Row(
-                run_button
+                self.build_run_button
             ),
             sizing_mode="stretch_width",
             title='Form')
@@ -138,10 +142,9 @@ class Example00PipelineFormV2(BaseExample00Form):
 
     def __panel__(self):
         """Create the Panel component for the example00 pipeline form with additional parameters."""
-        run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
-        pn.bind(self.run, run_button, watch=True)
+
         form = pn.Card(
             "Another example pipeline form.",
             pn.Row(
@@ -156,7 +159,7 @@ class Example00PipelineFormV2(BaseExample00Form):
                 file_dropper
             ),
             pn.Row(
-                run_button
+                self.build_run_button
             ),
             sizing_mode="stretch_width",
             title='Form')
@@ -266,6 +269,7 @@ class BaseExample01Form(pn.viewable.Viewer):
 
     duration = param.Number(default=3)
     example = param.String(default="hello")
+    disabled = param.Boolean(default=True)
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
@@ -281,6 +285,7 @@ class BaseExample01Form(pn.viewable.Viewer):
             with open(self.text_in.name, "w") as f:
                 f.write(v)
             print(f"Uploaded {k} to {self.text_in.name}")
+            self.disabled = False
 
     @param.depends("text_in", "uppercase", 'reversed', 'timestamped')
     async def pipeline_input(self):
@@ -306,6 +311,13 @@ class BaseExample01Form(pn.viewable.Viewer):
             "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
         })
 
+    @param.depends('disabled')
+    async def build_run_button(self):
+        button = pn.widgets.Button(
+            name='Run', button_type='success', disabled=self.disabled)
+        pn.bind(self.run, button, watch=True)
+        yield button
+
     async def run(self, event):
         """Run the pipeline with the current input and parameters."""
         p_input = await self.pipeline_input()
@@ -327,10 +339,8 @@ class Example01PipelineFormV1(BaseExample01Form):
         super().__init__(**params)
 
     def __panel__(self):
-        run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
-        pn.bind(self.run, run_button, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
@@ -338,7 +348,7 @@ class Example01PipelineFormV1(BaseExample01Form):
                 file_dropper
             ),
             pn.Row(
-                run_button
+                self.build_run_button
             ),
             sizing_mode="stretch_width",
             title='Form')

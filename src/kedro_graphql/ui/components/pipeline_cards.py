@@ -1,7 +1,6 @@
 import param
 import panel as pn
-from kedro_graphql.ui.decorators import discover_plugins, UI_PLUGINS
-from kedro_graphql.config import config
+from kedro_graphql.ui.decorators import UI_PLUGINS
 
 
 class PipelineCards(pn.viewable.Viewer):
@@ -22,15 +21,6 @@ class PipelineCards(pn.viewable.Viewer):
 
     def __init__(self, **params):
         super().__init__(**params)
-
-    def _get_gql_forms(self):
-        """Return all the @ui_form plugins registered in the project.
-
-        Returns:
-            [@ui_form plugin (panel.viewable.Viewer)] 
-        """
-        discover_plugins(config)
-        return UI_PLUGINS["FORMS"]
 
     def navigate(self, button_click, event=None, pipeline=None, form=None):
         """Navigate to the specified page with the given pipeline and form.
@@ -56,9 +46,8 @@ class PipelineCards(pn.viewable.Viewer):
         Yields:
             pn.FlexBox: A flexible box containing cards for each pipeline.
         """
-        plugins = self._get_gql_forms()
         p_cards = []
-        for pipeline, forms in plugins.items():
+        for pipeline, forms in UI_PLUGINS["FORMS"].items():
             p_card = pn.Card(title=pipeline, sizing_mode='stretch_width')
             run_button = pn.widgets.Button(name='Run', button_type='success')
             explore_button = pn.widgets.Button(name='Explore', button_type='default')
