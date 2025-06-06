@@ -1,4 +1,4 @@
-FROM python:3.11.9-alpine3.19
+FROM python:3.11.13-alpine3.20
 
 COPY . /opt/kedro-graphql
 
@@ -14,11 +14,9 @@ RUN apk add --no-cache --virtual .build-dependencies build-base curl-dev \
     && pip install pycurl \
     && apk del .build-dependencies
 
-RUN pip install -r /opt/kedro-graphql/src/requirements.txt
-
 WORKDIR /opt/kedro-graphql
 
-RUN pip install -e .[viz]
+RUN pip install -e .[ui]
 
 EXPOSE 5000
 
