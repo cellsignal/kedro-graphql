@@ -11,12 +11,29 @@ keywords = [
     "data pipelines",
     "data science",
     "data engineering",
+    "graphql"
 ]
-license = {text = "Apache Software License (Apache 2.0)"}
+license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
-dynamic = ["version", "readme", "dependencies"]
+dynamic = ["version", "readme"]
+dependencies = [
+    "kedro==0.19.11",
+    "kedro-datasets>=3.0.0",
+    "fastapi>=0.115.11",
+    "pymongo>=4.7.2",
+    "python-dotenv>=1.0.1",
+    "gql[all]>=3.5.1",
+    "strawberry-graphql>=0.262.5",
+    "uvicorn[standard]>=0.30.0",
+    "redis>=5.0.0",
+    "click>=4.0",
+    "celery>=5.4.0",
+    "boto3>=1.26.160",
+    "asyncio>=3.4.3"
+]
 
 [project.scripts]
 kedro-graphql = "kedro_graphql.__main__:main"
@@ -33,13 +50,26 @@ Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
 
 [project.optional-dependencies]
-test = ["minio~=7.1.15", "s3fs~=2023.5.0", "pandas~=2.2.0"] 
-ui = ["panel~=1.6.1", "kedro-viz~=10.2.0", "sh~=2.2.2"]
+test = [
+    "pandas>=2.2.0",
+    "pytest-cov>=3,<7",
+    "pytest-mock>=1.7.1, <4.0",
+    "pytest>=7.2,<9.0",
+    "pytest-asyncio>=0.23.7",    
+    "celery[pytest]~=5.4.0",
+]
+experimental = [
+    "minio~=7.1.15", 
+]
+ui = [
+    "panel>=1.6.1", 
+    "kedro-viz>=10.2.0", 
+    "sh>=2.2.2",
+]
 
 [tool.setuptools.dynamic]
 readme = {file = "README.md", content-type = "text/markdown"}
 version = {attr = "kedro_graphql.__version__"}
-dependencies = {file = "src/requirements.txt"}
 
 [tool.kedro]
 package_name = "kedro_graphql"

@@ -25,16 +25,17 @@ pip install kedro_graphql[ui]
 
 ### Start the UI
 
-Start the UI server.
+Start the UI server.  Fetch the ui.yaml from the [UI YAML Specification](#ui-yaml-specification)
+section below or from the repository.
 
 ```
-kedro gql --ui --imports "kedro_graphql.ui.plugins"
+kedro gql --ui --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
 ```
-kedro gql -r -u -i "kedro_graphql.ui.plugins"
+kedro gql -r -u --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Start the GraphQL API.
@@ -70,10 +71,10 @@ to use from the dropdown menu.
 ![pipeline forms](./02_ui_pipeline_form.png)
 
 
-### Dashboards
+### Default Dashboard
 
 After completing the form and clicking the "Run" button the
-pipeline dashboard will load with the following tabs:
+pipeline dashboard will load a default dashboard with the following tabs:
 
 **Monitor**
 
@@ -93,12 +94,16 @@ Visualize the pipeline with [kedro-viz](https://github.com/kedro-org/kedro-viz).
 
 ![pipeline viz](./05_ui_pipeline_viz_00.png)
 
-**Custom Tabs**
+**Adding Custom Tabs the default dashboard**
 
 Additional tabs with custom components can be added to a pipeline's dashboard 
 by registering one or more `@ui_data` [plugins](#plugins).
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
+
+### Custom Dashboards
+
+The default dashboard can be replaced using the `@ui_dashboard` decorator.
 
 ### Search
 
@@ -107,16 +112,20 @@ The search component can be used to search the entire pipeline collection.
 ![pipeline viz](./01_ui_pipeline_search.png)
 
 
-## Plugins
+## Plugins & Customization
 
-Currently, the functionality of the UI can be extended by registering 
-`@ui_form` and `@ui_data` plugins.  Plugins can be imported when starting
-the UI application using the `-i` or `--imports` cli flags.  For example:
+Currently, the functionality of the UI can be customized using the following approaches:
+
+- Use the [UI YAML Specification](#ui-yaml-specification)
+- Use the `@ui_form` and `@ui_data` plugins to add custom tabs to the default dashboard of a pipeline.  
+- Use the `@ui_dashboard` plugin to replace the default dashboard with your own implementation.  
+
+Plugins can be imported when starting the UI application using the `-i` or 
+`--imports` cli flags.  For example:
 
 ```
 kedro gql --ui --imports "kedro_graphql.ui.plugins"
 ```
-
 
 ### @ui_form
 
@@ -125,6 +134,7 @@ a pipeline.  The specification of `@ui_form` plugin is as follows:
 
 ```
 class ExampleForm(pn.viewable.Viewer):
+    spec = param.Dict(default={})
     client = param.ClassSelector(class_=KedroGraphqlClient)
     dashboard = param.String(default="dashboard")
 
@@ -150,32 +160,54 @@ from kedro_graphql.models import PipelineInput
 import json
 pn.extension('filedropper')
 
-
 class BaseExample00Form(pn.viewable.Viewer):
-    client = param.ClassSelector(class_=KedroGraphqlClient)
-    dashboard = param.String(default="dashboard")
+    """Base class for example00 pipeline forms.
+    This class provides the basic functionality for uploading files, running the pipeline,
+    and navigating to the pipeline dashboard.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        text_in (_TemporaryFileWrapper): A temporary file wrapper for the input text file.
+        text_out (_TemporaryFileWrapper): A temporary file wrapper for the output text file.
+        duration (int): The duration parameter for the pipeline.
+        example (str): An example string parameter for the pipeline.
+        button_disabled (bool): A flag to disable the run button until a file is uploaded.
+
+    Methods:
+        navigate(pipeline_id: str): Navigate to the pipeline dashboard with the given ID.
+        upload(file_dropper): Write the contents of the uploaded file to a temporary file.
+        pipeline_input(): Create a PipelineInput object with the current parameters.
+        run(event): Run the pipeline with the current input and parameters.
+        __panel__(): Return a Panel component for the form.
+
+    This class should be subclassed to implement specific forms for the example00 pipeline.
+    """
+    spec = param.Dict(default={})
     text_in = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     text_out = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     duration = param.Number(default=3)
     example = param.String(default="hello")
+    button_disabled = param.Boolean(default=True)
 
     def navigate(self, pipeline_id: str):
-        pn.state.location.search = "?component=" + \
-            self.dashboard+"&pipeline=example00&id=" + pipeline_id
+        """Navigate to the pipeline dashboard with the given ID."""
+        pn.state.location.search = "?page=dashboard&pipeline=example00&id=" + pipeline_id
 
     async def upload(self, file_dropper):
-        """write a files contens to a temporary file"""
+        """write a files contents to a temporary file"""
         for k, v in file_dropper.items():
             self.text_in = tempfile.NamedTemporaryFile(delete=False)
             self.text_out = tempfile.NamedTemporaryFile(delete=False)
             with open(self.text_in.name, "w") as f:
                 f.write(v)
             print(f"Uploaded {k} to {self.text_in.name}")
+            self.button_disabled = False
 
     @param.depends("text_in", "text_out", 'duration', 'example')
     async def pipeline_input(self):
+        """Create a PipelineInput object with the current parameters."""
 
         input_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
         output_dict = {"type": "text.TextDataset",
@@ -193,8 +225,9 @@ class BaseExample00Form(pn.viewable.Viewer):
         })
 
     async def run(self, event):
+        """Run the pipeline with the current input and parameters."""
         p_input = await self.pipeline_input()
-        result = await self.client.create_pipeline(p_input)
+        result = await self.spec["config"]["client"].create_pipeline(p_input)
         self.navigate(result.id)
 
     def __panel__(self):
@@ -203,15 +236,21 @@ class BaseExample00Form(pn.viewable.Viewer):
 
 @ui_form(pipeline="example00")
 class Example00PipelineFormV1(BaseExample00Form):
+    """Form for the example00 pipeline.
+    This form allows users to upload a file, run the pipeline, and navigate to the pipeline dashboard.
+    It inherits from BaseExample00Form and implements the __panel__ method to create the form layout.
+    """
 
     def __init__(self, **params):
         super().__init__(**params)
 
     def __panel__(self):
+        """Create the Panel component for the example00 pipeline form."""
         run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
         pn.bind(self.run, run_button, watch=True)
+        pn.bind(self.button_disabled, run_button.disabled, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
@@ -229,11 +268,16 @@ class Example00PipelineFormV1(BaseExample00Form):
 
 @ui_form(pipeline="example00")
 class Example00PipelineFormV2(BaseExample00Form):
+    """Another example form for the example00 pipeline.
+    This form allows users to enter additional parameters and upload a file.
+    It inherits from BaseExample00Form and implements the __panel__ method to create the form layout.
+    """
 
     def __init__(self, **params):
         super().__init__(**params)
 
     def __panel__(self):
+        """Create the Panel component for the example00 pipeline form with additional parameters."""
         run_button = pn.widgets.Button(name='Run', button_type='success')
         file_dropper = pn.widgets.FileDropper(multiple=False)
         pn.bind(self.upload, file_dropper, watch=True)
@@ -270,7 +314,8 @@ a pipeline's dashboard. The specification of `@ui_data` plugin is as follows:
 
 ```
 class ExampleData(pn.viewable.Viewer):
-    client = param.ClassSelector(class_=KedroGraphqlClient)
+    spec = param.Dict(default={})
+    id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Table 1")
 
@@ -295,9 +340,20 @@ pn.extension('tabulator', css_files=[
 
 @ui_data(pipeline="example00")
 class Example00Data00(pn.viewable.Viewer):
+    """Data viewer for the example00 pipeline.
+    This viewer displays a sample DataFrame in a Tabulator widget.
+    It inherits from pn.viewable.Viewer and implements the __panel__ method to create the data view.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        id (str): The ID of the data viewer.
+        pipeline (Pipeline): The Kedro pipeline associated with this data viewer.
+        title (str): The title of the data viewer.
+    """
+    spec = param.Dict(default={})
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
-    title = param.String(default="Table 1")
+    title = param.String(default="Plot 1")
 
     def __panel__(self):
 
@@ -318,6 +374,17 @@ class Example00Data00(pn.viewable.Viewer):
 
 @ui_data(pipeline="example00")
 class Example00Data01(pn.viewable.Viewer):
+    """Another data viewer for the example00 pipeline.
+    This viewer displays a sample plot using Bokeh figures.
+    It inherits from pn.viewable.Viewer and implements the __panel__ method to create the plot view.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and pages.
+        id (str): The ID of the data viewer.
+        pipeline (Pipeline): The Kedro pipeline associated with this data viewer.
+        title (str): The title of the data viewer.
+    """
+    spec = param.Dict(default={})
     id = param.String(default="")
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Plot 1")
@@ -328,7 +395,8 @@ class Example00Data01(pn.viewable.Viewer):
         p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
 
         p1.line([1, 2, 3], [1, 2, 3])
-        p2.circle([1, 2, 3], [1, 2, 3])
+        p2.circle([1, 2, 3], [1, 2, 3], radius=0.1,
+                  fill_color="orange", line_color="black")
 
         c1 = pn.Card(p1, pn.layout.Divider(), p2,
                      title="An example pipeline dashboard", sizing_mode='stretch_width')
@@ -336,3 +404,134 @@ class Example00Data01(pn.viewable.Viewer):
 ```
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
+
+
+### @ui_dashboard
+
+The `@ui_dashboard` decorator can be used to register one or more dashboards to
+a pipeline that replace the default dashboard.  The specification of 
+`@ui_dashboard` plugin is as follows:
+
+```
+class ExampleDashboard(pn.viewable.Viewer):
+    client = param.ClassSelector(class_=KedroGraphqlClient)
+    id = param.String(default="")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    viz_static = param.String(default="")
+
+    def __panel__(self):
+        raise NotImplementedError
+```
+
+The example shown below will register one custom dashboard to the 
+`example01` pipeline that will replace the default dashboard.
+
+```
+# kedro_graphql.ui.plugins
+import panel as pn
+import numpy as np
+import param
+import plotly.graph_objects as go
+from kedro_graphql.models import Pipeline
+from kedro_graphql.ui.decorators import ui_dashboard
+
+pn.extension('plotly')
+
+@ui_dashboard(pipeline="example01")
+class Example00PipelineUIV1(pn.viewable.Viewer):
+
+    client = param.ClassSelector(class_=KedroGraphqlClient)
+    id = param.String(default="")
+    pipeline = param.ClassSelector(class_=Pipeline)
+    viz_static = param.String(default="")
+
+    def __init__(self, **params):
+        super().__init__(**params)
+
+    def draw_pipeline(self):
+        nodes = ["stage 1", "stage 2", "stage 3"]
+        # it would be nice to get nodes from the pipeline object instead
+
+        # Define node colors, default color is blue
+        node_colors = ['blue'] * len(nodes)
+        node_colors[1] = 'green'  # Change color of the second node to green
+
+        # Define edges as tuples of node indices
+        node_trace = go.Scatter(
+            x=nodes,
+            y=[0, 0, 0],
+            mode='lines+markers',
+            text=[nodes],
+            marker=dict(
+                size=20,
+                color=node_colors
+            ),
+            line=dict(width=2, color='gray'),
+            textposition='bottom center'
+        )
+        fig = go.Figure(data=[node_trace],
+                        layout=go.Layout(showlegend=False))
+
+        fig.update_layout({
+            "plot_bgcolor": "rgba(0, 0, 0, 0)",
+            "paper_bgcolor": "rgba(0, 0, 0, 0)",
+            'xaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': True},
+            'yaxis': {'showgrid': False, 'zeroline': False, 'showticklabels': False},
+            'hovermode': False,
+            'height': 100,
+            'margin': dict(t=0, b=0, l=0, r=0),
+        })
+        return pn.pane.Plotly(fig, config={'displayModeBar': False, 'scrollZoom': False})
+
+    @param.depends("client", "pipeline")
+    async def build_ui(self):
+        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        monitor = PipelineMonitor(client=self.client, pipeline=self.pipeline)
+        ui = pn.Column(
+            pn.Row(self.draw_pipeline()),
+            pn.Row(monitor),
+            sizing_mode="stretch_width")
+
+        yield ui
+
+    def __panel__(self):
+
+        pn.state.location.sync(self, {"id": "id"})
+        return self.build_ui
+```
+
+### UI YAML Specification
+
+```
+## Kedro GraphQL UI configuration file
+# This file defines the structure and components of the Kedro GraphQL UI.
+config:
+  base_url: /
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
+  site_name: "kedro-graphql UI demo"
+  imports:
+    - "kedro_graphql.ui.plugins"
+pages:
+  pipelines:
+    module: kedro_graphql.ui.components.pipeline_cards.PipelineCards
+    params:
+      form_page: form
+      explore_page: explore
+  search:
+    module: kedro_graphql.ui.components.pipeline_search.PipelineSearch
+    params:
+      dashboard_page: dashboard
+  dashboard:
+    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+  form:
+    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
+  explore:
+    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+nav:
+  sidebar:
+    - name: Pipelines
+      page: pipelines
+    - name: Search 
+      page: search
+```

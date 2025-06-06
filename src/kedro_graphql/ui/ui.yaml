@@ -1,0 +1,31 @@
+## Kedro GraphQL UI configuration file
+# This file defines the structure and components of the Kedro GraphQL UI.
+config:
+  base_url: /
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
+  site_name: "kedro-graphql UI demo"
+  imports:
+    - "kedro_graphql.ui.plugins"
+pages:
+  pipelines:
+    module: kedro_graphql.ui.components.pipeline_cards.PipelineCards
+    params:
+      form_page: form
+      explore_page: explore
+  search:
+    module: kedro_graphql.ui.components.pipeline_search.PipelineSearch
+    params:
+      dashboard_page: dashboard
+  dashboard:
+    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+  form:
+    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
+  explore:
+    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+nav:
+  sidebar:
+    - name: Pipelines
+      page: pipelines
+    - name: Search 
+      page: search

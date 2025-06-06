@@ -2,7 +2,6 @@
 import panel as pn
 import param
 import pandas as pd
-from kedro_graphql.client import KedroGraphqlClient
 import json
 
 pn.extension('tabulator', css_files=[
@@ -13,7 +12,24 @@ pn.extension('tabulator', css_files=[
 
 
 class PipelineSearch(pn.viewable.Viewer):
-    client = param.ClassSelector(class_=KedroGraphqlClient)
+    """A component that allows users to search for pipelines in the Kedro GraphQL UI.
+    This component provides a search bar, results per page selection, and buttons to load more or previous results.
+    It displays the results in a table format with clickable rows to navigate to the pipeline details.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and client.
+        limit (int): The number of results to display per page.
+        cursor (str): The cursor for pagination.
+        filter (str): The filter string for searching pipelines.
+        prev_cursor (str): The cursor for the previous page.
+        next_cursor (str): The cursor for the next page.
+        more_clicks (int): The number of clicks on the "Load More" button.
+        prev_clicks (int): The number of clicks on the "Load Previous" button.
+        cursors (list): A list of cursors for pagination.
+        cursor_index (int): The index of the current cursor in the cursors list.
+        dashboard_page (str): The page to navigate to when a pipeline is clicked.
+    """
+    spec = param.Dict(default={})
     limit = param.Integer(default=10)
     cursor = param.String(default=None)
     filter = param.String(default="")
@@ -23,12 +39,19 @@ class PipelineSearch(pn.viewable.Viewer):
     prev_clicks = param.Integer(default=0)
     cursors = param.List(default=[])
     cursor_index = param.Integer(default=0)
-    dashboard = param.String(default="dashboard")
+    dashboard_page = param.String(
+        default="dashboard", doc="The page to navigate to when a pipeline is clicked.")
 
     def navigate(self, event, df):
+        """Navigate to the pipeline details page when a row is clicked.
+        Args:
+            event (pn.widgets.Tabulator.ClickEvent): The event triggered by clicking a row.
+            df (pd.DataFrame): The DataFrame containing pipeline data.
+        """
         if event.column == "Open":
-            pn.state.location.search = "?component="+self.dashboard+"&pipeline=" + \
+            pn.state.location.search = "?page=" + self.dashboard_page + "&pipeline=" + \
                 df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
+            pn.state.location.reload = True
 
     def build_filter(self, raw):
         """Build a filter string from  a raw string.
@@ -79,13 +102,23 @@ class PipelineSearch(pn.viewable.Viewer):
             return json.dumps(filter)
 
     async def build_table(self, limit, filter, load_more, load_prev, show_lineage):
+        """Builds a table of pipelines based on the provided filter and pagination parameters.
+        Args:
+            limit (int): The number of results to display per page.
+            filter (str): The filter string for searching pipelines.
+            load_more (int): The number of clicks on the "Load More" button.
+            load_prev (int): The number of clicks on the "Load Previous" button.
+            show_lineage (list): A list indicating whether to show lineage in the table.
+        Yields:
+            pn.widgets.Tabulator: A table displaying the pipelines with clickable rows.
+        """
         # TO DO enable switching to a searchable dataset view grouped by pipeline
         yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         f = self.build_filter(filter)
         if load_more > self.more_clicks and "id=" not in filter:
-            result = await self.client.read_pipelines(limit=limit,
-                                                      cursor=self.next_cursor,
-                                                      filter=f)
+            result = await self.spec["config"]["client"].read_pipelines(limit=limit,
+                                                                        cursor=self.next_cursor,
+                                                                        filter=f)
             pipelines = result.pipelines
             if self.cursors[-1] != self.next_cursor:
                 self.cursors.append(self.next_cursor)
@@ -102,9 +135,9 @@ class PipelineSearch(pn.viewable.Viewer):
                 cursor = None
                 self.cursors = [None]
 
-            result = await self.client.read_pipelines(limit=limit,
-                                                      cursor=cursor,
-                                                      filter=f)
+            result = await self.spec["config"]["client"].read_pipelines(limit=limit,
+                                                                        cursor=cursor,
+                                                                        filter=f)
             pipelines = result.pipelines
             self.prev_clicks = load_prev
 
@@ -112,15 +145,15 @@ class PipelineSearch(pn.viewable.Viewer):
             if "id=" in filter:
                 id = filter.split("id=")[1]
                 id = id.split(",")[0]
-                result = await self.client.read_pipeline(id=id)
+                result = await self.spec["config"]["client"].read_pipeline(id=id)
                 pipelines = [result]
                 self.cursors = [None]
             else:
                 cursor = None
 
-                result = await self.client.read_pipelines(limit=limit,
-                                                          cursor=cursor,
-                                                          filter=f)
+                result = await self.spec["config"]["client"].read_pipelines(limit=limit,
+                                                                            cursor=cursor,
+                                                                            filter=f)
                 pipelines = result.pipelines
                 self.cursors = [None]
                 self.next_cursor = result.page_meta.next_cursor
