@@ -304,7 +304,7 @@ class BaseExample01Form(pn.viewable.Viewer):
             "name": "example01",
             "state": "READY",
             "data_catalog": [{"name": "text_in", "config": json.dumps(text_in_dict)},
-                             {"name": "uppercase",
+                             {"name": "uppercased",
                                  "config": json.dumps(uppercase_dict)},
                              {"name": "reversed", "config": json.dumps(reversed_dict)},
                              {"name": "timestamped", "config": json.dumps(timestamped_dict)}],
