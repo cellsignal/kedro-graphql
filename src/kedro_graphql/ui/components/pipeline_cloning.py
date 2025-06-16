@@ -9,6 +9,17 @@ from copy import deepcopy
 pn.extension('modal')
 pn.extension(notifications=True)
 
+item_styles = {
+    'margin-top': 'auto',
+    'margin-bottom': 'auto',
+    'justify-content': 'left',
+    'background-color': '#f0f0f0',
+    'padding': '10px',
+    'margin': '10px',
+    'border-radius': '5px',
+    'word-break': 'break-all',
+}
+
 
 class PipelineCloning(pn.viewable.Viewer):
     """A component that clones a Kedro pipeline
@@ -37,14 +48,10 @@ class PipelineCloning(pn.viewable.Viewer):
         stage_button.on_click(lambda event: asyncio.create_task(self.clone_pipeline(type="staged")))
 
         self.view = pn.Column(
-            pn.layout.Divider(),
             self.datasets_section,
-            pn.layout.Divider(),
             self.parameters_section,
-            pn.layout.Divider(),
             self.tags_section,
-            pn.layout.Divider(),
-            pn.Row(stage_button, run_button), margin=(10, 10), scroll=True
+            pn.Row(stage_button, run_button, styles={'margin-top': '25px'}), margin=(10, 10), scroll=True
         )
 
     def _create_datasets_section(self):
@@ -57,15 +64,21 @@ class PipelineCloning(pn.viewable.Viewer):
                 name = dataset.name
                 filepath = config.get("filepath", "")
 
-                edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100)
+                edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100, styles={
+                                                'margin-top': 'auto', 'margin-bottom': 'auto'})
                 modal = self._dataset_edit_modal(dataset, edit_button)
 
-                dataset_block = pn.Row(edit_button, pn.pane.Markdown(f"**{name}**: `{filepath}`"), modal)
+                dataset_block = pn.Row(edit_button, pn.Column(
+                    pn.pane.HTML(f"<b>Name</b>: {name}", styles={'font-size': '16px'}),
+                    pn.pane.HTML(f"<b>Filepath</b>: {filepath}", styles={'font-size': '16px'}),
+                    styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
+                    modal, styles=item_styles)
                 widgets.append(dataset_block)
 
         return pn.Column(
             pn.pane.Markdown("## Datasets"),
-            *widgets if widgets else [pn.pane.Markdown("No datasets found.")],
+            pn.FlexBox(
+                *widgets) if widgets else pn.pane.Markdown("No datasets found."),
         )
 
     def _dataset_edit_modal(self, dataset, trigger):
@@ -81,12 +94,11 @@ class PipelineCloning(pn.viewable.Viewer):
                 modal = self._delete_dataset_tag_modal(dataset, tag, delete_button)
                 tag_key_input = pn.widgets.TextInput(name="Tag Key", value=tag.key)
                 tag_value_input = pn.widgets.TextInput(name="Tag Value", value=tag.value)
-                tag_inputs.append(pn.Row(delete_button, tag_key_input, tag_value_input, modal))
+                tag_inputs.append(pn.Row(delete_button, pn.Column(tag_key_input, tag_value_input), modal, styles={
+                    'border': '1px solid #cccccc', 'padding': '10px', 'margin': '10px', 'border-radius': '5px'}))
 
             for row in tag_inputs:
                 modal_items.extend([row])
-        else:
-            modal_items.append(pn.pane.Markdown("No tags found."))
 
         save_button = pn.widgets.Button(name="Save", button_type="success")
         cancel_button = pn.widgets.Button(name="Cancel")
@@ -94,7 +106,7 @@ class PipelineCloning(pn.viewable.Viewer):
         add_button = pn.widgets.Button(name="Add Tag", button_type="success", width=100)
         add_tag_modal = self._add_dataset_tag_modal(dataset, add_button)
         modal_items.append(pn.Row(add_button, add_tag_modal))
-        modal_items.append(pn.Row(cancel_button, save_button))
+        modal_items.append(pn.Row(cancel_button, save_button, styles={'margin-top': '25px'}))
 
         modal = pn.Modal("### Edit Dataset", *modal_items)
 
@@ -111,7 +123,7 @@ class PipelineCloning(pn.viewable.Viewer):
             dataset.config = json.dumps(config)
 
             modal.hide()
-            self.view[1] = self._create_datasets_section()
+            self.view[0] = self._create_datasets_section()
 
         def cancel(event):
             filepath_input.value = original_path
@@ -137,7 +149,7 @@ class PipelineCloning(pn.viewable.Viewer):
             for i, t in enumerate(dataset.tags):
                 if t.key == tag.key and t.value == tag.value:
                     del dataset.tags[i]
-                    self.view[1] = self._create_datasets_section()
+                    self.view[0] = self._create_datasets_section()
                     pn.state.notifications.success("Tag deleted successfully.", duration=10000)
                     break
 
@@ -175,7 +187,7 @@ class PipelineCloning(pn.viewable.Viewer):
                 pn.state.notifications.error("Key or value cannot be empty.", duration=10000)
 
             modal.hide()
-            self.view[1] = self._create_datasets_section()
+            self.view[0] = self._create_datasets_section()
 
         def cancel(event):
             key_input.value = ""
@@ -194,21 +206,25 @@ class PipelineCloning(pn.viewable.Viewer):
         widgets = []
         if self.state.parameters:
             for parameter in self.state.parameters:
-                edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100)
+                edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100, styles={
+                    'margin-top': 'auto', 'margin-bottom': 'auto'})
                 modal = self._param_edit_modal(parameter, edit_button)
                 widgets.append(pn.Row(
                     edit_button,
-                    pn.pane.Markdown(f"**{parameter.name}**: `{parameter.value}` ({parameter.type.value})"),
-                    modal
+                    pn.Column(pn.pane.HTML(f"<b>Name</b>: {parameter.name}", styles={'font-size': '16px'}),
+                              pn.pane.HTML(f"<b>Value</b>: {parameter.value}", styles={'font-size': '16px'}),
+                              pn.pane.HTML(f"<b>Type</b>: {parameter.type.value}", styles={'font-size': '16px'}), styles={
+                        'margin-top': 'auto', 'margin-bottom': 'auto'}),
+                    modal, styles=item_styles
                 ))
 
         return pn.Column(
             pn.pane.Markdown("## Parameters"),
-            *widgets if widgets else [pn.pane.Markdown("No parameters found.")],
+            pn.FlexBox(
+                *widgets) if widgets else pn.pane.Markdown("No parameters found."),
         )
 
     def _param_edit_modal(self, parameter, trigger):
-        name_input = pn.widgets.TextInput(name="Name", value=parameter.name)
         value_input = pn.widgets.TextInput(name="Value", value=parameter.value)
         type_input = pn.widgets.Select(
             name="Type", options=["string", "float", "boolean", "integer"],
@@ -216,18 +232,17 @@ class PipelineCloning(pn.viewable.Viewer):
 
         save_button = pn.widgets.Button(name="Save", button_type="success")
         cancel_button = pn.widgets.Button(name="Cancel")
-        modal = pn.Modal("### Edit Parameter", name_input, value_input, type_input, pn.Row(cancel_button, save_button))
+        modal = pn.Modal(f"### Edit Parameter '{parameter.name}'", value_input, type_input, pn.Row(
+            cancel_button, save_button, styles={'margin-top': '25px'}))
 
         def open_modal(event):
             modal.show()
 
         def save(event):
             new_value = value_input.value.strip()
-            new_name = name_input.value.strip()
             new_type = type_input.value
-            if new_name and new_value:
+            if new_value:
                 parameter.value = new_value
-                parameter.name = new_name
                 if new_type == "float":
                     parameter.type = ParameterType.FLOAT
                 elif new_type == "boolean":
@@ -237,14 +252,13 @@ class PipelineCloning(pn.viewable.Viewer):
                 else:
                     parameter.type = ParameterType.STRING
                 modal.hide()
-                self.view[3] = self._create_parameters_section()
+                self.view[1] = self._create_parameters_section()
 
             else:
                 pn.state.notifications.error("Name, value or type cannot be empty.", duration=10000)
 
         def cancel(event):
             value_input.value = parameter.value
-            name_input.value = parameter.name
             type_input.value = parameter.type
             modal.hide()
 
@@ -264,16 +278,24 @@ class PipelineCloning(pn.viewable.Viewer):
                 edit_tag_modal = self._tag_edit_modal(tag, edit_button)
                 delete_button = pn.widgets.Button(name="Delete", button_type="danger", width=100)
                 delete_tag_modal = self._pipeline_tag_delete_modal(tag, delete_button)
-                widgets.append(pn.Row(edit_button, delete_button, pn.pane.Markdown(
-                    f"**{tag.key}**: `{tag.value}`"), edit_tag_modal, delete_tag_modal))
+                widgets.append(
+                    pn.Row(
+                        pn.Column(edit_button, delete_button, styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
+                        pn.Column(
+                            pn.pane.HTML(f"<b>Key</b>: {tag.key}", styles={'font-size': '16px'}),
+                            pn.pane.HTML(f"<b>Value</b>: {tag.value}", styles={'font-size': '16px'}),
+                            styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
+                        edit_tag_modal, delete_tag_modal,
+                        styles=item_styles))
 
-        add_button = pn.widgets.Button(name="Add Tag", button_type="success", width=100)
+        add_button = pn.widgets.Button(name="Add", button_type="success", width=100,
+                                       styles={'margin-top': 'auto', 'margin-bottom': 'auto'})
+        widgets.append(pn.Row(add_button, styles=item_styles))
         add_tag_modal = self._add_tag_modal(add_button)
 
         return pn.Column(
             pn.pane.Markdown("## Pipeline Tags"),
-            *widgets if widgets else [pn.pane.Markdown("No tags found.")],
-            add_button,
+            pn.FlexBox(*widgets),
             add_tag_modal
         )
 
@@ -283,7 +305,8 @@ class PipelineCloning(pn.viewable.Viewer):
 
         save_button = pn.widgets.Button(name="Save", button_type="success")
         cancel_button = pn.widgets.Button(name="Cancel")
-        modal = pn.Modal("### Add Tag", key_input, value_input, pn.Row(cancel_button, save_button))
+        modal = pn.Modal("### Add Tag", key_input, value_input, pn.Row(cancel_button, save_button, styles={
+            'margin-top': '25px'}))
 
         def open_modal(event):
             modal.show()
@@ -294,7 +317,7 @@ class PipelineCloning(pn.viewable.Viewer):
             if new_key and new_value:
                 self.state.tags.append(Tag(key=new_key, value=new_value))
                 modal.hide()
-                self.view[5] = self._create_tags_section()
+                self.view[2] = self._create_tags_section()
             else:
                 pn.state.notifications.error("Key or value cannot be empty.", duration=10000)
 
@@ -315,7 +338,8 @@ class PipelineCloning(pn.viewable.Viewer):
 
         save_button = pn.widgets.Button(name="Save", button_type="success")
         cancel_button = pn.widgets.Button(name="Cancel")
-        modal = pn.Modal("### Edit Tag", key_input, value_input, pn.Row(cancel_button, save_button))
+        modal = pn.Modal("### Edit Tag", key_input, value_input, pn.Row(cancel_button, save_button, styles={
+            'margin-top': '25px'}))
 
         def open_modal(event):
             modal.show()
@@ -327,7 +351,7 @@ class PipelineCloning(pn.viewable.Viewer):
                 tag.key = new_key
                 tag.value = new_value
                 modal.hide()
-                self.view[5] = self._create_tags_section()
+                self.view[2] = self._create_tags_section()
             else:
                 pn.state.notifications.error("Key or value cannot be empty.", duration=10000)
 
@@ -362,7 +386,7 @@ class PipelineCloning(pn.viewable.Viewer):
                         duration=10000)
                     break
             modal.hide()
-            self.view[5] = self._create_tags_section()
+            self.view[2] = self._create_tags_section()
 
         def cancel(event):
             modal.hide()
