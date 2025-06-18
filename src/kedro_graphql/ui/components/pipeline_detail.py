@@ -44,10 +44,13 @@ class PipelineDetail(pn.viewable.Viewer):
                                                 theme='materialize',
                                                 show_index=False)
 
-            tags_df = pd.DataFrame({
-                'key': [i.key for i in self.pipeline.tags],
-                'value': [i.value for i in self.pipeline.tags],
-            }, index=[i for i in range(len(self.pipeline.tags))])
+            if self.pipeline.tags:
+                tags_df = pd.DataFrame({
+                    'key': [i.key for i in self.pipeline.tags],
+                    'value': [i.value for i in self.pipeline.tags],
+                }, index=[i for i in range(len(self.pipeline.tags))])
+            else:
+                tags_df = pd.DataFrame({'key': [], 'value': []})
 
             tags_widget = pn.widgets.Tabulator(tags_df,
                                                disabled=True,

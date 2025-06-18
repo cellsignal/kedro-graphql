@@ -623,12 +623,12 @@ class Pipeline:
         if payload.get("tags", None):
             tags = [Tag(**t) for t in payload["tags"]]
         else:
-            tags = []
+            tags = None
 
         if payload.get("data_catalog", None):
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
-            data_catalog = []
+            data_catalog = None
 
         if payload.get("status", None):
             status = [PipelineStatus(
