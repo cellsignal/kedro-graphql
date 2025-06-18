@@ -623,7 +623,7 @@ class Pipeline:
         if payload.get("tags", None):
             tags = [Tag(**t) for t in payload["tags"]]
         else:
-            tags = None
+            tags = []
 
         if payload.get("data_catalog", None):
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
@@ -656,7 +656,7 @@ class Pipeline:
         if payload.get("parameters", None):
             parameters = [Parameter.decode(p) for p in payload["parameters"]]
         else:
-            parameters = None
+            parameters = []
 
         return Pipeline(
             id=payload.get("id", None),
