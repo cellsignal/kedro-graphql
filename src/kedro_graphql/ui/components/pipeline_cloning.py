@@ -9,7 +9,7 @@ from copy import deepcopy
 pn.extension('modal')
 pn.extension(notifications=True)
 
-item_styles = {
+SECTION_ITEM_STYLES = {
     'margin-top': 'auto',
     'margin-bottom': 'auto',
     'justify-content': 'left',
@@ -23,6 +23,7 @@ item_styles = {
 
 class PipelineCloning(pn.viewable.Viewer):
     """A component that clones a Kedro pipeline
+
     Attributes:
         pipeline (Pipeline): The Kedro pipeline to retry.
         client (KedroGraphqlClient): The client used to interact with the Kedro GraphQL API.
@@ -60,20 +61,25 @@ class PipelineCloning(pn.viewable.Viewer):
         widgets = []
         if self.state.data_catalog:
             for dataset in self.state.data_catalog:
-                config = json.loads(dataset.config)
-                name = dataset.name
-                filepath = config.get("filepath", "")
+                try:
+                    config = json.loads(dataset.config)
+                    name = dataset.name
+                    filepath = config.get("filepath", "")
 
-                edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100, styles={
-                                                'margin-top': 'auto', 'margin-bottom': 'auto'})
-                modal = self._dataset_edit_modal(dataset, edit_button)
+                    edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100, styles={
+                                                    'margin-top': 'auto', 'margin-bottom': 'auto'})
+                    modal = self._dataset_edit_modal(dataset, edit_button)
 
-                dataset_block = pn.Row(edit_button, pn.Column(
-                    pn.pane.HTML(f"<b>Name</b>: {name}", styles={'font-size': '16px'}),
-                    pn.pane.HTML(f"<b>Filepath</b>: {filepath}", styles={'font-size': '16px'}),
-                    styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
-                    modal, styles=item_styles)
-                widgets.append(dataset_block)
+                    dataset_block = pn.Row(edit_button, pn.Column(
+                        pn.pane.HTML(f"<b>Name</b>: {name}", styles={'font-size': '16px'}),
+                        pn.pane.HTML(f"<b>Filepath</b>: {filepath}", styles={'font-size': '16px'}),
+                        styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
+                        modal, styles=SECTION_ITEM_STYLES)
+                    widgets.append(dataset_block)
+                except json.JSONDecodeError as e:
+                    pn.state.notifications.error(
+                        f"Failed to decode JSON for dataset {dataset.name}: {str(e)}", duration=10000)
+                    continue
 
         return pn.Column(
             pn.pane.Markdown("## Datasets"),
@@ -82,7 +88,14 @@ class PipelineCloning(pn.viewable.Viewer):
         )
 
     def _dataset_edit_modal(self, dataset, trigger):
-        config = json.loads(dataset.config)
+        """Return modal for editing dataset configurations"""
+
+        try:
+            config = json.loads(dataset.config)
+        except json.JSONDecodeError:
+            self._show_error(f"Invalid configuration for dataset {dataset.name}")
+            return pn.Modal("Error", "Invalid dataset configuration")
+
         original_path = config.get("filepath", "")
         filepath_input = pn.widgets.TextInput(name="Filepath", value=original_path)
 
@@ -136,6 +149,8 @@ class PipelineCloning(pn.viewable.Viewer):
         return modal
 
     def _delete_dataset_tag_modal(self, dataset, tag, trigger):
+        """Return modal for deleting a dataset tag"""
+
         confirm_button = pn.widgets.Button(name="Confirm", button_type="danger")
         cancel_button = pn.widgets.Button(name="Cancel")
 
@@ -165,6 +180,8 @@ class PipelineCloning(pn.viewable.Viewer):
         return modal
 
     def _add_dataset_tag_modal(self, dataset, trigger):
+        """Return modal for adding a new tag to a dataset"""
+
         key_input = pn.widgets.TextInput(name="Key", placeholder="Enter tag key")
         value_input = pn.widgets.TextInput(name="Value", placeholder="Enter tag value")
 
@@ -215,7 +232,7 @@ class PipelineCloning(pn.viewable.Viewer):
                               pn.pane.HTML(f"<b>Value</b>: {parameter.value}", styles={'font-size': '16px'}),
                               pn.pane.HTML(f"<b>Type</b>: {parameter.type.value}", styles={'font-size': '16px'}), styles={
                         'margin-top': 'auto', 'margin-bottom': 'auto'}),
-                    modal, styles=item_styles
+                    modal, styles=SECTION_ITEM_STYLES
                 ))
 
         return pn.Column(
@@ -225,6 +242,8 @@ class PipelineCloning(pn.viewable.Viewer):
         )
 
     def _param_edit_modal(self, parameter, trigger):
+        """Return modal for editing a parameter's value and type"""
+
         value_input = pn.widgets.TextInput(name="Value", value=parameter.value)
         type_input = pn.widgets.Select(
             name="Type", options=["string", "float", "boolean", "integer"],
@@ -286,11 +305,11 @@ class PipelineCloning(pn.viewable.Viewer):
                             pn.pane.HTML(f"<b>Value</b>: {tag.value}", styles={'font-size': '16px'}),
                             styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
                         edit_tag_modal, delete_tag_modal,
-                        styles=item_styles))
+                        styles=SECTION_ITEM_STYLES))
 
         add_button = pn.widgets.Button(name="Add", button_type="success", width=100,
                                        styles={'margin-top': 'auto', 'margin-bottom': 'auto'})
-        widgets.append(pn.Row(add_button, styles=item_styles))
+        widgets.append(pn.Row(add_button, styles=SECTION_ITEM_STYLES))
         add_tag_modal = self._add_tag_modal(add_button)
 
         return pn.Column(
@@ -300,6 +319,8 @@ class PipelineCloning(pn.viewable.Viewer):
         )
 
     def _add_tag_modal(self, trigger):
+        """Return modal for adding a new tag to the pipeline"""
+
         key_input = pn.widgets.TextInput(name="Key", placeholder="Enter tag key")
         value_input = pn.widgets.TextInput(name="Value", placeholder="Enter tag value")
 
@@ -333,6 +354,8 @@ class PipelineCloning(pn.viewable.Viewer):
         return modal
 
     def _tag_edit_modal(self, tag, trigger):
+        """Return modal for editing a tag's key and value"""
+
         key_input = pn.widgets.TextInput(name="Key", value=tag.key)
         value_input = pn.widgets.TextInput(name="Value", value=tag.value)
 
@@ -399,6 +422,7 @@ class PipelineCloning(pn.viewable.Viewer):
 
     async def clone_pipeline(self, type="staged"):
         """Clones the pipeline and stages or runs it based on the operation type.
+
         Args:
             type (str): The type of post-cloning operation, either "staged" or "ready".
         """
