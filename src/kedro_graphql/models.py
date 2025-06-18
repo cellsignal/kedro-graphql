@@ -628,7 +628,7 @@ class Pipeline:
         if payload.get("data_catalog", None):
             data_catalog = [DataSet.decode(d) for d in payload["data_catalog"]]
         else:
-            data_catalog = None
+            data_catalog = []
 
         if payload.get("status", None):
             status = [PipelineStatus(
@@ -656,7 +656,7 @@ class Pipeline:
         if payload.get("parameters", None):
             parameters = [Parameter.decode(p) for p in payload["parameters"]]
         else:
-            parameters = []
+            parameters = None
 
         return Pipeline(
             id=payload.get("id", None),
