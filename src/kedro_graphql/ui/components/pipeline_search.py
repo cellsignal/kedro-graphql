@@ -169,13 +169,16 @@ class PipelineSearch(pn.viewable.Viewer):
             tags = []
             for index, row in df.iterrows():
                 inner_tags = []
-                for i in row["tags"]:
-                    inner_tags.append(pd.DataFrame(
-                        {"tag: " + i["key"]: i["value"]}, index=[index]))
+                if row["tags"]:
+                    for i in row["tags"]:
+                        inner_tags.append(pd.DataFrame(
+                            {"tag: " + i["key"]: i["value"]}, index=[index]))
 
-                tags.append(pd.concat(inner_tags, axis=1))
+                    tags.append(pd.concat(inner_tags, axis=1))
+                else:
+                    tags.append(pd.DataFrame(index=[index]))
 
-            tags = pd.concat(tags)
+            tags = pd.concat(tags).fillna("")
 
             df = df.merge(tags, left_index=True, right_index=True)
 
