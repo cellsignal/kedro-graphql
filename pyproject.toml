@@ -45,6 +45,9 @@ kedro-graphql = "kedro_graphql.commands:commands"
 kedro-graphql-validation = "kedro_graphql.hooks:validation_hooks"
 kedro-graphql-logging = "kedro_graphql.hooks:logging_hooks"
 
+[project.entry-points."panel.auth"]
+pkce = "kedro_graphql.ui.auth:PKCELoginHandler"
+
 [project.urls]
 Homepage = "https://github.com/opensean/kedro-graphql"
 Source = "https://github.com/opensean/kedro-graphql"
