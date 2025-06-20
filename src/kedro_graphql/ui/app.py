@@ -70,7 +70,7 @@ def start_ui(config={}, spec=""):
             uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"])
 
         if spec["panel_get_server_kwargs"].get("static_dirs", None):
-            spec["panel_get_server_kwargs"]["static_dirs"]["/pipeline/viz-build"]: str(
+            spec["panel_get_server_kwargs"]["static_dirs"]["/pipeline/viz-build"] = str(
                 tmpdirname + "/build")
         else:
             spec["panel_get_server_kwargs"]["static_dirs"] = {
