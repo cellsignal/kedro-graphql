@@ -4,6 +4,8 @@ from kedro_graphql.ui.decorators import UI_PLUGINS
 from kedro_graphql.ui.components.pipeline_detail import PipelineDetail
 from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
 from kedro_graphql.ui.components.pipeline_viz import PipelineViz
+from kedro_graphql.ui.components.pipeline_retry import PipelineRetry
+from kedro_graphql.ui.components.pipeline_cloning import PipelineCloning
 
 
 class PipelineDashboardFactory(pn.viewable.Viewer):
@@ -38,10 +40,14 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         monitor = PipelineMonitor(client=self.spec["config"]["client"], pipeline=p)
         detail = PipelineDetail(pipeline=p)
         viz = PipelineViz(pipeline=p.name, spec=self.spec)
+        retry = PipelineRetry(client=self.spec["config"]["client"], pipeline=p)
+        cloning = PipelineCloning(client=self.spec["config"]["client"], pipeline=p)
         tabs = pn.Tabs(dynamic=False)
         tabs.append(("Monitor", monitor))
         tabs.append(("Detail", detail))
         tabs.append(("Viz", viz))
+        tabs.append(("Retry", retry))
+        tabs.append(("Cloning", cloning))
         if UI_PLUGINS["DATA"].get(self.pipeline, None):
             for d in UI_PLUGINS["DATA"][self.pipeline]:
                 data = d(id=self.id, spec=self.spec,
