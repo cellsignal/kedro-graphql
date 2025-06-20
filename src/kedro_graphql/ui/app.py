@@ -23,7 +23,7 @@ def template_factory(spec={}):
     def build_template():
         return KedroGraphqlMaterialTemplate(spec=spec)
 
-    return {spec["config"]["base_url"]: build_template}
+    return {spec["panel_get_server_kwargs"]["base_url"]: build_template}
 
 
 def start_ui(config={}, spec=""):
@@ -67,15 +67,14 @@ def start_ui(config={}, spec=""):
         pn.config.global_loading_spinner = True
 
         client = KedroGraphqlClient(
-            uri_graphql=config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"], uri_ws=config["KEDRO_GRAPHQL_CLIENT_URI_WS"])
+            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"])
 
-        # override values provided in the UI spec with config values provided via the cli or env vars
-        spec["config"]["site_name"] = config["KEDRO_GRAPHQL_UI_SITE_NAME"]
-        spec["config"]["base_url"] = config["KEDRO_GRAPHQL_UI_BASE_URL"]
-        spec["config"]["client_uri_graphql"] = config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
-        spec["config"]["client_uri_ws"] = config["KEDRO_GRAPHQL_CLIENT_URI_WS"]
-        spec["config"]["viz_static"] = tmpdirname + "/build/"
+        if spec["panel_get_server_kwargs"].get("static_dirs", None):
+            spec["panel_get_server_kwargs"]["static_dirs"]["/pipeline/viz-build"]: str(
+                tmpdirname + "/build")
+        else:
+            spec["panel_get_server_kwargs"]["static_dirs"] = {
+                "/pipeline/viz-build": str(tmpdirname + "/build")}
+
         spec["config"]["client"] = client
-
-        pn.serve(template_factory(spec=spec), admin=True, port=5006,
-                 static_dirs={"/pipeline/viz-build": str(tmpdirname + "/build")})
+        pn.serve(template_factory(spec=spec), **spec["panel_get_server_kwargs"])
