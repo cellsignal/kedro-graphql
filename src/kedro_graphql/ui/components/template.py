@@ -1,9 +1,9 @@
 """A python panel app for visualizing Kedro pipelines."""
 import panel as pn
 import param
-from kedro_graphql.client import KedroGraphqlClient
 
 # pn.extension(theme="dark")
+pn.extension("modal")
 
 
 class NavigationSidebarButton(pn.viewable.Viewer):
@@ -22,7 +22,7 @@ class NavigationSidebarButton(pn.viewable.Viewer):
 
     def navigate(self, event):
         """Navigate to the specified page."""
-        pn.state.location.pathname = self.spec["config"]["base_url"]
+        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["base_url"]
         pn.state.location.search = "?page="+self.name.lower()
 
     async def build_button(self):
@@ -82,7 +82,7 @@ class TemplateMainFactory(pn.viewable.Viewer):
 
 class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
     """A Material Design template for the Kedro GraphQL UI.
-    This template includes a sidebar for navigation and a main content area that 
+    This template includes a sidebar for navigation and a main content area that
     displays different pages based on the current URL.
     It uses the `spec` dictionary to configure the sidebar and main content.
 
@@ -96,17 +96,73 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
     page = param.String(default="pipelines")
     spec = param.Dict(default={})
 
+    def user_menu_action(self, event, user_info_modal, login_link, logout_link):
+        """ Handles user menu actions such as showing user information, logging in, or logging out.
+        Args:
+            event (str): The action triggered by the user menu.
+            user_info_modal (pn.Modal): The modal to display user information.
+            login_link (str): The URL for the login endpoint.
+            logout_link (str): The URL for the logout endpoint.
+        """
+        if event == "User Information":
+            user_info_modal.show()
+        elif event == "Login":
+            pn.state.location.pathname = login_link
+            pn.state.location.search = ""
+            pn.state.location.reload = True
+        elif event == "Logout":
+            pn.state.location.pathname = logout_link
+            pn.state.location.search = ""
+            pn.state.location.reload = True
+
+    async def build_user_menu(self):
+        """Asynchronously retrieves the user context for the template.
+        This method can be overridden to provide custom user context data.
+        """
+        user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
+        user_menu_items = [("User Information", "User Information")]
+        login_link = self.spec["panel_get_server_kwargs"].get(
+            "login_endpoint", "/login")
+        logout_link = self.spec["panel_get_server_kwargs"].get(
+            "logout_endpoint", "/logout")
+        user_info = "No user information available"
+
+        if user == "Guest":
+            if pn.config.oauth_provider:
+                user_menu_items.append("Login")
+            elif pn.config.basic_auth:
+                user_menu_items.append("Login")
+        else:
+            user_menu_items.append("Logout")
+            user_info = pn.state.user_info
+
+        user_menu = pn.widgets.MenuButton(name=user, icon="circle-letter-" + user[0].lower(
+        ), icon_size="2em", items=user_menu_items, sizing_mode="stretch_width",)
+        user_info_modal = pn.Modal(user_info, name='User Information',
+                                   margin=20, background_close=True, show_close_button=True)
+        pn.bind(self.user_menu_action, user_menu.param.clicked,
+                user_info_modal, login_link, logout_link, watch=True)
+        yield pn.Column(pn.Row(user_menu), pn.Row(user_info_modal, height=0)
+                        )
+
     def __init__(self, title="kedro-graphql", spec=None):
+        """Initializes the KedroGraphqlMaterialTemplate with a title and specification.
+        Args:
+            title (str): The title of the template.
+            spec (dict): The specification for the UI, including configuration and pages.
+        """
         super().__init__(
-            title=spec["config"]["site_name"],
+            title=spec["panel_get_server_kwargs"]["title"],
             sidebar_width=200)
+        self.spec = spec
+        self.sidebar.append(self.build_user_menu)
+        self.sidebar.append(pn.layout.Divider())
         for nav in spec["nav"]["sidebar"]:
             next_button = NavigationSidebarButton(name=nav["name"], spec=spec)
             pn.state.location.sync(next_button, {"page": "page"})
             self.sidebar.append(next_button)
 
         self.main.append(TemplateMainFactory(spec=spec))
-
-        pn.state.location.pathname = spec["config"]["base_url"]
+        # pn.state.location.pathname = spec["panel_get_server_kwargs"]["base_url"]
         pn.state.location.sync(
             self, {"page": "page"})

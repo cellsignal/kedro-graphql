@@ -1,5 +1,3 @@
-
-version: '3.8'
 services:
   redis:
     image: redis:6.2-alpine
@@ -25,7 +23,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
-  
   mongo-express:
     image: mongo-express:0.54.0
     restart: always
@@ -37,6 +34,14 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
     depends_on:
       - mongo
+  dex:
+    image: ghcr.io/dexidp/dex:v2.31.1
+    ports:
+      - 5556:5556
+    volumes:
+      - ./dex-config.yaml:/etc/dex/cfg/config.yaml:z
+    command: ["dex", "serve", "/etc/dex/cfg/config.yaml"]
+    network_mode: host
 volumes:
   cache:
     driver: local

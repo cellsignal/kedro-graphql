@@ -48,7 +48,7 @@ Start a worker.
 kedro gql -r -w
 ```
 
-Start mongodb and redis.
+Start supporting services (e.g. mongo, redis, etc...).
 ```
 docker compose up -d
 ```
@@ -505,11 +505,14 @@ class Example00PipelineUIV1(pn.viewable.Viewer):
 ```
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
-config:
+panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
+  title: Kedro GraphQL UI
+  admin: true
   base_url: /
+  port: 5006
+config:
   client_uri_graphql: "http://localhost:5000/graphql"
   client_uri_ws: "ws://localhost:5000/graphql"
-  site_name: "kedro-graphql UI demo"
   imports:
     - "kedro_graphql.ui.plugins"
 pages:
@@ -534,4 +537,82 @@ nav:
       page: pipelines
     - name: Search 
       page: search
+```
+
+
+### UI Authentication Example
+
+The following is an example UI YAML specification to demonstrate
+how to configure the UI to use OAuth for user authentication.  All
+OAuth configuration is passed through to panel, refer to the 
+[Configuring OAuth](https://panel.holoviz.org/how_to/authentication/configuration.html) 
+section of the panel documentation for more information about supported
+values and providers.
+
+#### Authorization Code Flow with Proof Key for Code Exchange
+
+For the `kedro_graphql` project Dex is included in the docker-compose.yaml to enable development
+when working with OAuth.  
+
+The `kedro_graphql.ui.auth.PKCELoginHandler` class is a pluggable
+panel OAuth provider that supports the authorization code flow with 
+proof key for code exchange OAuth protocol. The PKCE protocol is the
+default for [Dex](https://dexidp.io/). See 
+https://github.com/holoviz/panel/issues/7979 for more discussion on this
+topic.  Using `oauth_provider: "pkce"` in the conifiguration tells panel
+to use the `kedro_graphql.ui.auth.PKCELoginHandler`.
+
+```
+## Kedro GraphQL UI configuration file
+# This file defines the structure and components of the Kedro GraphQL UI.
+panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
+  title: Kedro GraphQL UI
+  admin: true
+  base_url: /
+  port: 5006
+  oauth_provider: "pkce"
+  oauth_secret: "panel"
+  oauth_key: "panel"
+  oauth_extra_params: 
+    AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
+    TOKEN_URL: "http://localhost:5556/oidc/token"
+    USER_URL: "http://localhost:5556/oidc/userinfo"
+  cookie_secret: fdb0Yy-wHDyoCUeRyvPnl07zjIOINImqY5aaGDDJbqM=
+  oauth_encryption_key: 1txhYRzdbCpBRKKcvyChR0qH9QSm60BU4UJq0NqZz2I=
+  allow_websocket_origin: 
+    - "localhost:5006"
+  oauth_redirect_uri: "http://localhost:5006/login"
+config:
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
+  imports:
+    - "kedro_graphql.ui.plugins"
+pages:
+  pipelines:
+    module: kedro_graphql.ui.components.pipeline_cards.PipelineCards
+    params:
+      form_page: form
+      explore_page: explore
+  search:
+    module: kedro_graphql.ui.components.pipeline_search.PipelineSearch
+    params:
+      dashboard_page: dashboard
+  dashboard:
+    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+  form:
+    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
+  explore:
+    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+nav:
+  sidebar:
+    - name: Pipelines
+      page: pipelines
+    - name: Search 
+      page: search
+```
+
+Start the UI server.  Fetch the ui-auth.yaml from above or from the repository.
+
+```
+kedro gql --ui --ui-spec src/kedro_graphql/ui/ui-auth.yaml
 ```
