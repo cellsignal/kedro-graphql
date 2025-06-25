@@ -5,3 +5,5 @@
 # Link: https://kedro.readthedocs.io/en/0.18.4/kedro_project_setup/configuration.html#parameters
 example: "hello"
 duration: 1
+id: "placeholder"
+event: "placeholder"

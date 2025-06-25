@@ -2,7 +2,7 @@ import pytest
 from celery.result import AsyncResult
 from celery.states import ALL_STATES
 
-from kedro_graphql.events import PipelineEventMonitor
+from kedro_graphql.pipeline_event_monitor import PipelineEventMonitor
 
 
 @pytest.mark.usefixtures('mock_celery_session_app')

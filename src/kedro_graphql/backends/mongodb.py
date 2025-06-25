@@ -12,9 +12,10 @@ from .base import BaseBackend
 
 class MongoBackend(BaseBackend):
 
-    def __init__(self, uri=None, db=None):
+    def __init__(self, uri=None, db=None, collection="pipelines"):
         self.client = MongoClient(uri)
         self.db = self.client[db]
+        self.collection = collection
 
     def startup(self, **kwargs):
         """Startup hook."""
@@ -25,23 +26,25 @@ class MongoBackend(BaseBackend):
         self.client.close()
 
     def list(self, cursor: uuid.UUID = None, limit=10, filter="", sort=""):
-        query = {'_id': {'$gte': ObjectId(cursor)}}
         if len(filter) > 0:
             filter = json.loads(filter)
-            query.update(filter)
+            query = filter
+        else:
+            query = {'_id': {'$gte': ObjectId(cursor)}}
 
         if sort:
             try:
                 sort = ast.literal_eval(sort)
                 # Validate that sort is a list of tuples like [('created_at', -1)]
                 if isinstance(sort, list) and all(isinstance(i, tuple) and len(i) == 2 for i in sort):
-                    raw = self.db["pipelines"].find(query).sort(sort).limit(limit)
+                    raw = self.db[self.collection].find(query).sort(sort).limit(limit)
                 else:
-                    raise ValueError("Sort parameter should be a list of tuples like [('field', order)]")
+                    raise ValueError(
+                        "Sort parameter should be a list of tuples like [('field', order)]")
             except (ValueError, SyntaxError) as e:
                 raise ValueError(f"Invalid sort parameter format: {e}")
         else:
-            raw = self.db["pipelines"].find(query).limit(limit)
+            raw = self.db[self.collection].find(query).limit(limit)
 
         results = []
         for r in raw:
@@ -53,9 +56,10 @@ class MongoBackend(BaseBackend):
     def read(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id or task_id"""
         if task_id:
-            r = self.db["pipelines"].find_one({"status": {"$elemMatch": {"task_id": task_id}}})
+            r = self.db[self.collection].find_one(
+                {"status": {"$elemMatch": {"task_id": task_id}}})
         else:
-            r = self.db["pipelines"].find_one({"_id": ObjectId(id)})
+            r = self.db[self.collection].find_one({"_id": ObjectId(id)})
 
         if r:
             r["id"] = str(r["_id"])
@@ -68,8 +72,8 @@ class MongoBackend(BaseBackend):
         """Save a pipeline"""
         values = pipeline.encode()
         values.pop("id")  # we dont have an id yet, we will get it after insert
-        created = self.db["pipelines"].insert_one(values)
-        created = self.db["pipelines"].find_one({"_id": created.inserted_id})
+        created = self.db[self.collection].insert_one(values)
+        created = self.db[self.collection].find_one({"_id": created.inserted_id})
         created["id"] = str(created["_id"])
         p = Pipeline.decode(created)
         return p
@@ -81,7 +85,7 @@ class MongoBackend(BaseBackend):
         values = pipeline.encode()
         values.pop("id")  # we dont want to update the id
         newvalues = {"$set": values}
-        self.db["pipelines"].update_one(filter, newvalues)
+        self.db[self.collection].update_one(filter, newvalues)
 
         p = self.read(id=id)
 
@@ -89,5 +93,5 @@ class MongoBackend(BaseBackend):
 
     def delete(self, id: uuid.UUID = None):
         """Delete a pipeline using id"""
-        self.db["pipelines"].delete_one({"_id": ObjectId(id)})
+        self.db[self.collection].delete_one({"_id": ObjectId(id)})
         return id
