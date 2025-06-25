@@ -157,6 +157,11 @@ class Mutation:
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
         serial = p.encode(encoder="kedro")
 
+        runner = (
+            d.get("runner")
+            if d.get("runner")
+            else info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        )
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -180,7 +185,7 @@ class Mutation:
 
         if d["state"] == "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
-                                           runner=None,
+                                           runner=runner,
                                            session=None,
                                            started_at=None,
                                            finished_at=None,
@@ -191,7 +196,7 @@ class Mutation:
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
-                                           runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                           runner=runner,
                                            session=None,
                                            started_at=started_at,
                                            finished_at=None,
@@ -205,7 +210,7 @@ class Mutation:
                 name=serial["name"],
                 parameters=serial["parameters"],
                 data_catalog=serial["data_catalog"],
-                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                runner=runner,
                 slices=d.get("slices", None),
                 only_missing=d.get("only_missing", False)
             )
