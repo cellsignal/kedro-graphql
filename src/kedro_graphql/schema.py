@@ -21,7 +21,7 @@ from strawberry.schema.config import StrawberryConfig
 
 from . import __version__ as kedro_graphql_version
 from .config import config
-from .events import PipelineEventMonitor
+from .pipeline_event_monitor import PipelineEventMonitor
 from .hooks import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (

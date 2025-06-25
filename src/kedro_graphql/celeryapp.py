@@ -2,7 +2,7 @@ from celery import Celery
 from celery import signals
 
 
-def celery_app(config, backend):
+def celery_app(config, backend, schema):
     app = Celery()
 
     class Config:
@@ -19,6 +19,7 @@ def celery_app(config, backend):
 
     app.config_from_object(Config)
     app.kedro_graphql_backend = backend
+    app.kedro_graphql_schema = schema
     return app
 
 

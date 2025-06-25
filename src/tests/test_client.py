@@ -1,53 +1,9 @@
 import pytest
-from kedro.framework.session import KedroSession
-from kedro.framework.startup import bootstrap_project
-from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.config import config as CONFIG
 from kedro_graphql.models import PipelineInput, Pipeline, TagInput
-from multiprocessing import Process
-import uvicorn
 import json
-from pathlib import Path
-from kedro_graphql.asgi import KedroGraphQL
 from celery.states import ALL_STATES
 from kedro_graphql.schema import encode_cursor
-import multiprocessing as mp
-import tempfile
 import pytest_asyncio
-
-
-if mp.get_start_method(allow_none=True) != "spawn":
-    mp.set_start_method("spawn")
-
-
-def start_server():
-
-    with tempfile.TemporaryDirectory() as tmp:
-        with tempfile.TemporaryDirectory() as tmp2:
-            bootstrap_project(Path.cwd())
-            session = KedroSession.create()
-            app = KedroGraphQL(kedro_session=session, config=CONFIG)
-            app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
-            app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
-            uvicorn.run(app,
-                        host="localhost",
-                        port=5000)
-
-
-@pytest_asyncio.fixture(scope="session")
-def setup():
-    proc = Process(target=start_server, args=())
-    proc.start()
-    yield
-    proc.terminate()
-
-
-@pytest_asyncio.fixture
-async def mock_client(setup):
-    client = KedroGraphqlClient(uri_graphql="http://localhost:5000/graphql",
-                                uri_ws="ws://localhost:5000/graphql")
-    yield client
-    await client.close_sessions()
 
 
 @pytest_asyncio.fixture

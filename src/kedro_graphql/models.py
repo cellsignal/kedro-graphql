@@ -16,6 +16,7 @@ from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
 from .config import config as CONFIG
 from .utils import parse_s3_filepath
+from .logs.logger import logger
 
 
 def mark_deprecated(default=None):
@@ -363,8 +364,13 @@ class PipelineTemplate:
     def outputs(self) -> List[DataSet]:
         outputs_resolved = []
         for n in self.kedro_pipelines[self.name].all_outputs():
-            config = self.kedro_catalog[n]
-            outputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
+            if self.kedro_catalog.get(n, None):
+                config = self.kedro_catalog[n]
+                outputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
+            else:
+                logger.warning(
+                    f"PipelineTemplate '{self.name}' has an output '{n}' that is not defined in the catalog. This may be due to a missing dataset configuration or because it is a MemoryDataset."
+                )
 
         return outputs_resolved
 
@@ -430,7 +436,7 @@ class PipelineInput:
     parameters: Optional[List[ParameterInput]] = None
     data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
-    parent: Optional[uuid.UUID] = None
+    parent: Optional[strawberry.ID] = None
     runner: Optional[str] = None
     slices: Optional[List[PipelineSlice]] = None
     only_missing: Optional[bool] = False
@@ -536,7 +542,7 @@ class PipelineStatus:
 
 @strawberry.type
 class Pipeline:
-    id: Optional[uuid.UUID] = None
+    id: Optional[strawberry.ID] = None
     name: str
     data_catalog: Optional[List[DataSet]] = None
     describe: Optional[str] = None
@@ -545,7 +551,7 @@ class Pipeline:
     status: List[PipelineStatus] = strawberry.field(default_factory=list)
     tags: Optional[List[Tag]] = None
     created_at: Optional[datetime] = None
-    parent: Optional[uuid.UUID] = None
+    parent: Optional[strawberry.ID] = None
     project_version: Optional[str] = None
     pipeline_version: Optional[str] = None
     kedro_graphql_version: Optional[str] = None
@@ -565,7 +571,7 @@ class Pipeline:
                 data_catalog.update(s)
 
         return {
-            "id": self.id,
+            "id": str(self.id),
             "name": self.name,
             "data_catalog": data_catalog,
             "parameters": parameters,
@@ -584,21 +590,6 @@ class Pipeline:
             return self.serialize()
         else:
             raise TypeError("encoder must be 'dict' or 'kedro'")
-
-    @classmethod
-    def decode(cls, payload, decoder="dict"):
-        """Factory method to create a new Pipeline from a dictionary or graphql api response.
-        """
-        if decoder == "graphql":
-            payload = {to_snake_case(k): v for k, v in payload.items()}
-            if payload["status"]:
-                payload["status"] = [
-                    {to_snake_case(k): v for k, v in s.items()} for s in payload["status"]]
-
-            return cls.decode_dict(payload)
-
-        elif decoder == "dict":
-            return cls.decode_dict(payload)
 
     @classmethod
     def decode(cls, payload, decoder=None):
