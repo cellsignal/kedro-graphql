@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-import json
 from strawberry.fastapi import GraphQLRouter
 
 from .backends import init_backend

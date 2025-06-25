@@ -24,7 +24,6 @@ from .client import PIPELINE_GQL
 
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import from_json, to_json
-import uuid
 
 logger = logging.getLogger(__name__)
 

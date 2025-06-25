@@ -11,7 +11,6 @@ import asyncio
 import tempfile
 from omegaconf.dictconfig import DictConfig
 from omegaconf import OmegaConf
-from kedro_graphql.logs.logger import logger
 
 
 def create_pipeline_input(id: str, event: CloudEvent) -> PipelineInput:
