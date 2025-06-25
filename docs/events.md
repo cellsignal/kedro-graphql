@@ -15,11 +15,11 @@ The configuration can be provided using the `KEDRO_GRAPHQL_EVENT_CONFIG`
 environment variable.  If no value is provided the `/event/` endpoint 
 is automatically disabled.  The configuration is a mapping between
 a pipeline name and the expected `source` and `type` event attributes.
-For example, the following configuration will run the `event_pipe00`
+For example, the following configuration will run the `event00`
 pipeline if the `event.source = "example.com"` and `event.type = "com.example.event"`
 
 ```python
-"KEDRO_GRAPHQL_EVENTS_CONFIG" = {"example00_from_event": {
+"KEDRO_GRAPHQL_EVENTS_CONFIG" = {"event00": {
                                  "source": "example.com", "type": "com.example.event"
                                  }}
 ```
@@ -30,10 +30,10 @@ as a JSON string.  For example:
 ```
 #.env
 
-KEDROG_GRAPHQL_EVENTS_CONFIG='{"example00_from_event": {"source": "example.com", "type": "com.example.event"}}'
+KEDROG_GRAPHQL_EVENTS_CONFIG='{"event00": {"source": "example.com", "type": "com.example.event"}}'
 ```
 
-## Required Pipeline Paramters
+## Required Pipeline Parameters
 
 For a kedro pipeline to be triggered by an event it must accept the following
 parameters:
@@ -43,30 +43,37 @@ parameters:
 **event (str)**: The cloudevent serialized as a JSON string
 
 
-The `event_pipe00` pipeline included in the `kedro_graphql.pipelines` directory is
+The `event00` pipeline included in the `kedro_graphql.pipelines` directory is
 a basic example of how one might use the `event --> pipeline` pattern.  
-The `event_pipe00` pipeline processes the event and starts a `example00` child pipeline.  
+The `event00` pipeline processes the event and starts a `example00` child pipeline.  
 
-The tests for the events pattern can be run using:
+The tests for the events pattern leverage the `event00` and `example00` pipelines
+ and can be run using:
 
 ```
 pytest -s src/tests/test_asgi.py
 ```
 
 The pattern can be expanded to address many different 
-automation scenarios (*n x events --> n x event pipeline --> n x pipeline*)
+automation scenarios (*n x event --> n x event pipeline --> n x pipeline*).
+
+*The following diagram is using the [Entity-relationship model](https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model)*
 
 ```mermaid
 erDiagram
-    Cloudevent ||--|{ "/event/" : POST
-    "/event/" ||--|{ event_pipe00 : create_pipeline
-    "event_pipe00" ||--o{ example00 : create_pipeline
+    Cloudevent |{--|| "/event/" : POST
+    "/event/" ||--|{ event00 : create_pipeline
+    "event00" ||--o{ example00 : create_pipeline
 
 ```
 
+There is no requirment for the pipeline(s) triggered by the event 
+to create any child pipelines, however, it can be a useful pattern
+to encapsulate event processing logic and aligns well with the
+[modular pipeline](https://docs.kedro.org/en/0.19.14/nodes_and_pipelines/modular_pipelines.html#modular-pipelines) approach recommended by the kedro project.
 
 ## Future Steps
 
 - the event handler will pass the pipeline's id and the incoming event as
   parameters to pipeline.  Should we support loading and passing any additional
-  parameters found in the trigger's PipelineTemplate?
+  parameters found in the PipelineTemplate?
