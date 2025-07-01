@@ -19,6 +19,7 @@ config = {
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
     "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
     "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
+    "KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER": "kedro_graphql.plugins.presigned_url.s3_provider.S3PreSignedUrlProvider",
 }
 
 config = {

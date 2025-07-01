@@ -4,7 +4,8 @@ from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-
+from kedro.io.core import _parse_filepath
+from .plugins.presigned_url.local_file_provider import LocalFileProvider
 import boto3
 import strawberry
 from botocore.exceptions import ClientError
@@ -15,7 +16,7 @@ from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
 from .config import config as CONFIG
-from .utils import parse_s3_filepath
+from importlib import import_module
 
 
 def mark_deprecated(default=None):
@@ -159,71 +160,31 @@ class DataSet:
     tags: Optional[List[Tag]] = None
 
     @strawberry.field
-    def pre_signed_url_create(self) -> Optional[JSON]:
-        """
-        Generate a presigned URL S3 to upload a file.
+    def pre_signed_url_create(self) -> JSON | None:
 
-        Returns:
-            Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+        # if _parse_filepath(self.config)["protocol"] == "file":
+        # return LocalFileProvider.pre_signed_url_create()
 
-            Example:
-                {
-                    "url": "https://your-bucket-name.s3.amazonaws.com/",
-                    "fields": {
-                        "key": "your-object-key",
-                        "AWSAccessKeyId": "your-access-key-id",
-                        "x-amz-security-token": "your-security-token",
-                        "policy": "your-policy",
-                        "signature": "your-signature"
-                    }
-                }
-        """
+        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
+        module = import_module(module_path)
+        cls = getattr(module, class_name)
 
-        bucket_name, s3_key = parse_s3_filepath(self.config)
-
-        try:
-            s3_client = boto3.client('s3')
-            response = s3_client.generate_presigned_post(bucket_name,
-                                                         f"{uuid.uuid4()}/{s3_key}",
-                                                         Fields=None,
-                                                         Conditions=None,
-                                                         ExpiresIn=3600)
-        except ClientError as e:
-            print(f"Failed to generate presigned URL: {e}")
-            return None
-
-        return response
+        return cls.pre_signed_url_create(self.config)
 
     @strawberry.field
-    def pre_signed_url_read(self) -> Optional[str]:
-        """
-        Generate a presigned URL S3 to download a file.
+    def pre_signed_url_read(self) -> str | None:
 
-        Returns:
-            Optional[str]: download url with query parameters
+        config = json.loads(self.config)
+        filepath = config.get("filepath")
 
-            Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
-        """
+        if _parse_filepath(filepath)["protocol"] == "file":
+            return LocalFileProvider.pre_signed_url_read(self.config)
 
-        bucket_name, s3_key = parse_s3_filepath(self.config)
+        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
+        module = import_module(module_path)
+        cls = getattr(module, class_name)
 
-        try:
-            s3_client = boto3.client('s3')
-            params = {
-                'Bucket': bucket_name,
-                'Key': s3_key
-            }
-
-            response = s3_client.generate_presigned_url(
-                'get_object',
-                Params=params,
-                ExpiresIn=3600
-            )
-        except ClientError as e:
-            print(f"Failed to generate presigned URL: {e}")
-            return None
-
-        return response
+        return cls.pre_signed_url_read(self.config)
 
     @strawberry.field
     def exists(self) -> bool:

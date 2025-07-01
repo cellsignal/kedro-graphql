@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from datetime import datetime
+from fastapi import Query, Response
 from strawberry.fastapi import GraphQLRouter
 
 from .backends import init_backend
@@ -43,3 +46,27 @@ class KedroGraphQL(FastAPI):
         @self.on_event("shutdown")
         def shutdown_backend():
             self.backend.shutdown()
+
+        # Storing presigned urls in-memory token store for now
+        self.presigned_urls = {}
+
+        @self.get("/download/{filepath:path}")
+        def download_file(filepath: str, token: str = Query(..., description="Token for presigned URL"),
+                          Expires: int = Query(..., description="Expiration timestamp")):
+
+            presigned_url = self.presigned_urls.get(token, None)
+
+            if not presigned_url:
+                raise HTTPException(status_code=404, detail="Token not found or expired")
+
+            (filepath, expiration) = presigned_url
+
+            if Expires != expiration:
+                raise HTTPException(status_code=403, detail="Access Denied: Invalid expiration timestamp")
+
+            print(f"Attempting to download file: {filepath} with token: {token} and expiration: {expiration}")
+            if int(datetime.now().timestamp()) > expiration:
+                del self.presigned_urls[token]
+                raise HTTPException(status_code=410, detail="Token expired")
+
+            return FileResponse(filepath, headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0"})
