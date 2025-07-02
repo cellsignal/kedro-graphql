@@ -56,34 +56,58 @@ class KedroGraphQL(FastAPI):
                     self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
                     algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]]
                 )
-                filepath = Path(payload["filepath"])
+                path = Path(payload["filepath"])
             except jwt.ExpiredSignatureError:
                 raise HTTPException(status_code=403, detail="Token expired")
             except jwt.InvalidTokenError:
                 raise HTTPException(status_code=403, detail="Invalid token")
 
-            if not filepath.exists() or not filepath.is_file():
+            ALLOWED_ROOTS = []
+
+            for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_DOWNLOAD_ALLOWED_ROOTS"]:
+                ALLOWED_ROOTS.append(Path(root).resolve())
+                print(f"Allowed root: {Path(root).resolve()}")
+
+            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
+                )
+
+            if not path.exists() or not path.is_file():
                 raise HTTPException(status_code=404, detail="File not found")
 
-            return FileResponse(filepath, headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0"})
+            return FileResponse(path, headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0"})
 
         @self.post("/upload")
         async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
             try:
                 payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
                                      algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
-                dest_path = Path(payload["filepath"]).resolve()
-                print(f"Destination path: {dest_path}")
+                path = Path(payload["filepath"]).resolve()
+                print(f"Destination path: {path}")
             except jwt.ExpiredSignatureError:
                 raise HTTPException(status_code=403, detail="Token expired")
             except jwt.InvalidTokenError:
                 raise HTTPException(status_code=403, detail="Invalid token")
 
+            ALLOWED_ROOTS = []
+
+            for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_UPLOAD_ALLOWED_ROOTS"]:
+                ALLOWED_ROOTS.append(Path(root).resolve())
+                print(f"Allowed root: {Path(root).resolve()}")
+
+            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
+                )
+
             try:
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(dest_path, "wb") as out_file:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "wb") as out_file:
                     shutil.copyfileobj(file.file, out_file)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
-            return {"status": "success", "path": str(dest_path)}
+            return {"status": "success", "path": str(path)}

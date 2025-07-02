@@ -7,6 +7,7 @@ from dotenv import dotenv_values
 config = {
     "MONGO_URI": "mongodb://root:example@localhost:27017/",
     "MONGO_DB_NAME": "pipelines",
+    "KEDRO_GRAPHQL_SERVER_URL": "http://localhost:5000",
     "KEDRO_GRAPHQL_IMPORTS": "kedro_graphql.plugins.plugins,",
     "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphQL",
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
