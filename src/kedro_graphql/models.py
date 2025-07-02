@@ -6,6 +6,7 @@ from enum import Enum
 from typing import List, Optional
 from kedro.io.core import _parse_filepath
 from .plugins.presigned_url.local_file_provider import LocalFileProvider
+from .plugins.presigned_url.base import PreSignedUrlProvider
 import boto3
 import strawberry
 from botocore.exceptions import ClientError
@@ -157,7 +158,7 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
-    tags: Optional[List[Tag]] = strawberry.field(default_factory=list)
+    tags: Optional[List[Tag]] = None
 
     @strawberry.field
     def pre_signed_url_create(self, expires_in_sec: int) -> JSON | None:
@@ -190,6 +191,9 @@ class DataSet:
         module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
         module = import_module(module_path)
         cls = getattr(module, class_name)
+
+        if not issubclass(cls, PreSignedUrlProvider):
+            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
 
         return cls.pre_signed_url_create(filepath, expires_in_sec)
 
@@ -224,6 +228,9 @@ class DataSet:
         module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
         module = import_module(module_path)
         cls = getattr(module, class_name)
+
+        if not issubclass(cls, PreSignedUrlProvider):
+            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
 
         return cls.pre_signed_url_read(filepath, expires_in_sec)
 

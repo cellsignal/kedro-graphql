@@ -20,7 +20,7 @@ def init_app(app, config, session):
 
 
 def start_app(app, config, conf_source, env, package_name, project_path):
-    global a
+
     bootstrap_project(project_path)
     with KedroSession.create(project_path=project_path, env=env, conf_source=conf_source) as session:
         a = init_app(app, config, session)
