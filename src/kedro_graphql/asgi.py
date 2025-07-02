@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from datetime import datetime
-from fastapi import Query, Response
+import jwt
+import shutil
+from pathlib import Path
 from strawberry.fastapi import GraphQLRouter
 
 from .backends import init_backend
@@ -47,26 +48,42 @@ class KedroGraphQL(FastAPI):
         def shutdown_backend():
             self.backend.shutdown()
 
-        # Storing presigned urls in-memory token store for now
-        self.presigned_urls = {}
+        @self.get("/download")
+        def download_file(token: str):
+            try:
+                payload = jwt.decode(
+                    token,
+                    self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
+                    algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]]
+                )
+                filepath = Path(payload["filepath"])
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=403, detail="Token expired")
+            except jwt.InvalidTokenError:
+                raise HTTPException(status_code=403, detail="Invalid token")
 
-        @self.get("/download/{filepath:path}")
-        def download_file(filepath: str, token: str = Query(..., description="Token for presigned URL"),
-                          Expires: int = Query(..., description="Expiration timestamp")):
-
-            presigned_url = self.presigned_urls.get(token, None)
-
-            if not presigned_url:
-                raise HTTPException(status_code=404, detail="Token not found or expired")
-
-            (filepath, expiration) = presigned_url
-
-            if Expires != expiration:
-                raise HTTPException(status_code=403, detail="Access Denied: Invalid expiration timestamp")
-
-            print(f"Attempting to download file: {filepath} with token: {token} and expiration: {expiration}")
-            if int(datetime.now().timestamp()) > expiration:
-                del self.presigned_urls[token]
-                raise HTTPException(status_code=410, detail="Token expired")
+            if not filepath.exists() or not filepath.is_file():
+                raise HTTPException(status_code=404, detail="File not found")
 
             return FileResponse(filepath, headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0"})
+
+        @self.post("/upload")
+        async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
+            try:
+                payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
+                                     algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+                dest_path = Path(payload["filepath"]).resolve()
+                print(f"Destination path: {dest_path}")
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=403, detail="Token expired")
+            except jwt.InvalidTokenError:
+                raise HTTPException(status_code=403, detail="Invalid token")
+
+            try:
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(dest_path, "wb") as out_file:
+                    shutil.copyfileobj(file.file, out_file)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
+            return {"status": "success", "path": str(dest_path)}

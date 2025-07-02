@@ -10,8 +10,6 @@ from watchfiles import run_process
 from .config import config
 from .logs.logger import logger
 
-a = None
-
 
 def init_app(app, config, session):
     # create app instance

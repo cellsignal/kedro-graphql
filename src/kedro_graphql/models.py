@@ -157,34 +157,75 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
-    tags: Optional[List[Tag]] = None
+    tags: Optional[List[Tag]] = strawberry.field(default_factory=list)
 
     @strawberry.field
-    def pre_signed_url_create(self) -> JSON | None:
+    def pre_signed_url_create(self, expires_in_sec: int) -> JSON | None:
+        """
+        Get a presigned URL for uploading a dataset.
 
-        # if _parse_filepath(self.config)["protocol"] == "file":
-        # return LocalFileProvider.pre_signed_url_create()
+        Args:
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
 
-        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
-        module = import_module(module_path)
-        cls = getattr(module, class_name)
+        Returns:
+            JSON | None: A presigned URL for uploading the dataset or None if not applicable.
 
-        return cls.pre_signed_url_create(self.config)
+        Raises:
+            ValueError: If the dataset configuration is invalid or cannot be parsed.
+        """
 
-    @strawberry.field
-    def pre_signed_url_read(self) -> str | None:
-
-        config = json.loads(self.config)
-        filepath = config.get("filepath")
+        try:
+            config = json.loads(self.config)
+            filepath = config.get("filepath", None)
+            if not filepath:
+                raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Unable to parse JSON in config: {e}")
+        except Exception as e:
+            raise ValueError(f"Invalid dataset configuration: {e}")
 
         if _parse_filepath(filepath)["protocol"] == "file":
-            return LocalFileProvider.pre_signed_url_read(self.config)
+            return LocalFileProvider.pre_signed_url_create(filepath, expires_in_sec)
 
         module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
         module = import_module(module_path)
         cls = getattr(module, class_name)
 
-        return cls.pre_signed_url_read(self.config)
+        return cls.pre_signed_url_create(filepath, expires_in_sec)
+
+    @strawberry.field
+    def pre_signed_url_read(self, expires_in_sec: int) -> str | None:
+        """
+        Get a presigned URL for downloading a dataset.
+
+        Args:
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
+
+        Returns:
+            str | None: A presigned URL for downloading the dataset or None if not applicable.
+
+        Raises:
+            ValueError: If the dataset configuration is invalid or cannot be parsed.
+        """
+
+        try:
+            config = json.loads(self.config)
+            filepath = config.get("filepath", None)
+            if not filepath:
+                raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Unable to parse JSON in config: {e}")
+        except Exception as e:
+            raise ValueError(f"Invalid dataset configuration: {e}")
+
+        if _parse_filepath(filepath)["protocol"] == "file":
+            return LocalFileProvider.pre_signed_url_read(filepath, expires_in_sec)
+
+        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
+        module = import_module(module_path)
+        cls = getattr(module, class_name)
+
+        return cls.pre_signed_url_read(filepath, expires_in_sec)
 
     @strawberry.field
     def exists(self) -> bool:

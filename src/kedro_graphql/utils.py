@@ -26,20 +26,19 @@ def merge_dicts(dicts):
     return reduce(merge, dicts)
 
 
-def parse_s3_filepath(config):
+def parse_s3_filepath(filepath: str) -> tuple[str, str]:
     """
     Parse the s3 bucket name and key from DataSet filepath field.
+
+    Args:
+        filepath (str): The S3 file path in the format s3://bucket-name/key
+
+    Returns:
+        tuple: A tuple containing the bucket name and the S3 key (object path).
+
+    Raises:
+        ValueError: If the filepath does not start with "s3://" or if the bucket name or S3 key is missing.
     """
-    if config:
-        try:
-            dataset_dict = json.loads(config)
-            filepath = dataset_dict.get("filepath")
-            if not filepath:
-                raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in config: {e}")
-    else:
-        raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
 
     if not filepath.startswith("s3://"):
         raise ValueError("Invalid S3 path. Must start with 's3://'")

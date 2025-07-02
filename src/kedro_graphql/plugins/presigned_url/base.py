@@ -7,27 +7,29 @@ class PreSignedUrlProvider(metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def pre_signed_url_read(config: dict) -> str | None:
+    def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None:
         """
         Abstract method to get a presigned URL for downloading a dataset.
 
         Args:
-            config (dict): The configuration dictionary.
+            filepath (str): The file path of the dataset.
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
 
         Returns:
-            str: A presigned URL for downloading the dataset.
+            str | None: A presigned URL for downloading the dataset.
         """
         pass
 
     @abc.abstractmethod
-    def pre_signed_url_create(config: dict) -> dict | None:
+    def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None:
         """
         Abstract method to get a presigned URL for uploading a dataset.
 
         Args:
-            config (dict): The configuration dictionary.
+            filepath (str): The file path of the dataset.
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
 
         Returns:
-            PresignedUploadUrl | None: A presigned URL for uploading the dataset with the appropriate fields.
+            dict | None: A dictionary with the URL to post to and form fields and values to submit with the POST.
         """
         pass
