@@ -38,9 +38,13 @@ pages:
     module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
   explore:
     module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+  explorer:
+    module: kedro_graphql.ui.components.data_frame_viewer.DataFrameViewer
 nav:
   sidebar:
     - name: Pipelines
       page: pipelines
     - name: Search 
       page: search
+dataset_render_map:
+  pandas.CSVDataSet: explorer
