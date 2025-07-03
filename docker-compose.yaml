@@ -52,6 +52,15 @@ services:
       - ./dex-config.yaml:/etc/dex/cfg/config.yaml:z
     command: ["dex", "serve", "/etc/dex/cfg/config.yaml"]
     network_mode: host
+  oauth2-proxy:
+    restart: always
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.2.1
+    ports:
+      - "4180:4180"
+    volumes:
+      - ./oauth2-proxy.cfg:/etc/oauth2-proxy.cfg
+    command: ["oauth2-proxy", "--config", "/etc/oauth2-proxy.cfg"]
+    network_mode: host
 volumes:
   cache:
     driver: local

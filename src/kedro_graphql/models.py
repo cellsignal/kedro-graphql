@@ -17,6 +17,9 @@ from strawberry.utils.str_converters import to_camel_case, to_snake_case
 from .config import config as CONFIG
 from .utils import parse_s3_filepath
 from .logs.logger import logger
+from .permissions import get_permissions
+
+PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 
 
 def mark_deprecated(default=None):
@@ -159,7 +162,7 @@ class DataSet:
     config: Optional[str] = None
     tags: Optional[List[Tag]] = None
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[PERMISSIONS_CLASS])
     def pre_signed_url_create(self) -> Optional[JSON]:
         """
         Generate a presigned URL S3 to upload a file.
@@ -195,7 +198,7 @@ class DataSet:
 
         return response
 
-    @strawberry.field
+    @strawberry.field(permission_classes=[PERMISSIONS_CLASS])
     def pre_signed_url_read(self) -> Optional[str]:
         """
         Generate a presigned URL S3 to download a file.

@@ -12,6 +12,7 @@ from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
 from strawberry.extensions import SchemaExtension
+from strawberry.fastapi import BaseContext
 from strawberry.tools import merge_types
 from strawberry.types import Info
 from strawberry.directive import StrawberryDirective
@@ -37,6 +38,9 @@ from .models import (
     State,
 )
 from .tasks import run_pipeline
+from .permissions import get_permissions
+
+PERMISSIONS_CLASS = get_permissions(config.get("KEDRO_GRAPHQL_PERMISSIONS"))
 
 
 def encode_cursor(id: int) -> str:
@@ -65,14 +69,14 @@ def decode_cursor(cursor: str) -> int:
 @strawberry.type
 class Query:
 
-    @strawberry.field(description="Get a pipeline template.")
+    @strawberry.field(description="Get a pipeline template.", permission_classes=[PERMISSIONS_CLASS])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
             print(p.id, type(p.id))
             if p.id == id:
                 return p
 
-    @strawberry.field(description="Get a list of pipeline templates.")
+    @strawberry.field(description="Get a list of pipeline templates.", permission_classes=[PERMISSIONS_CLASS])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
         if cursor is not None:
             # decode the user ID from the given cursor.
@@ -102,7 +106,7 @@ class Query:
             pipeline_templates=sliced_pipes, page_meta=PageMeta(next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Get a pipeline instance.")
+    @strawberry.field(description="Get a pipeline instance.", permission_classes=[PERMISSIONS_CLASS])
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -113,7 +117,7 @@ class Query:
 
         return p
 
-    @strawberry.field(description="Get a list of pipeline instances.")
+    @strawberry.field(description="Get a list of pipeline instances.", permission_classes=[PERMISSIONS_CLASS])
     def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
@@ -141,7 +145,7 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Execute a pipeline.")
+    @strawberry.mutation(description="Execute a pipeline.", permission_classes=[PERMISSIONS_CLASS])
     def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
@@ -214,7 +218,7 @@ class Mutation:
                 f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             return p
 
-    @strawberry.mutation(description="Update a pipeline.")
+    @strawberry.mutation(description="Update a pipeline.", permission_classes=[PERMISSIONS_CLASS])
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         try:
@@ -288,7 +292,7 @@ class Mutation:
 
         return p
 
-    @strawberry.mutation(description="Delete a pipeline.")
+    @strawberry.mutation(description="Delete a pipeline.", permission_classes=[PERMISSIONS_CLASS])
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -304,7 +308,7 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
-    @strawberry.subscription(description="Subscribe to pipeline events.")
+    @strawberry.subscription(description="Subscribe to pipeline events.", permission_classes=[PERMISSIONS_CLASS])
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
@@ -325,7 +329,7 @@ class Subscription:
                 e["id"] = id
                 yield PipelineEvent(**e)
 
-    @strawberry.subscription(description="Subscribe to pipeline logs.")
+    @strawberry.subscription(description="Subscribe to pipeline logs.", permission_classes=[PERMISSIONS_CLASS])
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:

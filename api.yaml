@@ -8,20 +8,6 @@ config:
   app: "kedro_graphql.asgi.KedroGraphQL"
   app_title: "Kedro GraphQL"
   app_description: "A tool for serving kedro projects as a GraphQL API"
-  oauth_provider: "pkce"
-  oauth_secret: "api"
-  oauth_key: "api"
-  oauth_scope: 
-    - openid
-    - profile 
-    - email 
-    - groups
-  cookie_secret: "f34feacef9d3c3c6e7cb29d486ced14f9d2c45a8e8d914801d42a43814fa4a31"
-  oauth_extra_params: 
-    OPENID_CONNECT_URL: "http://localhost:5556/oidc/.well-known/openid-configuration"
-  openapi_tags:
-    - name: "protected"
-      description: "Protected endpoints that require authentication"
   project_version: "1.0.1"
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
@@ -32,4 +18,9 @@ config:
   deprecation_docs: "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations"
   log_tmp_dir: "/tmp/"
   log_path_prefix: null
+  events_config:
+    event00:
+      source: "example.com"
+      type: "com.example.event"
+  permissions: "kedro_graphql.permissions.IsAuthenticatedAlways"
 

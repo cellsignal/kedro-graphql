@@ -1,6 +1,6 @@
 frontend:
   issuer: kedro-graphql
-issuer: http://localhost/oidc
+issuer: http://localhost:5556/oidc
 enablePasswordDB: true
 storage:
   type: sqlite3
@@ -17,13 +17,9 @@ staticPasswords:
     username: "admin"
     userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
 staticClients:
-  - id: ui
-    name: 'ui'
-    secret: ui
+  - id: kedro-graphql
+    name: 'kedro-graphql'
+    secret: 'kedro-graphql'
     redirectURIs:
-      - 'http://localhost:5006/login'
-  - id: api
-    name: 'api'
-    secret: api
-    redirectURIs:
-      - 'http://localhost:5000/callback'
+      - 'http://localhost:4180/oauth2/callback'
+

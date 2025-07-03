@@ -34,8 +34,6 @@ dependencies = [
     "boto3>=1.26.160",
     "asyncio>=3.4.3",
     "cloudevents",
-    "Authlib",
-    "itsdangerous"
 ]
 
 [project.scripts]
