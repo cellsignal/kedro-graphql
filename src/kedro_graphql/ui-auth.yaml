@@ -6,8 +6,8 @@ panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/
   base_url: /
   port: 5006
   oauth_provider: "pkce"
-  oauth_secret: "panel"
-  oauth_key: "panel"
+  oauth_secret: "ui"
+  oauth_key: "ui"
   oauth_extra_params: 
     AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
     TOKEN_URL: "http://localhost:5556/oidc/token"

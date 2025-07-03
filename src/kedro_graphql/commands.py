@@ -7,7 +7,7 @@ from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from watchfiles import run_process
 
-from .config import config
+from .config import config, load_api_spec
 from .logs.logger import logger
 
 
@@ -84,12 +84,12 @@ def commands():
 )
 @click.option(
     "--mongo-uri",
-    default=config["MONGO_URI"],
+    default=config["KEDRO_GRAPHQL_MONGO_URI"],
     help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'"
 )
 @click.option(
     "--mongo-db-name",
-    default=config["MONGO_DB_NAME"],
+    default=config["KEDRO_GRAPHQL_MONGO_DB_NAME"],
     help="Name to use for collection in mongo e.g. 'pipelines'"
 )
 @click.option(
@@ -121,6 +121,12 @@ def commands():
     help="Path to watch for file changes, defaults to <project path>/src"
 )
 @click.option(
+    "--api-spec",
+    default=None,
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    help="Path to watch for file changes, defaults to <project path>/src"
+)
+@click.option(
     "--ui",
     "-u",
     is_flag=True,
@@ -141,13 +147,14 @@ def commands():
 )
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir,
-        log_path_prefix, reload, reload_path, ui, ui_spec,
+        log_path_prefix, reload, reload_path, api_spec, ui, ui_spec,
         worker):
     """Commands for working with kedro-graphql."""
+    config_full = load_api_spec(api_spec) if api_spec else config
 
-    config.update({
-        "MONGO_URI": mongo_uri,
-        "MONGO_DB_NAME": mongo_db_name,
+    config_full.update({
+        "KEDRO_GRAPHQL_MONGO_URI": mongo_uri,
+        "KEDRO_GRAPHQL_MONGO_DB_NAME": mongo_db_name,
         "KEDRO_GRAPHQL_IMPORTS": imports,
         "KEDRO_GRAPHQL_APP": app,
         "KEDRO_GRAPHQL_BACKEND": backend,
@@ -162,6 +169,7 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         "KEDRO_PROJECT_NAME": metadata.package_name,
     })
 
+    print(config_full)
     if not reload_path:
         reload_path = metadata.project_path.joinpath("src")
 
@@ -173,22 +181,22 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         from .ui.app import start_ui
         if reload:
             run_process(str(reload_path), target=start_ui, kwargs={
-                        "spec": ui_spec, "config": config})
+                        "spec": ui_spec, "config": config_full})
         else:
-            start_ui(spec=ui_spec, config=config)
+            start_ui(spec=ui_spec, config=config_full)
 
     elif worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
-                app, config, conf_source, env, metadata.package_name, metadata.project_path))
+                app, config_full, conf_source, env, metadata.package_name, metadata.project_path))
         else:
-            start_worker(app, config, conf_source, env,
+            start_worker(app, config_full, conf_source, env,
                          metadata.package_name, metadata.project_path)
 
     else:
         if reload:
-            run_process(reload_path, target=start_app, args=(app, config, conf_source,
+            run_process(reload_path, target=start_app, args=(app, config_full, conf_source,
                         env, metadata.package_name, metadata.project_path))
         else:
-            start_app(app, config, conf_source, env,
+            start_app(app, config_full, conf_source, env,
                       metadata.package_name, metadata.project_path)
