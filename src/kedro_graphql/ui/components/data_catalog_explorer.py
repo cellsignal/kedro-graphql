@@ -17,12 +17,24 @@ class DataCatalogExplorer(pn.viewable.Viewer):
 
     def __panel__(self):
 
-        ds_df = pd.DataFrame({
+        # Initial flat columns
+        base_df = pd.DataFrame({
             'name': [i.name for i in self.pipeline.data_catalog],
             'type': [json.loads(i.config)["type"] for i in self.pipeline.data_catalog],
             'filepath': [json.loads(i.config).get("filepath", "") for i in self.pipeline.data_catalog],
-            'tags': [", ".join([f"{tag.key}={tag.value}" for tag in i.tags]) if i.tags else "" for i in self.pipeline.data_catalog],
         }, index=[i for i in range(len(self.pipeline.data_catalog))])
+
+        # Flatten tags into individual columns like 'tag:key' = value
+        tags_list = []
+        for idx, ds in enumerate(self.pipeline.data_catalog):
+            tag_data = {}
+            if ds.tags:
+                for tag in ds.tags:
+                    tag_data[f"tag:{tag.key}"] = tag.value
+            tags_list.append(pd.Series(tag_data, name=idx))
+
+        tags_df = pd.DataFrame(tags_list).fillna("")
+        ds_df = pd.concat([base_df, tags_df], axis=1)
 
         # JS pane (invisible) used to inject JS dynamically
         js_download = pn.pane.HTML("", width=0, height=0)
@@ -77,6 +89,16 @@ class DataCatalogExplorer(pn.viewable.Viewer):
                     else:
                         print(f"No presigned URL available for {dataset_name}")
 
+        filters = {
+            "name": {"type": "input", "placeholder": "Filter by name", "func": "like"},
+            "type":
+            {"type": "list", "placeholder": "Select dataset type(s)", "func": "in", "valuesLookup": True, "multiselect": True},
+            "filepath": {"type": "input", "placeholder": "Filter by filepath", "func": "like"}}
+
+        for tag in tags_df.columns.tolist():
+            filters[tag] = {"type": "list", "placeholder": "Select tag(s)",
+                            "func": "in", "valuesLookup": True, "multiselect": True}
+
         ds_widget = pn.widgets.Tabulator(
             ds_df,
             disabled=True,
@@ -86,19 +108,15 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             theme='materialize',
             selectable=False,
             show_index=False,
+            layout='fit_columns',
+            header_filters=filters,
         )
         ds_widget.on_click(download_action)
 
         return pn.Column(
-            pn.Row(
-                pn.pane.Markdown(
-                    """Search for datasets with the following syntax:
-- Search by name: `name=example`
-- Search by tags: `tag:key=value`
-                                 """)),
-            pn.Card(ds_widget, title="Data Catalog", sizing_mode="stretch_width"),
+            pn.Card(ds_widget, title="Data Catalog Explorer", sizing_mode="stretch_width"),
             js_download,
-            pn.pane.Markdown("# Download datasets using AbstractDataset.from_config().load()"),
+            # pn.pane.Markdown("# Download datasets using AbstractDataset.from_config().load()"),
             # pn.widgets.FileDownload(
             #     callback=lambda: io.BytesIO(AbstractDataset.from_config(
             #         self.pipeline.data_catalog[3].name, json.loads(self.pipeline.data_catalog[3].config)).load()),
