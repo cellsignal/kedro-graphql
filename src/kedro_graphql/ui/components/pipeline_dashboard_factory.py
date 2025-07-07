@@ -6,6 +6,7 @@ from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
 from kedro_graphql.ui.components.pipeline_viz import PipelineViz
 from kedro_graphql.ui.components.pipeline_retry import PipelineRetry
 from kedro_graphql.ui.components.pipeline_cloning import PipelineCloning
+from kedro_graphql.ui.components.data_catalog_explorer import DataCatalogExplorer
 
 
 class PipelineDashboardFactory(pn.viewable.Viewer):
@@ -42,7 +43,9 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         viz = PipelineViz(pipeline=p.name, spec=self.spec)
         retry = PipelineRetry(client=self.spec["config"]["client"], pipeline=p)
         cloning = PipelineCloning(client=self.spec["config"]["client"], pipeline=p)
+        explorer = DataCatalogExplorer(spec=self.spec, pipeline=p)
         tabs = pn.Tabs(dynamic=False)
+        tabs.append(("Explorer", explorer))
         tabs.append(("Monitor", monitor))
         tabs.append(("Detail", detail))
         tabs.append(("Viz", viz))

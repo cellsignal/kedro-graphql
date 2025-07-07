@@ -2,7 +2,7 @@ import panel as pn
 import param
 import pandas as pd
 import json
-from kedro_graphql.client import KedroGraphqlClient
+
 from kedro_graphql.models import Pipeline
 
 
@@ -10,7 +10,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
     """Main class for the Data Catalog Explorer UI"""
 
     pipeline = param.ClassSelector(class_=Pipeline)
-    client = param.ClassSelector(class_=KedroGraphqlClient)
+    spec = param.Dict(default={})
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -43,13 +43,15 @@ class DataCatalogExplorer(pn.viewable.Viewer):
 
             js_download.object = js_code
 
-        def open_data_frame_viewer(url, file_type):
+        def open_data_frame_viewer(page, presigned_url, ds_name, ds_type):
             js_code = f"""
             <script>
             (function() {{
-                const url = "{url}";
-                const fileType = "{file_type}";
-                const viewerUrl = `${{window.location.origin}}/?page=explorer&url=${{encodeURIComponent(url)}}&file_type=${{encodeURIComponent(fileType)}}`;
+                const presigned_url = "{presigned_url}";
+                const page = "{page}";
+                const ds_name = "{ds_name}";
+                const ds_type = "{ds_type}";
+                const viewerUrl = `${{window.location.origin}}/?page=${{page}}&presigned_url=${{encodeURIComponent(presigned_url)}}&ds_name=${{encodeURIComponent(ds_name)}}&ds_type=${{encodeURIComponent(ds_type)}}`;
                 window.open(viewerUrl, '_blank');
             }})();
             </script>
@@ -63,13 +65,13 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             row = event.row
 
             dataset_name = ds_df.iloc[row]['name']
-
             for ds in self.pipeline.data_catalog:
                 if ds.name == dataset_name:
-                    presigned_url = ds.pre_signed_url_read(expires_in_sec=10)
-                    if json.loads(ds.config)["type"] == "pandas.CSVDataset":
-                        open_data_frame_viewer(presigned_url, "csv")
-                        continue
+                    presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
+                    for dataset_type, panel_page in self.spec["dataset_viewer"].items():
+                        if json.loads(ds.config)["type"] == dataset_type:
+                            open_data_frame_viewer(panel_page, presigned_url, ds.name, json.loads(ds.config)["type"])
+                            return
                     if presigned_url:
                         trigger_download(presigned_url)
                     else:
