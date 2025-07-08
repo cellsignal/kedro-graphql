@@ -66,7 +66,7 @@ class KedroGraphQL(FastAPI):
 
             for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_DOWNLOAD_ALLOWED_ROOTS"]:
                 ALLOWED_ROOTS.append(Path(root).resolve())
-                print(f"Allowed root: {Path(root).resolve()}")
+                # print(f"Allowed root: {Path(root).resolve()}")
 
             if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
                 raise HTTPException(
@@ -88,7 +88,7 @@ class KedroGraphQL(FastAPI):
                 payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
                                      algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
                 path = Path(payload["filepath"]).resolve()
-                print(f"Destination path: {path}")
+                # print(f"Destination path: {path}")
             except jwt.ExpiredSignatureError:
                 raise HTTPException(status_code=403, detail="Token expired")
             except jwt.InvalidTokenError:
@@ -98,7 +98,7 @@ class KedroGraphQL(FastAPI):
 
             for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_UPLOAD_ALLOWED_ROOTS"]:
                 ALLOWED_ROOTS.append(Path(root).resolve())
-                print(f"Allowed root: {Path(root).resolve()}")
+                # print(f"Allowed root: {Path(root).resolve()}")
 
             if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
                 raise HTTPException(

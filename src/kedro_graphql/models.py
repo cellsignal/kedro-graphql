@@ -7,6 +7,7 @@ from typing import List, Optional
 from kedro.io.core import _parse_filepath
 from .plugins.presigned_url.local_file_provider import LocalFileProvider
 from .plugins.presigned_url.base import PreSignedUrlProvider
+from importlib import import_module
 import strawberry
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
@@ -15,7 +16,6 @@ from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
 from .config import config as CONFIG
-from importlib import import_module
 
 
 def mark_deprecated(default=None):
