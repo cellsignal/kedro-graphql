@@ -124,22 +124,16 @@ class TestKedroGraphqlClient:
         r = await mock_client.delete_pipeline(id=pipeline.id)
         assert r.id == pipeline.id
 
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
     @pytest.mark.asyncio
-    async def test_pipeline_events(self, mock_create_pipeline, mock_client):
+    async def test_pipeline_events(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 
         async for result in mock_client.pipeline_events(id=pipeline.id):
             assert result.status in ALL_STATES
 
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
     @pytest.mark.asyncio
-    async def test_pipeline_logs(self, mock_create_pipeline, mock_client):
+    async def test_pipeline_logs(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 

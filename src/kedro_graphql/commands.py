@@ -1,3 +1,4 @@
+import os
 import pathlib
 from importlib import import_module
 
@@ -7,7 +8,7 @@ from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from watchfiles import run_process
 
-from .config import config, load_api_spec
+from .config import defaults, load_config
 from .logs.logger import logger
 
 
@@ -47,64 +48,64 @@ def commands():
 @click.option(
     "--app",
     "-a",
-    default=config["KEDRO_GRAPHQL_APP"],
+    default=defaults["KEDRO_GRAPHQL_APP"],
     help="Application import path"
 )
 @click.option(
     "--backend",
-    default=config["KEDRO_GRAPHQL_BACKEND"],
+    default=defaults["KEDRO_GRAPHQL_BACKEND"],
     help="The only supported value for this option is 'kedro_graphql.backends.mongodb.MongoBackend'"
 )
 @click.option(
     "--broker",
-    default=config["KEDRO_GRAPHQL_BROKER"],
+    default=defaults["KEDRO_GRAPHQL_BROKER"],
     help="URI to broker e.g. 'redis://localhost'"
 )
 @click.option(
     "--celery-result-backend",
-    default=config["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"],
+    default=defaults["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"],
     help="URI to backend for celery results e.g. 'redis://localhost'"
 )
 @click.option(
     "--conf-source",
-    default=config["KEDRO_GRAPHQL_CONF_SOURCE"],
+    default=defaults["KEDRO_GRAPHQL_CONF_SOURCE"],
     help="Path of a directory where project configuration is stored."
 )
 @click.option(
     "--env",
     "-e",
-    default=config["KEDRO_GRAPHQL_ENV"],
+    default=defaults["KEDRO_GRAPHQL_ENV"],
     help="Kedro configuration environment name. Defaults to `local`."
 )
 @click.option(
     "--imports",
     "-i",
-    default=config["KEDRO_GRAPHQL_IMPORTS"],
+    default=defaults["KEDRO_GRAPHQL_IMPORTS"],
     help="Additional import paths"
 )
 @click.option(
     "--mongo-uri",
-    default=config["KEDRO_GRAPHQL_MONGO_URI"],
+    default=defaults["KEDRO_GRAPHQL_MONGO_URI"],
     help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'"
 )
 @click.option(
     "--mongo-db-name",
-    default=config["KEDRO_GRAPHQL_MONGO_DB_NAME"],
+    default=defaults["KEDRO_GRAPHQL_MONGO_DB_NAME"],
     help="Name to use for collection in mongo e.g. 'pipelines'"
 )
 @click.option(
     "--runner",
-    default=config["KEDRO_GRAPHQL_RUNNER"],
+    default=defaults["KEDRO_GRAPHQL_RUNNER"],
     help="Execution mechanism to run pipelines e.g. 'kedro.runner.SequentialRunner'"
 )
 @click.option(
     "--log-tmp-dir",
-    default=config["KEDRO_GRAPHQL_LOG_TMP_DIR"],
+    default=defaults["KEDRO_GRAPHQL_LOG_TMP_DIR"],
     help="Temporary directory for logs"
 )
 @click.option(
     "--log-path-prefix",
-    default=config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"],
+    default=defaults["KEDRO_GRAPHQL_LOG_PATH_PREFIX"],
     help="Prefix of path to save logs"
 )
 @click.option(
@@ -150,26 +151,41 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         log_path_prefix, reload, reload_path, api_spec, ui, ui_spec,
         worker):
     """Commands for working with kedro-graphql."""
-    config_full = load_api_spec(api_spec) if api_spec else config
 
-    config_full.update({
-        "KEDRO_GRAPHQL_MONGO_URI": mongo_uri,
-        "KEDRO_GRAPHQL_MONGO_DB_NAME": mongo_db_name,
-        "KEDRO_GRAPHQL_IMPORTS": imports,
-        "KEDRO_GRAPHQL_APP": app,
-        "KEDRO_GRAPHQL_BACKEND": backend,
-        "KEDRO_GRAPHQL_BROKER": broker,
-        "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": celery_result_backend,
-        "KEDRO_GRAPHQL_RUNNER": runner,
-        "KEDRO_GRAPHQL_ENV": env,
-        "KEDRO_GRAPHQL_CONF_SOURCE": conf_source,
-        "KEDRO_GRAPHQL_LOG_TMP_DIR": log_tmp_dir,
-        "KEDRO_GRAPHQL_LOG_PATH_PREFIX": log_path_prefix,
-        "KEDRO_PROJECT_VERSION": getattr(import_module(metadata.package_name), "__version__", None),
-        "KEDRO_PROJECT_NAME": metadata.package_name,
-    })
+    if api_spec:
+        os.environ["KEDRO_GRAPHQL_API_SPEC"] = str(api_spec)
+    if mongo_uri:
+        os.environ["KEDRO_GRAPHQL_MONGO_URI"] = mongo_uri
+    if mongo_db_name:
+        os.environ["KEDRO_GRAPHQL_MONGO_DB_NAME"] = mongo_db_name
+    if imports:
+        os.environ["KEDRO_GRAPHQL_IMPORTS"] = imports
+    if app:
+        os.environ["KEDRO_GRAPHQL_APP"] = app
+    if backend:
+        os.environ["KEDRO_GRAPHQL_BACKEND"] = backend
+    if broker:
+        os.environ["KEDRO_GRAPHQL_BROKER"] = broker
+    if celery_result_backend:
+        os.environ["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"] = celery_result_backend
+    if conf_source:
+        os.environ["KEDRO_GRAPHQL_CONF_SOURCE"] = conf_source
+    if env:
+        os.environ["KEDRO_GRAPHQL_ENV"] = env
+    if runner:
+        os.environ["KEDRO_GRAPHQL_RUNNER"] = runner
+    if log_tmp_dir:
+        os.environ["KEDRO_GRAPHQL_LOG_TMP_DIR"] = log_tmp_dir
+    if log_path_prefix:
+        os.environ["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = log_path_prefix
 
-    print(config_full)
+    os.environ["KEDRO_GRAPHQL_PROJECT_VERSION"] = getattr(
+        import_module(metadata.package_name), "__version__", None)
+    os.environ["KEDRO_PROJECT_NAME"] = metadata.package_name
+
+    config = load_config()
+    logger.debug("configuration loaded by {s}".format(s=__name__))
+
     if not reload_path:
         reload_path = metadata.project_path.joinpath("src")
 
@@ -181,22 +197,22 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         from .ui.app import start_ui
         if reload:
             run_process(str(reload_path), target=start_ui, kwargs={
-                        "spec": ui_spec, "config": config_full})
+                        "spec": ui_spec, "config": config})
         else:
-            start_ui(spec=ui_spec, config=config_full)
+            start_ui(spec=ui_spec, config=config)
 
     elif worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
-                app, config_full, conf_source, env, metadata.package_name, metadata.project_path))
+                app, config, conf_source, env, metadata.package_name, metadata.project_path))
         else:
-            start_worker(app, config_full, conf_source, env,
+            start_worker(app, config, conf_source, env,
                          metadata.package_name, metadata.project_path)
 
     else:
         if reload:
-            run_process(reload_path, target=start_app, args=(app, config_full, conf_source,
+            run_process(reload_path, target=start_app, args=(app, config, conf_source,
                         env, metadata.package_name, metadata.project_path))
         else:
-            start_app(app, config_full, conf_source, env,
+            start_app(app, config, conf_source, env,
                       metadata.package_name, metadata.project_path)

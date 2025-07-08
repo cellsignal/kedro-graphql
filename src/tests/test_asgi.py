@@ -20,12 +20,8 @@ class TestASGI:
     @pytest.mark.asyncio
     async def test_post_event(self,
                               mock_server,
-                              mock_client,
                               mock_celery_session_app,
                               celery_session_worker,
-                              depends_on_current_app,
-                              mock_app,
-                              mock_info_context,
                               event_data):
         retry = Retry(
             total=5,
@@ -48,7 +44,4 @@ class TestASGI:
         assert resp.status_code == 200
         resp = resp.json()
         # print("RESPONSE JSON:", resp)
-        assert resp.keys() == {"result"}
-        result = mock_celery_session_app.AsyncResult(
-            resp["result"]).wait(timeout=None, interval=0.5)
-        assert len(result) > 0
+        assert resp.keys() == {"id"}

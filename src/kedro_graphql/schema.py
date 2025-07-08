@@ -12,7 +12,7 @@ from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
 from strawberry.extensions import SchemaExtension
-from strawberry.fastapi import BaseContext
+from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
 from strawberry.types import Info
 from strawberry.directive import StrawberryDirective
@@ -21,7 +21,7 @@ from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
 from strawberry.schema.config import StrawberryConfig
 
 from . import __version__ as kedro_graphql_version
-from .config import config
+from .config import load_config
 from .pipeline_event_monitor import PipelineEventMonitor
 from .hooks import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
@@ -40,7 +40,12 @@ from .models import (
 from .tasks import run_pipeline
 from .permissions import get_permissions
 
-PERMISSIONS_CLASS = get_permissions(config.get("KEDRO_GRAPHQL_PERMISSIONS"))
+
+CONFIG = load_config()
+logger.debug("configuration loaded by {s}".format(s=__name__))
+
+PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
+logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
 
 
 def encode_cursor(id: int) -> str:
@@ -68,15 +73,14 @@ def decode_cursor(cursor: str) -> int:
 
 @strawberry.type
 class Query:
-
-    @strawberry.field(description="Get a pipeline template.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
             print(p.id, type(p.id))
             if p.id == id:
                 return p
 
-    @strawberry.field(description="Get a list of pipeline templates.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
         if cursor is not None:
             # decode the user ID from the given cursor.
@@ -103,21 +107,23 @@ class Query:
             next_cursor = None
 
         return PipelineTemplates(
-            pipeline_templates=sliced_pipes, page_meta=PageMeta(next_cursor=next_cursor)
+            pipeline_templates=sliced_pipes, page_meta=PageMeta(
+                next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Get a pipeline instance.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")])])
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
         return p
 
-    @strawberry.field(description="Get a list of pipeline instances.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipelines")])])
     def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
@@ -145,7 +151,7 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Execute a pipeline.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")])])
     def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
@@ -170,10 +176,10 @@ class Mutation:
         p.created_at = started_at
 
         # Get kedro project, kedro-graphql, and pipeline versions
-        p.project_version = config.get("KEDRO_PROJECT_VERSION", None)
+        p.project_version = CONFIG.get("KEDRO_PROJECT_VERSION", None)
         p.kedro_graphql_version = kedro_graphql_version
         p.pipeline_version = None
-        package_name = config.get("KEDRO_PROJECT_NAME", None)
+        package_name = CONFIG.get("KEDRO_PROJECT_NAME", None)
         if package_name:
             try:
                 module = import_module(
@@ -218,13 +224,14 @@ class Mutation:
                 f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
             return p
 
-    @strawberry.mutation(description="Update a pipeline.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")])])
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
 
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -236,7 +243,7 @@ class Mutation:
         p.tags = pipeline_input_dict.get("tags")
         p.parent = pipeline_input_dict.get("parent")
         runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get(
-            "runner") else config["KEDRO_GRAPHQL_RUNNER"]
+            "runner") else CONFIG["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
@@ -292,12 +299,13 @@ class Mutation:
 
         return p
 
-    @strawberry.mutation(description="Delete a pipeline.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")])])
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -308,14 +316,15 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
-    @strawberry.subscription(description="Subscribe to pipeline events.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_events")])])
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -329,13 +338,14 @@ class Subscription:
                 e["id"] = id
                 yield PipelineEvent(**e)
 
-    @strawberry.subscription(description="Subscribe to pipeline logs.", permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_logs")])])
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -363,6 +373,7 @@ def build_schema(
         ] = None,
         schema_directives: Iterable[object] = ()
 ):
+
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
     ComboMutation = merge_types("Mutation", tuple(
         [Mutation] + type_plugins["mutation"]))

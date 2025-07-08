@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -22,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.config import config as CONFIG
+from kedro_graphql.config import load_config
 from multiprocessing import Process
 import uvicorn
 from pathlib import Path
@@ -30,14 +31,6 @@ from kedro_graphql.asgi import KedroGraphQL
 import multiprocessing as mp
 import tempfile
 import pytest_asyncio
-
-# enable events endpoint
-CONFIG["KEDRO_GRAPHQL_EVENTS_CONFIG"] = {"event00": {
-    "source": "example.com", "type": "com.example.event"}}
-
-# use "test_pipelines" as the collection name for testing
-CONFIG["KEDRO_GRAPHQL_MONGO_DB_COLLECTION"] = "test_pipelines"
-CONFIG["MONGO_DB_NAME"] = "test_pipelines"
 
 
 if mp.get_start_method(allow_none=True) != "spawn":
@@ -50,15 +43,32 @@ def kedro_session():
     return KedroSession.create()
 
 
-def start_server():
+@pytest.fixture(scope="session")
+def kedro_graphql_config():
+
+    config = load_config()
+
+    # enable events endpoint
+    config["KEDRO_GRAPHQL_EVENTS_CONFIG"] = {"event00": {
+        "source": "example.com", "type": "com.example.event"}}
+
+    # use "test_pipelines" as the collection name for testing
+    config["KEDRO_GRAPHQL_MONGO_DB_COLLECTION"] = "test_pipelines"
+    config["KEDRO_GRAPHQL_MONGO_DB_NAME"] = "test_pipelines"
+
+    return config
+
+
+def start_server(config={}):
 
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
             bootstrap_project(Path.cwd())
             session = KedroSession.create()
-            app = KedroGraphQL(kedro_session=session, config=CONFIG)
+            app = KedroGraphQL(kedro_session=session, config=config)
             app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
             app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
+            # print("Starting Kedro GraphQL server with config: ", app.config)
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
@@ -72,8 +82,27 @@ def start_server():
 
 
 @pytest.fixture(scope="session")
-def mock_server():
-    proc = Process(target=start_server, args=())
+def mock_server(kedro_graphql_config):
+    proc = Process(target=start_server, args=(), kwargs={
+                   "config": kedro_graphql_config})
+    proc.start()
+    yield
+    proc.terminate()
+
+
+@pytest.fixture(scope="session")
+def mock_server_rbac(kedro_graphql_config):
+    kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedRBAC"
+    kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
+        "test_group": "admin"
+    }
+    # set env variables so other modules will load config correctly
+    os.environ["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = json.dumps(
+        kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
+    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS"]
+
+    proc = Process(target=start_server, args=(), kwargs={
+                   "config": kedro_graphql_config})
     proc.start()
     yield
     proc.terminate()
@@ -81,6 +110,7 @@ def mock_server():
 
 @pytest_asyncio.fixture
 async def mock_client(mock_server):
+
     client = KedroGraphqlClient(uri_graphql="http://localhost:5000/graphql",
                                 uri_ws="ws://localhost:5000/graphql")
     yield client
@@ -88,13 +118,14 @@ async def mock_client(mock_server):
 
 
 @pytest.fixture(scope="session")
-def mock_app(kedro_session):
+def mock_app(kedro_session, kedro_graphql_config):
 
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
-            app = KedroGraphQL(kedro_session=kedro_session)
+            app = KedroGraphQL(kedro_session=kedro_session, config=kedro_graphql_config)
             app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
             app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
+
             yield app
 
 
@@ -115,9 +146,10 @@ def celery_config():
 
 
 @pytest.fixture(scope='session')
-def mock_celery_session_app(mock_app, celery_session_app):
+def mock_celery_session_app(mock_app, mock_info_context, celery_session_app):
     celery_session_app.kedro_graphql_backend = mock_app.backend
     celery_session_app.kedro_graphql_schema = mock_app.schema
+    celery_session_app.kedro_graphql_config = mock_app.config
     return celery_session_app
 
 
@@ -126,7 +158,7 @@ def celery_worker_parameters():
     return {"without_heartbeat": False}
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def mock_info_context(mock_app):
 
     class Request():
@@ -309,4 +341,4 @@ def delete_pipeline_collection(mock_app):
     # Will be executed before the first test
     yield
     # Will be executed after the last test
-    mock_app.backend.db[mock_app.config["MONGO_DB_NAME"]].drop()
+    mock_app.backend.db[mock_app.config["KEDRO_GRAPHQL_MONGO_DB_NAME"]].drop()

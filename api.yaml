@@ -22,5 +22,22 @@ config:
     event00:
       source: "example.com"
       type: "com.example.event"
-  permissions: "kedro_graphql.permissions.IsAuthenticatedAlways"
+  permissions: "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail"
+  permissions_role_to_action_mapping:
+    admin:
+      - "create_pipeline"
+      - "read_pipeline"
+      - "read_pipelines"
+      - "update_pipeline"
+      - "delete_pipeline"
+      - "read_pipeline_template"
+      - "read_pipeline_templates"
+      - "create_dataset"
+      - "read_dataset"
+      - "subscribe_to_events"
+      - "subscribe_to_logs"
+      - "create_event"
+  permissions_group_to_role_mapping: 
+      EXTERNAL_GROUP_NAME: 
+          - admin
 

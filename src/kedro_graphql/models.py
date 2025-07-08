@@ -1,3 +1,4 @@
+from cloudevents.pydantic import CloudEvent
 import json
 import uuid
 from copy import deepcopy
@@ -13,13 +14,19 @@ from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
+from strawberry.permission import PermissionExtension
 
-from .config import config as CONFIG
+from .config import load_config
 from .utils import parse_s3_filepath
 from .logs.logger import logger
 from .permissions import get_permissions
 
+
+CONFIG = load_config()
+logger.debug("configuration loaded by {s}".format(s=__name__))
+
 PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
+logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
 
 
 def mark_deprecated(default=None):
@@ -162,7 +169,7 @@ class DataSet:
     config: Optional[str] = None
     tags: Optional[List[Tag]] = None
 
-    @strawberry.field(permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
     def pre_signed_url_create(self) -> Optional[JSON]:
         """
         Generate a presigned URL S3 to upload a file.
@@ -198,7 +205,7 @@ class DataSet:
 
         return response
 
-    @strawberry.field(permission_classes=[PERMISSIONS_CLASS])
+    @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
     def pre_signed_url_read(self) -> Optional[str]:
         """
         Generate a presigned URL S3 to download a file.

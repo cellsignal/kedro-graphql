@@ -2,13 +2,15 @@ from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.websockets import WebsocketsTransport
 from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage
-from kedro_graphql.config import config
+from kedro_graphql.config import load_config
 import backoff
 from gql.transport.exceptions import TransportQueryError
 from typing import Optional
 import logging
 
 logger = logging.getLogger("kedro-graphql")
+CONFIG = load_config()
+logger.debug("configuration loaded by {s}".format(s=__name__))
 
 PIPELINE_GQL = """{
                     id
@@ -71,8 +73,8 @@ class KedroGraphqlClient():
             pipeline_gql (str): pipeline graphql query [default: kedro_graphql.client.PIPELINE_GQL]
 
         """
-        self.uri_graphql = uri_graphql or config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
-        self.uri_ws = uri_ws or config["KEDRO_GRAPHQL_CLIENT_URI_WS"]
+        self.uri_graphql = uri_graphql or CONFIG["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
+        self.uri_ws = uri_ws or CONFIG["KEDRO_GRAPHQL_CLIENT_URI_WS"]
         self._aio_transport = AIOHTTPTransport(url=self.uri_graphql)
         self._web_transport = WebsocketsTransport(url=self.uri_ws)
         self._aio_client = Client(transport=self._aio_transport)

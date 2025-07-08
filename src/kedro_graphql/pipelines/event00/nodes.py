@@ -40,7 +40,7 @@ def create_pipeline_input(id: str, event: CloudEvent) -> PipelineInput:
     return PipelineInput(**{
         "parent": id,
         "name": "example00",
-        "state": "READY",
+        "state": "STAGED",
         "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
                          {"name": "text_out", "config": json.dumps(output_dict)}],
         "parameters": [{"name": "example", "value": "hello"},

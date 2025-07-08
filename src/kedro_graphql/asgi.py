@@ -5,16 +5,19 @@ from cloudevents.http import from_http, to_json
 from .logs.logger import logger
 from .backends import init_backend
 from .celeryapp import celery_app
-from .config import config
 from .decorators import RESOLVER_PLUGINS, TYPE_PLUGINS, discover_plugins
 from .models import PipelineTemplates
 from .schema import build_schema
 from .tasks import handle_event
+from .config import load_config
+
+CONFIG = load_config()
+logger.debug("configuration loaded by {s}".format(s=__name__))
 
 
 class KedroGraphQL(FastAPI):
 
-    def __init__(self, kedro_session=None, config=config):
+    def __init__(self, kedro_session=None, config=CONFIG):
         super(KedroGraphQL, self).__init__(
             title=config["KEDRO_GRAPHQL_APP_TITLE"],
             description=config["KEDRO_GRAPHQL_APP_DESCRIPTION"],
@@ -68,8 +71,8 @@ class KedroGraphQL(FastAPI):
                 event = from_http(request.headers, body)
                 logger.info(f"Received event: {event}")
                 result = handle_event.delay(
-                    to_json(event), config["KEDRO_GRAPHQL_EVENTS_CONFIG"])
-                return {"result": result.task_id}
+                    to_json(event), self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"])
+                return {"id": result.task_id}
         else:
             logger.warning(
                 "KEDRO_GRAPHQL_EVENTS_CONFIG is not set or not a dictionary. "

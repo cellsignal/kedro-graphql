@@ -18,7 +18,7 @@ from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.runners import init_runner
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
-from .config import config as CONFIG
+# from .config import load_config
 from .models import DataSet, State
 from .client import PIPELINE_GQL
 
@@ -26,17 +26,26 @@ from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import from_json, to_json
 
 logger = logging.getLogger(__name__)
+# CONFIG = load_config()
+# logger.debug("configuration loaded by {s}".format(s=__name__))
 
 
 class KedroGraphqlTask(Task):
 
     _db = None
+    _gql_config = None
 
     @property
     def db(self):
         if self._db is None:
             self._db = self.app.kedro_graphql_backend
         return self._db
+
+    @property
+    def gql_config(self):
+        if self._gql_config is None:
+            self._gql_config = self.app.kedro_graphql_config
+        return self._gql_config
 
     def before_start(self, task_id, args, kwargs):
         """Handler called before the task starts.
@@ -54,7 +63,6 @@ class KedroGraphqlTask(Task):
         handler = KedroGraphQLLogHandler(
             task_id, broker_url=self._app.conf["broker_url"])
         logging.getLogger("kedro").addHandler(handler)
-
         p = self.db.read(id=kwargs["id"])
         p.status[-1].state = State.STARTED
         p.status[-1].task_id = task_id
@@ -64,25 +72,37 @@ class KedroGraphqlTask(Task):
 
         try:
             # Create info and error handlers for the run
+            # os.makedirs(os.path.join(
+            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
             os.makedirs(os.path.join(
-                CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
+                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            # info_handler = logging.FileHandler(os.path.join(
+            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
             info_handler = logging.FileHandler(os.path.join(
-                CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
+                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
+
             info_handler.setLevel(logging.INFO)
             info_handler.setFormatter(formatter)
+            # error_handler = logging.FileHandler(os.path.join(
+            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a')
             error_handler = logging.FileHandler(os.path.join(
-                CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a')
+                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a')
+
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
             logging.getLogger("kedro").addHandler(info_handler)
             logging.getLogger("kedro").addHandler(error_handler)
+            # logger.info(
+            # f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             logger.info(
-                f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
+                f"Storing tmp logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
 
             # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
-            log_path_prefix = CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
-            print(log_path_prefix)
+            # log_path_prefix = CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
+            log_path_prefix = self.gql_config.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
+            logger.info("Final upload destination for logs:{s}".format(
+                s=log_path_prefix))
             if log_path_prefix:
 
                 today = date.today()
@@ -215,10 +235,14 @@ class KedroGraphqlTask(Task):
         # Clear logs from temp_logs
         try:
             # Removes the directory and its contents
-            shutil.rmtree(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id))
+            # shutil.rmtree(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id))
+            shutil.rmtree(os.path.join(
+                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id))
         except Exception as e:
+            # logger.info(
+            #    f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
             logger.info(
-                f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
+                f"Failed to clear logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
 
 
 @shared_task(bind=True, base=KedroGraphqlTask)
@@ -231,9 +255,12 @@ def run_pipeline(self,
                  slices: List[Dict[str, List[str]]] = None,
                  only_missing: bool = False):
 
+    # with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
+    #                         env=CONFIG["KEDRO_GRAPHQL_ENV"],
+    #                         conf_source=CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
     with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
-                             env=CONFIG["KEDRO_GRAPHQL_ENV"],
-                             conf_source=CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
+                             env=self.gql_config["KEDRO_GRAPHQL_ENV"],
+                             conf_source=self.gql_config["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
 
         hook_manager = session._hook_manager
 
@@ -472,7 +499,6 @@ def handle_event(self, event: str, config: dict):
             # Need to STAGE to get a pipeline id to pass as parameter
             resp = asyncio.run(self.schema.execute(self.create_pipeline_mutation,
                                                    variable_values={"pipeline": pipeline_input.encode(encoder="graphql")}))
-
             p = Pipeline.decode(resp.data["createPipeline"], decoder="graphql")
             pipeline_input.state = "READY"
             pipeline_input.parameters.append(ParameterInput(
@@ -481,10 +507,9 @@ def handle_event(self, event: str, config: dict):
             resp = asyncio.run(self.schema.execute(self.update_pipeline_mutation,
                                                    variable_values={"id": p.id,
                                                                     "pipeline": pipeline_input.encode(encoder="graphql")}))
-
             p = Pipeline.decode(resp.data["updatePipeline"], decoder="graphql")
-
             pipelines.append(p.encode(encoder="dict"))
             logger.info(
                 f"event " f"{event.id} triggered pipeline {p.id}")
+
     return pipelines

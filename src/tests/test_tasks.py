@@ -15,11 +15,13 @@ from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
 
-@pytest.mark.usefixtures('mock_celery_session_app')
-@pytest.mark.usefixtures('celery_session_worker')
-@pytest.mark.usefixtures('depends_on_current_app')
 @pytest.mark.asyncio
-async def test_run_pipeline(mock_app, mock_text_in, mock_text_out):
+async def test_run_pipeline(mock_app,
+                            mock_info_context,
+                            mock_celery_session_app,
+                            celery_session_worker,
+                            mock_text_in,
+                            mock_text_out):
     """
     This test will fail because the pipeline is missing in the backend
     """
@@ -74,10 +76,10 @@ class TestHandleEvent:
         return {"event00": {
             "source": "example.com", "type": "com.example.event"}}
 
-    def test_handle_event(self, mock_server,
+    def test_handle_event(self,
+                          mock_server,
                           mock_celery_session_app,
                           celery_session_worker,
-                          depends_on_current_app,
                           mock_app,
                           mock_info_context,
                           event_data,
@@ -87,6 +89,5 @@ class TestHandleEvent:
         pipelines = task.wait(timeout=None, interval=0.5)
         pipelines = [Pipeline.decode(p, decoder="dict") for p in pipelines]
         pipeline = mock_app.backend.read(id=pipelines[0].id)
-        print("PIPELINE:", pipelines)
         assert pipeline.name == "event00"
         assert pipeline.status[-1].state == State.READY
