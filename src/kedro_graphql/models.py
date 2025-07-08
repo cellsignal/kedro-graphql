@@ -7,9 +7,7 @@ from typing import List, Optional
 from kedro.io.core import _parse_filepath
 from .plugins.presigned_url.local_file_provider import LocalFileProvider
 from .plugins.presigned_url.base import PreSignedUrlProvider
-import boto3
 import strawberry
-from botocore.exceptions import ClientError
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset

@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from pathlib import Path
 from ...config import config as CONFIG
-from fastapi import Request
 
 
 class LocalFileProvider(PreSignedUrlProvider):

@@ -5,9 +5,12 @@ import json
 
 from kedro_graphql.models import Pipeline
 
+pn.extension(notifications=True)
+
 
 class DataCatalogExplorer(pn.viewable.Viewer):
-    """Main class for the Data Catalog Explorer UI"""
+    """A component that displays the data catalog of a Kedro pipeline, allowing users to filter, view,
+    and download datasets using their pre-signed URL implementation of choice."""
 
     pipeline = param.ClassSelector(class_=Pipeline)
     spec = param.Dict(default={})
@@ -17,29 +20,27 @@ class DataCatalogExplorer(pn.viewable.Viewer):
 
     def __panel__(self):
 
-        # Initial flat columns
         base_df = pd.DataFrame({
-            'name': [i.name for i in self.pipeline.data_catalog],
-            'type': [json.loads(i.config)["type"] for i in self.pipeline.data_catalog],
-            'filepath': [json.loads(i.config).get("filepath", "") for i in self.pipeline.data_catalog],
+            'Name': [ds.name for ds in self.pipeline.data_catalog],
+            'Type': [json.loads(ds.config)["type"] for ds in self.pipeline.data_catalog],
+            'Filepath': [json.loads(ds.config).get("filepath", "") for ds in self.pipeline.data_catalog],
         }, index=[i for i in range(len(self.pipeline.data_catalog))])
 
-        # Flatten tags into individual columns like 'tag:key' = value
+        # Create column for each tag
         tags_list = []
         for idx, ds in enumerate(self.pipeline.data_catalog):
             tag_data = {}
             if ds.tags:
                 for tag in ds.tags:
-                    tag_data[f"tag:{tag.key}"] = tag.value
+                    tag_data[f"Tag:{tag.key}"] = tag.value
             tags_list.append(pd.Series(tag_data, name=idx))
 
         tags_df = pd.DataFrame(tags_list).fillna("")
         ds_df = pd.concat([base_df, tags_df], axis=1)
 
-        # JS pane (invisible) used to inject JS dynamically
-        js_download = pn.pane.HTML("", width=0, height=0)
+        js_download = pn.pane.HTML("", width=0, height=0)  # this is used to inject JS dynamically
 
-        def trigger_download(url):
+        def trigger_popout(url):
             js_code = f"""
             <script>
             (function() {{
@@ -54,8 +55,30 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             """
 
             js_download.object = js_code
+            js_download.object = None
 
-        def open_data_frame_viewer(page, presigned_url, ds_name, ds_type):
+        def trigger_download(url, filepath):
+            js_code = f"""
+            <script>
+            (async function() {{
+                const response = await fetch("{url}");
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', "{filepath.split("/")[-1]}");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            }})();
+            </script>
+            """
+
+            js_download.object = js_code
+            js_download.object = None
+
+        def open_dataset_viewer(page, presigned_url, ds_name, ds_type):
             js_code = f"""
             <script>
             (function() {{
@@ -70,30 +93,39 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             """
             js_download.object = js_code
 
-        def download_action(event):
-            if event.column != 'Download':
-                return
-
+        def on_row_click(event):
             row = event.row
-
-            dataset_name = ds_df.iloc[row]['name']
-            for ds in self.pipeline.data_catalog:
-                if ds.name == dataset_name:
-                    presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
-                    for dataset_type, panel_page in self.spec["dataset_viewer"].items():
-                        if json.loads(ds.config)["type"] == dataset_type:
-                            open_data_frame_viewer(panel_page, presigned_url, ds.name, json.loads(ds.config)["type"])
+            dataset_name = ds_df.iloc[row]['Name']
+            dataset_filepath = ds_df.iloc[row]['Filepath']
+            dataset_type = ds_df.iloc[row]['Type']
+            if event.column == 'Download':
+                for ds in self.pipeline.data_catalog:
+                    if ds.name == dataset_name:
+                        presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
+                        if presigned_url:
+                            trigger_download(presigned_url, dataset_filepath)
+                        else:
+                            pn.state.notifications.warning(f"No presigned URL available for {dataset_name}", duration=10000)
                             return
-                    if presigned_url:
-                        trigger_download(presigned_url)
-                    else:
-                        print(f"No presigned URL available for {dataset_name}")
+            if event.column == 'Popout':
+                for ds in self.pipeline.data_catalog:
+                    if ds.name == dataset_name:
+                        presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
+                        for dataset_type, panel_page in self.spec["dataset_viewer"].items():
+                            if json.loads(ds.config)["type"] == dataset_type:
+                                open_dataset_viewer(panel_page, presigned_url, dataset_name, dataset_type)
+                                return
+                        if presigned_url:
+                            trigger_popout(presigned_url)
+                        else:
+                            pn.state.notifications.warning(f"No presigned URL available for {dataset_name}", duration=10000)
+                            return
 
         filters = {
-            "name": {"type": "input", "placeholder": "Filter by name", "func": "like"},
-            "type":
+            "Name": {"type": "input", "placeholder": "Filter by name", "func": "like"},
+            "Type":
             {"type": "list", "placeholder": "Select dataset type(s)", "func": "in", "valuesLookup": True, "multiselect": True},
-            "filepath": {"type": "input", "placeholder": "Filter by filepath", "func": "like"}}
+            "Filepath": {"type": "input", "placeholder": "Filter by filepath", "func": "like"}}
 
         for tag in tags_df.columns.tolist():
             filters[tag] = {"type": "list", "placeholder": "Select tag(s)",
@@ -103,30 +135,17 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             ds_df,
             disabled=True,
             buttons={
-                'Download': "<i class='fa fa-download'></i>"
+                'Download': "<i class='fa fa-download'></i>",
+                "Popout": "<i class='fa fa-external-link'></i>"
             },
             theme='materialize',
             selectable=False,
             show_index=False,
-            layout='fit_columns',
             header_filters=filters,
         )
-        ds_widget.on_click(download_action)
+        ds_widget.on_click(on_row_click)
 
         return pn.Column(
             pn.Card(ds_widget, title="Data Catalog Explorer", sizing_mode="stretch_width"),
             js_download,
-            # pn.pane.Markdown("# Download datasets using AbstractDataset.from_config().load()"),
-            # pn.widgets.FileDownload(
-            #     callback=lambda: io.BytesIO(AbstractDataset.from_config(
-            #         self.pipeline.data_catalog[3].name, json.loads(self.pipeline.data_catalog[3].config)).load()),
-            #     filename=self.pipeline.data_catalog[3].name),
-            # pn.widgets.FileDownload(
-            #     callback=lambda: io.StringIO(AbstractDataset.from_config(
-            #         self.pipeline.data_catalog[4].name, json.loads(self.pipeline.data_catalog[4].config)).load()),
-            #     filename=self.pipeline.data_catalog[4].name),
-            # pn.widgets.FileDownload(
-            #     callback=lambda: io.StringIO(AbstractDataset.from_config(
-            #         self.pipeline.data_catalog[5].name, json.loads(self.pipeline.data_catalog[5].config)).load()),
-            #     filename=self.pipeline.data_catalog[5].name),
             sizing_mode="stretch_width",)

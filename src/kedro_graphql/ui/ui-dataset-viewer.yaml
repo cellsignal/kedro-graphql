@@ -38,9 +38,14 @@ pages:
     module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
   explore:
     module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+  dataset_perspective:
+    module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
 nav:
   sidebar:
     - name: Pipelines
       page: pipelines
     - name: Search 
       page: search
+dataset_viewer:
+  pandas.CSVDataset: dataset_perspective
+  pandas.ParquetDataset: dataset_perspective

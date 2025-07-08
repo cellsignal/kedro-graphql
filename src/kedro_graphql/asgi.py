@@ -77,7 +77,10 @@ class KedroGraphQL(FastAPI):
             if not path.exists() or not path.is_file():
                 raise HTTPException(status_code=404, detail="File not found")
 
-            return FileResponse(path, headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0"})
+            return FileResponse(
+                path,
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0",
+                         "Access-Control-Allow-Origin": "*"})
 
         @self.post("/upload")
         async def upload_file(token: str = Form(...), file: UploadFile = File(...)):

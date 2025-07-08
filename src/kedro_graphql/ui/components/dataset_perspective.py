@@ -15,18 +15,16 @@ class DatasetPerspective(pn.viewable.Viewer):
 
     def __init__(self, **params):
         super().__init__(**params)
-
-        self.perspective = pn.pane.Markdown("Loading...", height=400)
-
+        self.perspective = pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         self._load_data()
 
     def _load_data(self):
         """Loads data from the URL and updates the Perspective pane."""
-        presigned_url = self.presigned_url or pn.state.location.query_params.get("presigned_url")
-        self.ds_name = self.ds_name or pn.state.location.query_params.get("ds_name")
-        self.ds_type = self.ds_type or pn.state.location.query_params.get("ds_type")
+        self.presigned_url = pn.state.location.query_params.get("presigned_url")
+        self.ds_name = pn.state.location.query_params.get("ds_name")
+        self.ds_type = pn.state.location.query_params.get("ds_type")
 
-        if not presigned_url:
+        if not self.presigned_url:
             self.perspective.object = "**Missing `presigned_url` query parameter.**"
             return
 
@@ -40,13 +38,13 @@ class DatasetPerspective(pn.viewable.Viewer):
 
         try:
             df = AbstractDataset.from_config(name=self.ds_name, config={
-                                             "type": self.ds_type, "filepath": presigned_url}).load()
+                                             "type": self.ds_type, "filepath": self.presigned_url}).load()
 
-            self.perspective = pn.pane.Perspective(df, width=1000, height=1000, sizing_mode="stretch_width", styles={
-                "font-size": "20px",
-            }, theme="pro-dark", editable=False)
+            self.perspective = pn.pane.Perspective(
+                df, width=1000, height=1000, sizing_mode="stretch_width", theme="pro-dark",
+                editable=False, settings=False)
         except Exception as e:
-            self.perspective.object = f"Error loading data from URL: {str(e)}"
+            self.perspective = f"Error loading data from URL: {str(e)}"
 
     def __panel__(self):
         return pn.Column(

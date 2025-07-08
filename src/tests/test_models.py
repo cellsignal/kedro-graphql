@@ -4,6 +4,10 @@ import pytest
 from omegaconf import OmegaConf
 
 from kedro_graphql.models import DataSet, Parameter
+from kedro_graphql.config import config as CONFIG
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+import jwt
 
 
 class TestDataSet:
@@ -37,13 +41,38 @@ class TestDataSet:
         d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
 
         with pytest.raises(ValueError):
-            output = d.pre_signed_url_create()
+            output = d.pre_signed_url_create(expires_in_sec=10)
+
+    def test_pre_signed_url_create_allowed_local(self, mock_text_in):
+        d = DataSet(name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
+
+        output = d.pre_signed_url_create(expires_in_sec=10)
+        token = output["fields"].get("token", None)
+
+        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
+                             algorithms=[CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+
+        # Unique path should be generated
+        assert Path(payload["filepath"]).resolve() != Path(mock_text_in).resolve()
 
     def test_pre_signed_url_read_config_no_filepath(self):
         d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
 
         with pytest.raises(ValueError):
-            output = d.pre_signed_url_read()
+            output = d.pre_signed_url_read(expires_in_sec=10)
+
+    def test_pre_signed_url_read_allowed_local(self, mock_text_in):
+        d = DataSet(name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
+
+        output = d.pre_signed_url_read(expires_in_sec=10)
+        parsed_url = urlparse(output)
+        query_params = parse_qs(parsed_url.query)
+        token = query_params.get("token", [None])[0]
+
+        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
+                             algorithms=[CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+
+        assert Path(payload["filepath"]).resolve() == Path(mock_text_in).resolve()
 
     def test_does_exist_with_config(self, mock_text_in):
         params = {
