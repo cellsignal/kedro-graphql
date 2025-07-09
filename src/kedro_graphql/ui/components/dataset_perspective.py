@@ -2,6 +2,7 @@ import panel as pn
 import param
 import asyncio
 from kedro.io import AbstractDataset
+import requests
 
 pn.extension("perspective")
 
@@ -17,7 +18,6 @@ class DatasetPerspective(pn.viewable.Viewer):
     def __init__(self, **params):
         super().__init__(**params)
 
-    @param.depends("presigned_url", "spec", "ds_name", "ds_type")
     async def build_component(self):
         yield pn.Column(
             pn.indicators.LoadingSpinner(value=True, width=25, height=25),
@@ -25,25 +25,27 @@ class DatasetPerspective(pn.viewable.Viewer):
             sizing_mode="stretch_width",
         )
 
-        self.presigned_url = pn.state.location.query_params.get("presigned_url")
-        self.ds_name = pn.state.location.query_params.get("ds_name")
-        self.ds_type = pn.state.location.query_params.get("ds_type")
+        query = pn.state.location.query_params
 
-        if not self.presigned_url:
+        presigned_url = query.get("presigned_url")
+        ds_name = query.get("ds_name")
+        ds_type = query.get("ds_type")
+
+        if not presigned_url:
             yield pn.Column(
                 "# Dataset Perspective",
                 pn.pane.Markdown("**Missing `presigned_url` query parameter.**"),
                 sizing_mode="stretch_width",
             )
 
-        if not self.ds_name:
+        if not ds_name:
             yield pn.Column(
                 "# Dataset Perspective",
                 pn.pane.Markdown("**Missing `ds_name` query parameter.**"),
                 sizing_mode="stretch_width",
             )
 
-        if not self.ds_type:
+        if not ds_type:
             yield pn.Column(
                 "# Dataset Perspective",
                 pn.pane.Markdown("**Missing `ds_name` or `ds_type` query parameter.**"),
@@ -51,11 +53,28 @@ class DatasetPerspective(pn.viewable.Viewer):
             )
 
         try:
+            SIZE_LIMIT_MB = 10
+            # Check file size before loading
+            headers = {"Range": "bytes=0-0"}
+            response = requests.get(presigned_url, headers=headers)
+            if response.status_code in (200, 206):
+                size_str = response.headers.get('Content-Range') or response.headers.get('Content-Length')
+                if size_str:
+                    if 'Content-Range' in response.headers:
+                        # Format: bytes 0-0/123456
+                        size_bytes = int(size_str.split('/')[-1])
+                    else:
+                        size_bytes = int(size_str)
+                    max_size = SIZE_LIMIT_MB * 1024 * 1024  # 10 MB
+                    if size_bytes > max_size:
+                        yield pn.Column("# Dataset Perspective", pn.pane.Markdown(f"### File size {size_bytes/1024/1024:.2f} MB exceeds {SIZE_LIMIT_MB} MB limit."))
+                        return
+
             dataset = AbstractDataset.from_config(
                 name=self.ds_name,
                 config={
-                    "type": self.ds_type,
-                    "filepath": self.presigned_url
+                    "type": ds_type,
+                    "filepath": presigned_url
                 }
             )
             df = await asyncio.to_thread(dataset.load)

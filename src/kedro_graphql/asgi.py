@@ -84,6 +84,13 @@ class KedroGraphQL(FastAPI):
 
         @self.post("/upload")
         async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
+
+            if file.size > self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB"] * 1024 * 1024:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File size exceeds the maximum limit of {self.config['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB']} MB"
+                )
+
             try:
                 payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                                      algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
