@@ -144,6 +144,36 @@ class TestIsAuthenticatedXForwarded:
         assert resp["errors"][0]["message"] == "User is not authenticated"
 
     @pytest.mark.asyncio
+    async def test_graphql_with_wrong_x_forwarded_groups_header(self,
+                                                                mock_payload,
+                                                                mock_server_5001):
+
+        retry = Retry(
+            total=5,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+
+        adapter = HTTPAdapter(max_retries=retry)
+        s = Session()
+        s.mount('http://', adapter)
+
+        headers = {
+            "X-Forwarded-Groups": "wrong_group",
+            "X-Forwarded-Email": "admin@example.com"}
+        url = "http://localhost:5001/graphql"
+        req = Request('POST', url, json=mock_payload, headers=headers)
+
+        req_prepped = req.prepare()
+        # print("REQUEST:", req_prepped.headers, req_prepped.body)
+        resp = s.send(req_prepped)
+        # print("RESPONSE:", resp)
+        assert resp.status_code == 200
+        resp = resp.json()
+        assert resp.keys() == {"data", "errors"}
+        assert resp["errors"][0]["message"] == "User is not authenticated"
+
+    @pytest.mark.asyncio
     async def test_graphql_with_x_forwarded_email(self,
                                                   mock_payload,
                                                   mock_server_5002):
