@@ -1,5 +1,6 @@
 import panel as pn
 import param
+import asyncio
 from kedro.io import AbstractDataset
 
 pn.extension("perspective")
@@ -15,40 +16,64 @@ class DatasetPerspective(pn.viewable.Viewer):
 
     def __init__(self, **params):
         super().__init__(**params)
-        self.perspective = pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        self._load_data()
 
-    def _load_data(self):
-        """Loads data from the URL and updates the Perspective pane."""
+    @param.depends("presigned_url", "spec", "ds_name", "ds_type")
+    async def build_component(self):
+        yield pn.Column(
+            pn.indicators.LoadingSpinner(value=True, width=25, height=25),
+            pn.pane.Markdown("Fetching data... This may take some time if the dataset is large."),
+            sizing_mode="stretch_width",
+        )
+
         self.presigned_url = pn.state.location.query_params.get("presigned_url")
         self.ds_name = pn.state.location.query_params.get("ds_name")
         self.ds_type = pn.state.location.query_params.get("ds_type")
 
         if not self.presigned_url:
-            self.perspective.object = "**Missing `presigned_url` query parameter.**"
-            return
+            yield pn.Column(
+                "# Dataset Perspective",
+                pn.pane.Markdown("**Missing `presigned_url` query parameter.**"),
+                sizing_mode="stretch_width",
+            )
 
         if not self.ds_name:
-            self.perspective.object = "**Missing `ds_name` query parameter.**"
-            return
+            yield pn.Column(
+                "# Dataset Perspective",
+                pn.pane.Markdown("**Missing `ds_name` query parameter.**"),
+                sizing_mode="stretch_width",
+            )
 
         if not self.ds_type:
-            self.perspective.object = "**Missing `ds_name` or `ds_type` query parameter.**"
-            return
+            yield pn.Column(
+                "# Dataset Perspective",
+                pn.pane.Markdown("**Missing `ds_name` or `ds_type` query parameter.**"),
+                sizing_mode="stretch_width",
+            )
 
         try:
-            df = AbstractDataset.from_config(name=self.ds_name, config={
-                                             "type": self.ds_type, "filepath": self.presigned_url}).load()
+            dataset = AbstractDataset.from_config(
+                name=self.ds_name,
+                config={
+                    "type": self.ds_type,
+                    "filepath": self.presigned_url
+                }
+            )
+            df = await asyncio.to_thread(dataset.load)
 
-            self.perspective = pn.pane.Perspective(
-                df, width=1000, height=1000, sizing_mode="stretch_width", theme="pro-dark",
-                editable=False, settings=False)
+            yield pn.Column(
+                "# Dataset Perspective",
+                pn.pane.Perspective(
+                    df, height=1000, sizing_mode="stretch_width", theme="pro-dark",
+                    editable=False, settings=False),
+                sizing_mode="stretch_width",
+            )
+
         except Exception as e:
-            self.perspective = f"Error loading data from URL: {str(e)}"
+            yield pn.Column(
+                "# Dataset Perspective",
+                pn.pane.Markdown(f"**Error loading data from URL:** {str(e)}"),
+                sizing_mode="stretch_width",
+            )
 
     def __panel__(self):
-        return pn.Column(
-            "# Dataset Perspective",
-            self.perspective,
-            sizing_mode="stretch_width",
-        )
+        return self.build_component

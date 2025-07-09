@@ -19,7 +19,9 @@ class DataCatalogExplorer(pn.viewable.Viewer):
     def __init__(self, **params):
         super().__init__(**params)
 
-    def __panel__(self):
+    @param.depends("pipeline", "spec", "dataset_map")
+    async def build_component(self):
+        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
         base_df = pd.DataFrame({
             'Name': [ds.name for ds in self.pipeline.data_catalog],
@@ -146,7 +148,10 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         )
         ds_widget.on_click(on_row_click)
 
-        return pn.Column(
+        yield pn.Column(
             pn.Card(ds_widget, title="Data Catalog Explorer", sizing_mode="stretch_width"),
             js_download,
             sizing_mode="stretch_width",)
+
+    def __panel__(self):
+        return self.build_component
