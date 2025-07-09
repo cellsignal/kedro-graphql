@@ -44,6 +44,8 @@ pages:
     module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
   dataset_perspective:
     module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
+    params:
+      file_size_limit_mb: 10
 nav:
   sidebar:
     - name: Pipelines

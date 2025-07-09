@@ -14,6 +14,7 @@ class DatasetPerspective(pn.viewable.Viewer):
     spec = param.Dict(default={})
     ds_name = param.String(doc="The name of the dataset")
     ds_type = param.String(doc="The type of the dataset")
+    file_size_limit_mb = param.Integer(doc="Maximum file size limit in MB")
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -53,7 +54,6 @@ class DatasetPerspective(pn.viewable.Viewer):
             )
 
         try:
-            SIZE_LIMIT_MB = 10
             # Check file size before loading
             headers = {"Range": "bytes=0-0"}
             response = requests.get(presigned_url, headers=headers)
@@ -65,9 +65,9 @@ class DatasetPerspective(pn.viewable.Viewer):
                         size_bytes = int(size_str.split('/')[-1])
                     else:
                         size_bytes = int(size_str)
-                    max_size = SIZE_LIMIT_MB * 1024 * 1024  # 10 MB
+                    max_size = self.file_size_limit_mb * 1024 * 1024  # 10 MB
                     if size_bytes > max_size:
-                        yield pn.Column("# Dataset Perspective", pn.pane.Markdown(f"### File size {size_bytes/1024/1024:.2f} MB exceeds {SIZE_LIMIT_MB} MB limit."))
+                        yield pn.Column("# Dataset Perspective", pn.pane.Markdown(f"### File size {size_bytes/1024/1024:.2f} MB exceeds {self.file_size_limit_mb} MB limit."))
                         return
 
             dataset = AbstractDataset.from_config(
