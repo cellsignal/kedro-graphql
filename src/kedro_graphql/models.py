@@ -170,8 +170,11 @@ class DataSet:
             JSON | None: A presigned URL for uploading the dataset or None if not applicable.
 
         Raises:
-            ValueError: If the dataset configuration is invalid or cannot be parsed.
+            ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
         """
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         try:
             config = json.loads(self.config)
@@ -207,8 +210,12 @@ class DataSet:
             str | None: A presigned URL for downloading the dataset or None if not applicable.
 
         Raises:
-            ValueError: If the dataset configuration is invalid or cannot be parsed.
+            ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
         """
+
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         try:
             config = json.loads(self.config)

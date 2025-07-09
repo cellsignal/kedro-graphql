@@ -101,7 +101,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             if event.column == 'Download':
                 for ds in self.pipeline.data_catalog:
                     if ds.name == dataset_name:
-                        presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
+                        presigned_url = ds.pre_signed_url_read(expires_in_sec=3600)
                         if presigned_url:
                             trigger_download(presigned_url, dataset_filepath)
                         else:
@@ -110,7 +110,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             if event.column == 'Popout':
                 for ds in self.pipeline.data_catalog:
                     if ds.name == dataset_name:
-                        presigned_url = ds.pre_signed_url_read(expires_in_sec=100)
+                        presigned_url = ds.pre_signed_url_read(expires_in_sec=3600)
                         for dataset_type, panel_page in self.spec["dataset_viewer"].items():
                             if json.loads(ds.config)["type"] == dataset_type:
                                 open_dataset_viewer(panel_page, presigned_url, dataset_name, dataset_type)

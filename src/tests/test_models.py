@@ -49,8 +49,8 @@ class TestDataSet:
         output = d.pre_signed_url_create(expires_in_sec=10)
         token = output["fields"].get("token", None)
 
-        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
-                             algorithms=[CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                             algorithms=[CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
 
         # Unique path should be generated
         assert Path(payload["filepath"]).resolve() != Path(mock_text_in).resolve()
@@ -69,8 +69,8 @@ class TestDataSet:
         query_params = parse_qs(parsed_url.query)
         token = query_params.get("token", [None])[0]
 
-        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
-                             algorithms=[CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                             algorithms=[CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
 
         assert Path(payload["filepath"]).resolve() == Path(mock_text_in).resolve()
 
