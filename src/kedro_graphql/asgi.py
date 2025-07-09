@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, HTTPException, status
 from strawberry.fastapi import GraphQLRouter
 from cloudevents.http import from_http, to_json
 
@@ -10,9 +10,14 @@ from .models import PipelineTemplates
 from .schema import build_schema
 from .tasks import handle_event
 from .config import load_config
+from .permissions import get_permissions
+from starlette.requests import Request
+from starlette.websockets import WebSocket
 
 CONFIG = load_config()
 logger.debug("configuration loaded by {s}".format(s=__name__))
+
+PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 
 
 class KedroGraphQL(FastAPI):
@@ -56,8 +61,23 @@ class KedroGraphQL(FastAPI):
         def shutdown_backend():
             self.backend.shutdown()
 
+        class Info:
+            def __init__(self, request: Request):
+                self.context = {"request": request}
+
+        @staticmethod
+        def authenticate(request: Request):
+            access = PERMISSIONS_CLASS(action="create_event").has_permission(
+                None, Info(request))
+            if not access:
+                raise HTTPException(detail="User is not authenticated",
+                                    status_code=status.HTTP_403_FORBIDDEN)
+            else:
+                return access
+
         if self.config.get("KEDRO_GRAPHQL_EVENTS_CONFIG", None) and isinstance(self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"], dict):
-            @self.post("/event/")
+
+            @self.post("/event/", dependencies=[Depends(authenticate)])
             async def event(request: Request):
                 """
                 Endpoint to handle cloudevents.

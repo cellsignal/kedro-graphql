@@ -41,7 +41,8 @@ class IsAuthenticatedAlways(IsAuthenticatedAction):
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
-        logger.info("action: {a} source: {s}".format(a=str(self.action), s=str(source)))
+        logger.info(
+            "authentication disabled - permission granted    - user=None, action=None, source={s}".format(s=str(source)))
         return True
 
 
@@ -55,7 +56,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
     ) -> bool:
         request: typing.Union[Request, WebSocket] = info.context["request"]
         if request.headers.get("X-Forwarded-Email", None):
-            logger.info("permission granted - user: {u} action: {a} source: {s}".format(
+            logger.info("permission granted - user={u}, action={a}, source={s}".format(
                 u=str(request.headers.get("X-Forwarded-Email",
                       request.headers.get("X-Forwarded-User", None))),
                 a=str(self.action),
@@ -63,7 +64,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
 
             return True
         else:
-            logger.info("permission denied - user: {u} action: {a} source: {s}".format(
+            logger.info("permission denied - user={u}, action={a}, source={s}".format(
                 u=str(request.headers.get("X-Forwarded-Email",
                       request.headers.get("X-Forwarded-User", None))),
                 a=str(self.action),
@@ -106,7 +107,7 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                 role = group_to_role[group]
                 if role_to_action.get(role, None):
                     if self.action in role_to_action[role]:
-                        logger.info("permission granted - user: {u} role: {r} action: {a} source: {s}".format(
+                        logger.info("permission granted - user={u}, role={r}, action={a}, source={s}".format(
                             u=str(request.headers.get("X-Forwarded-Email",
                                   request.headers.get("X-Forwarded-User", None))),
                             r=str(role),
@@ -114,7 +115,7 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                             s=str(source)))
                         return True
 
-        logger.info("permission denied - user: {u} action: {a} source: {s}".format(
+        logger.info("permission denied - user:={u}, action={a}, source={s}".format(
             u=str(request.headers.get("X-Forwarded-Email",
                   request.headers.get("X-Forwarded-User", None))),
             a=str(self.action),

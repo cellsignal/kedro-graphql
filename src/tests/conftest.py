@@ -43,7 +43,6 @@ def kedro_session():
     return KedroSession.create()
 
 
-@pytest.fixture(scope="session")
 def kedro_graphql_config():
 
     config = load_config()
@@ -59,7 +58,7 @@ def kedro_graphql_config():
     return config
 
 
-def start_server(config={}):
+def start_server(port=5000, config={}):
 
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
@@ -78,31 +77,55 @@ def start_server(config={}):
             )
             uvicorn.run(app,
                         host="localhost",
-                        port=5000)
+                        port=port)
 
 
 @pytest.fixture(scope="session")
-def mock_server(kedro_graphql_config):
+def mock_server():
+    config = kedro_graphql_config()
     proc = Process(target=start_server, args=(), kwargs={
-                   "config": kedro_graphql_config})
+                   "port": 5000,
+                   "config": config})
     proc.start()
     yield
     proc.terminate()
 
 
 @pytest.fixture(scope="session")
-def mock_server_rbac(kedro_graphql_config):
-    kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedRBAC"
-    kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
+def mock_server_5001():
+    config = kedro_graphql_config()
+    config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedRBAC"
+    config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
         "test_group": "admin"
     }
     # set env variables so other modules will load config correctly
     os.environ["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = json.dumps(
-        kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
-    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = kedro_graphql_config["KEDRO_GRAPHQL_PERMISSIONS"]
+        config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
+    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = config["KEDRO_GRAPHQL_PERMISSIONS"]
 
     proc = Process(target=start_server, args=(), kwargs={
-                   "config": kedro_graphql_config})
+                   "port": 5001,
+                   "config": config})
+    proc.start()
+    yield
+    proc.terminate()
+
+
+@pytest.fixture(scope="session")
+def mock_server_5002():
+    config = kedro_graphql_config()
+    config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail"
+    config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
+        "test_group": "admin"
+    }
+    # set env variables so other modules will load config correctly
+    os.environ["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = json.dumps(
+        config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
+    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = config["KEDRO_GRAPHQL_PERMISSIONS"]
+
+    proc = Process(target=start_server, args=(), kwargs={
+                   "port": 5002,
+                   "config": config})
     proc.start()
     yield
     proc.terminate()
@@ -118,11 +141,11 @@ async def mock_client(mock_server):
 
 
 @pytest.fixture(scope="session")
-def mock_app(kedro_session, kedro_graphql_config):
-
+def mock_app(kedro_session):
+    config = kedro_graphql_config()
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
-            app = KedroGraphQL(kedro_session=kedro_session, config=kedro_graphql_config)
+            app = KedroGraphQL(kedro_session=kedro_session, config=config)
             app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
             app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
 

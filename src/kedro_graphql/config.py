@@ -6,6 +6,7 @@ import json
 import yaml
 from importlib import import_module
 from .logs.logger import logger
+import copy
 
 
 defaults = {
@@ -94,7 +95,7 @@ def env_var_parser(config):
 def load_config():
     """Load configuration from the environment variables and API spec."""
     config = {
-        **defaults,  # defaults
+        **copy.deepcopy(defaults),  # defaults
         **dotenv_values(".env"),  # .env file
         **load_api_spec(),  # loaded API spec
         **os.environ,  # override loaded values with environment variables
