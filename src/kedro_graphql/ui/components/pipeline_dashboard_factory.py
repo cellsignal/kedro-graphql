@@ -25,6 +25,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
     options = param.List(default=[])
     spec = param.Dict(default={})
     dashboard_name = param.String(default=None)
+    dataset_map = param.Dict(default={})
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -43,7 +44,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         viz = PipelineViz(pipeline=p.name, spec=self.spec)
         retry = PipelineRetry(client=self.spec["config"]["client"], pipeline=p)
         cloning = PipelineCloning(client=self.spec["config"]["client"], pipeline=p)
-        explorer = DataCatalogExplorer(spec=self.spec, pipeline=p)
+        explorer = DataCatalogExplorer(spec=self.spec, pipeline=p, dataset_map=self.dataset_map)
         tabs = pn.Tabs(dynamic=False)
         tabs.append(("Explorer", explorer))
         tabs.append(("Monitor", monitor))

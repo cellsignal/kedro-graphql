@@ -14,6 +14,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
 
     pipeline = param.ClassSelector(class_=Pipeline)
     spec = param.Dict(default={})
+    dataset_map = param.Dict(default={})
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -111,7 +112,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
                 for ds in self.pipeline.data_catalog:
                     if ds.name == dataset_name:
                         presigned_url = ds.pre_signed_url_read(expires_in_sec=3600)
-                        for dataset_type, panel_page in self.spec["dataset_viewer"].items():
+                        for dataset_type, panel_page in self.dataset_map.items():
                             if json.loads(ds.config)["type"] == dataset_type:
                                 open_dataset_viewer(panel_page, presigned_url, dataset_name, dataset_type)
                                 return
