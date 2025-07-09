@@ -53,8 +53,8 @@ class KedroGraphQL(FastAPI):
             try:
                 payload = jwt.decode(
                     token,
-                    self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
-                    algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]]
+                    self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                    algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]]
                 )
                 path = Path(payload["filepath"])
             except jwt.ExpiredSignatureError:
@@ -64,7 +64,7 @@ class KedroGraphQL(FastAPI):
 
             ALLOWED_ROOTS = []
 
-            for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_DOWNLOAD_ALLOWED_ROOTS"]:
+            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"]:
                 ALLOWED_ROOTS.append(Path(root).resolve())
                 # print(f"Allowed root: {Path(root).resolve()}")
 
@@ -85,8 +85,8 @@ class KedroGraphQL(FastAPI):
         @self.post("/upload")
         async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
             try:
-                payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
-                                     algorithms=[self.config["KEDRO_GRAPHQL_JWT_ALGORITHM"]])
+                payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                                     algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
                 path = Path(payload["filepath"]).resolve()
                 # print(f"Destination path: {path}")
             except jwt.ExpiredSignatureError:
@@ -96,7 +96,7 @@ class KedroGraphQL(FastAPI):
 
             ALLOWED_ROOTS = []
 
-            for root in self.config["KEDRO_GRAPHQL_PRESIGNED_URL_UPLOAD_ALLOWED_ROOTS"]:
+            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"]:
                 ALLOWED_ROOTS.append(Path(root).resolve())
                 # print(f"Allowed root: {Path(root).resolve()}")
 

@@ -28,12 +28,12 @@ class LocalFileProvider(PreSignedUrlProvider):
             "iat": int(datetime.now().timestamp())
         }
 
-        token = jwt.encode(payload, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"],
-                           algorithm=CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"])
+        token = jwt.encode(payload, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                           algorithm=CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"])
 
         query = urlencode({"token": token})
 
-        return f"{CONFIG['KEDRO_GRAPHQL_SERVER_URL']}/download?{query}"
+        return f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
 
     def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None:
         """
@@ -49,9 +49,9 @@ class LocalFileProvider(PreSignedUrlProvider):
         path, file = str(path).rsplit("/", 1)
         new_path = path + "/" + str(uuid.uuid4()) + "/" + file
 
-        token = jwt.encode({
-            "filepath": new_path,
-            "exp": int((datetime.now() + timedelta(seconds=expires_in_sec)).timestamp())
-        }, CONFIG["KEDRO_GRAPHQL_JWT_SECRET_KEY"], algorithm=CONFIG["KEDRO_GRAPHQL_JWT_ALGORITHM"])
+        token = jwt.encode(
+            {"filepath": new_path, "exp": int((datetime.now() + timedelta(seconds=expires_in_sec)).timestamp())},
+            CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+            algorithm=CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"])
 
-        return {"url": f"{CONFIG['KEDRO_GRAPHQL_SERVER_URL']}/upload", "fields": {"token": token}}
+        return {"url": f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/upload", "fields": {"token": token}}
