@@ -1,4 +1,4 @@
-## Kedro GraphQL API configuration file.
+## Kedro GraphQL YAML API configuration file.
 config:
   mongo_uri: "mongodb://root:example@localhost:27017/"
   mongo_db_name: "pipelines"

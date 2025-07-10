@@ -14,39 +14,69 @@ def get_permissions(permissions_cls) -> BasePermission:
 
 
 class IsAuthenticatedAction(BasePermission):
+    """Base class for authentication permissions using actions.
+    """
     message = "User is not authenticated"
     error_extensions = {"code": "UNAUTHORIZED"}
 
     def __init__(self, action):
-        self._all_actions = ["read_pipeline_template",
-                             "create_pipeline",
+        """Initialize the permission with a specific action.
+        """
+        self._all_actions = ["create_pipeline",
                              "read_pipeline",
+                             "read_pipelines",
                              "update_pipeline",
                              "delete_pipeline",
+                             "read_pipeline_template",
+                             "read_pipeline_templates",
                              "create_dataset",
                              "read_dataset",
                              "subscribe_to_events",
-                             "subscribe_to_logs"]
+                             "subscribe_to_logs",
+                             "create_event"]
         self.action = action
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
+        """Check if the user has permission for the specified action.
+        This method should be overridden in subclasses.
 
+        Kwargs:
+            source: The source of the request, typically the fields of the GraphQL query.
+            info: Strawberry Info object containing the request context.
+            **kwargs: Additional keyword arguments that may be used in the future.
+
+        Returns:
+            bool: True if the user has permission, False otherwise.
+        """
         raise NotImplementedError
 
 
 class IsAuthenticatedAlways(IsAuthenticatedAction):
+    """Permission class that always grants access."""
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
+        """Always grants permission regardless of user authentication.
+
+        Kwargs:
+            source: The source of the request, typically the fields of the GraphQL query.
+            info: Strawberry Info object containing the request context.
+            **kwargs: Additional keyword arguments that may be used in the future.
+
+        Returns:
+            bool: Always returns True, granting permission.
+        """
+
         logger.info(
             "authentication disabled - permission granted    - user=None, action=None, source={s}".format(s=str(source)))
         return True
 
 
 class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
+    """Permission class that checks for X-Forwarded-Email header."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,6 +84,18 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
+        """Check if the user has permission based on X-Forwarded-Email header.
+        If the header is present, permission is granted.
+        If the header is not present, permission is denied.
+
+        Kwargs:
+            source: The source of the request, typically the fields of the GraphQL query.
+            info: Strawberry Info object containing the request context.
+            **kwargs: Additional keyword arguments that may be used in the future.
+
+        Returns:
+            bool: True if the user has permission, False otherwise.
+        """
         request: typing.Union[Request, WebSocket] = info.context["request"]
         if request.headers.get("X-Forwarded-Email", None):
             logger.info("permission granted - user={u}, action={a}, source={s}".format(
@@ -74,6 +116,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
 
 
 class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
+    """Permission class that checks for X-Forwarded-Groups header and RBAC mapping."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -81,7 +124,20 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
+        """Check if the user has permission based on X-Forwarded-Groups header and RBAC mapping.
+        If the header is present and the user belongs to a group that has the required role for
+        the specified action, permission is granted.
+        If the header is not present or the user does not belong to a group with the required
+        role for the specified action, permission is denied.
 
+        Kwargs:
+            source: The source of the request, typically the fields of the GraphQL query.
+            info: Strawberry Info object containing the request context.
+            **kwargs: Additional keyword arguments that may be used in the future.
+
+        Returns:
+            bool: True if the user has permission, False otherwise.
+        """
         request: typing.Union[Request, WebSocket] = info.context["request"]
 
         group_to_role = info.context["request"].app.config.get(

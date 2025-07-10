@@ -1,0 +1,43 @@
+# mkdocs.yml
+site_name: Kedro GraphQL
+theme:
+  name: "material"
+  features:
+  - navigation.expand
+  - content.code.copy
+  palette: 
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - mkdocstrings
+  - search
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Overview: index.md
+  - Quickstart: quickstart.md
+  - Configuration: configuration.md
+  - Events: events.md
+  - UI: ui.md
+  - Extend Kedro GraphQL:
+      - GraphQL: extend_graphql.md
+      - Dataset Uploads & Downloads: extend_pre_signed_url_provider.md
+      - Authentication & Authorization: extend_permissions.md
+      - Application: extend_application.md
+  - Reference: pydoc.md

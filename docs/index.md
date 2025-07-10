@@ -10,7 +10,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI Latest Release](https://img.shields.io/pypi/v/kedro-graphql.svg)](https://pypi.org/project/kedro-graphql/)
 
-## Overview
 
 Kedro-graphql is a [kedro-plugin](https://docs.kedro.org/en/stable/extend_kedro/plugins.html)
 for serving kedro projects as a graphql api.  It leverages
@@ -23,7 +22,6 @@ and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
 - subscribe to pipline events and logs via GraphQL subscriptions
 - storage
   - persist and track all pipelines executed via the API
-- [additional features](#features)
 
 ```mermaid
 flowchart  TB
@@ -38,5 +36,3 @@ flowchart  TB
   worker<-->redis
 
 ```
-
-Figure 1. Architecture

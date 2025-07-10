@@ -12,7 +12,6 @@ from .tasks import handle_event
 from .config import load_config
 from .permissions import get_permissions
 from starlette.requests import Request
-from starlette.websockets import WebSocket
 
 CONFIG = load_config()
 logger.debug("configuration loaded by {s}".format(s=__name__))
@@ -62,11 +61,28 @@ class KedroGraphQL(FastAPI):
             self.backend.shutdown()
 
         class Info:
+            """A simple class to hold the request context for permissions."""
+
             def __init__(self, request: Request):
                 self.context = {"request": request}
 
         @staticmethod
         def authenticate(request: Request):
+            """Dependency to authenticate the user based on permissions.
+            This function checks if the user is authenticated by verifying
+            the permissions class. If the user is not authenticated, it raises
+            an HTTPException with a 403 Forbidden status code.
+            This function is used as a dependency in the event endpoint to ensure
+            that only authenticated users can create events.
+
+            Args:
+                request (Request): The incoming request.
+            Returns:
+                bool: True if the user is authenticated, False otherwise.
+            Raises:
+                HTTPException: If the user is not authenticated.
+            """
+
             access = PERMISSIONS_CLASS(action="create_event").has_permission(
                 None, Info(request))
             if not access:
