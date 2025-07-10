@@ -11,8 +11,8 @@ and `type` attributes match what is provided in the configuration.
 
 ## Configuration
 
-The configuration can be provided using the `KEDRO_GRAPHQL_EVENT_CONFIG`
-environment variable.  If no value is provided the `/event/` endpoint 
+The configuration can be provided using the `KEDRO_GRAPHQL_EVENTS_CONFIG`
+variable.  If no value is provided the `/event/` endpoint 
 is automatically disabled.  The configuration is a mapping between
 a pipeline name and the expected `source` and `type` event attributes.
 For example, the following configuration will run the `event00`
@@ -67,7 +67,7 @@ erDiagram
 
 ```
 
-There is no requirment for the pipeline(s) triggered by the event 
+There is no requirement for the pipeline(s) triggered by the event 
 to create any child pipelines, however, it can be a useful pattern
 to encapsulate event processing logic and aligns well with the
 [modular pipeline](https://docs.kedro.org/en/0.19.14/nodes_and_pipelines/modular_pipelines.html#modular-pipelines) approach recommended by the kedro project.

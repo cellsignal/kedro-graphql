@@ -32,9 +32,7 @@ def start_worker(app, config, conf_source, env, package_name, project_path):
     bootstrap_project(project_path)
     with KedroSession.create(project_path=project_path, env=env, conf_source=conf_source) as session:
         a = init_app(app, config, session)
-        from .celeryapp import celery_app
-        capp = celery_app(a.config, a.backend)
-        worker = capp.Worker()
+        worker = a.celery_app.Worker()
         worker.start()
 
 

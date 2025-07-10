@@ -23,7 +23,6 @@ and [Celery](https://docs.celeryq.dev/en/stable/index.html) to turn any
 - subscribe to pipline events and logs via GraphQL subscriptions
 - storage
   - persist and track all pipelines executed via the API
-- [additional features](#features)
 
 ```mermaid
 flowchart  TB
