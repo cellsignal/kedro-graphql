@@ -34,6 +34,7 @@ The following table describes each configuration attribute available:
 | `permissions`                          | Python path to the permissions class used for authentication.                                    |
 | `permissions_role_to_action_map`       | Mapping of roles to allowed actions.                                                              |
 | `permissions_group_to_role_map`        | Mapping of external group names to roles.                                                        |
+| `presigned_url_provider`                  | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
 
 
 

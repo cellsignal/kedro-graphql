@@ -29,13 +29,13 @@ Start the UI server.  Fetch the ui.yaml from the [UI YAML Specification](#ui-yam
 section below or from the repository.
 
 ```bash
-kedro gql --ui --ui-spec src/kedro_graphql/ui/ui.yaml
+kedro gql --ui --ui-spec ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
 ```bash
-kedro gql -r -u --ui-spec src/kedro_graphql/ui/ui.yaml
+kedro gql -r -u --ui-spec ui.yaml
 ```
 
 Start the GraphQL API.
@@ -571,8 +571,8 @@ panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/
   base_url: /
   port: 5006
   oauth_provider: "pkce"
-  oauth_secret: "panel"
-  oauth_key: "panel"
+  oauth_secret: "kedro-graphql"
+  oauth_key: "kedro-graphql"
   oauth_extra_params: 
     AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
     TOKEN_URL: "http://localhost:5556/oidc/token"
@@ -599,16 +599,25 @@ pages:
       dashboard_page: dashboard
   dashboard:
     module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+    params:
+      dataset_map:
+        pandas.CSVDataset: dataset_perspective
+        pandas.ParquetDataset: dataset_perspective
   form:
     module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
   explore:
     module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+  dataset_perspective:
+    module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
+    params:
+      file_size_limit_mb: 10
 nav:
   sidebar:
     - name: Pipelines
       page: pipelines
     - name: Search 
       page: search
+
 ```
 
 Start the UI server.  Fetch the ui-auth.yaml from above or from the repository.

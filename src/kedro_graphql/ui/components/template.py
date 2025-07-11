@@ -119,7 +119,10 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
         """Asynchronously retrieves the user context for the template.
         This method can be overridden to provide custom user context data.
         """
-        user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
+        if pn.state.user_info:
+            user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
+        else:
+            user = "Guest"
         user_menu_items = [("User Information", "User Information")]
         login_link = self.spec["panel_get_server_kwargs"].get(
             "login_endpoint", "/login")
