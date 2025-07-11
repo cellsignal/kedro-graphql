@@ -71,9 +71,3 @@ There is no requirement for the pipeline(s) triggered by the event
 to create any child pipelines, however, it can be a useful pattern
 to encapsulate event processing logic and aligns well with the
 [modular pipeline](https://docs.kedro.org/en/0.19.14/nodes_and_pipelines/modular_pipelines.html#modular-pipelines) approach recommended by the kedro project.
-
-## Future Steps
-
-- the event handler will pass the pipeline's id and the incoming event as
-  parameters to pipeline.  Should we support loading and passing any additional
-  parameters found in the PipelineTemplate?

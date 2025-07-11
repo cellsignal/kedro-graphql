@@ -13,13 +13,13 @@ data exploration and web app framework for python.
 
 Clone the repository and install the dependencies,
 
-```
+```bash
 pip install -e .[ui]
 ```
 
 Once released, the UI dependencies will installable via pip.
 
-```
+```bash
 pip install kedro_graphql[ui]
 ```
 
@@ -28,28 +28,28 @@ pip install kedro_graphql[ui]
 Start the UI server.  Fetch the ui.yaml from the [UI YAML Specification](#ui-yaml-specification)
 section below or from the repository.
 
-```
+```bash
 kedro gql --ui --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
-```
+```bash
 kedro gql -r -u --ui-spec src/kedro_graphql/ui/ui.yaml
 ```
 
 Start the GraphQL API.
-```
-kedro gql -r 
+```bash
+kedro gql -r  --api-spec api.yaml
 ```
 
 Start a worker.
-```
-kedro gql -r -w
+```bash
+kedro gql -r -w --api-spec api.yaml
 ```
 
 Start supporting services (e.g. mongo, redis, etc...).
-```
+```bash
 docker compose up -d
 ```
 
@@ -132,7 +132,7 @@ kedro gql --ui --imports "kedro_graphql.ui.plugins"
 The `@ui_form` decorator can be used to register one or more forms to
 a pipeline.  The specification of `@ui_form` plugin is as follows:
 
-```
+```python
 class ExampleForm(pn.viewable.Viewer):
     spec = param.Dict(default={})
     client = param.ClassSelector(class_=KedroGraphqlClient)
@@ -147,7 +147,7 @@ class ExampleForm(pn.viewable.Viewer):
 The example shown below will register two forms to the 
 `example00` pipeline.
 
-```
+```python
 # kedro_graphql.ui.plugins
 
 import tempfile
@@ -312,7 +312,7 @@ class Example00PipelineFormV2(BaseExample00Form):
 The `@ui_data` decorator can be used to register one or more custom components to
 a pipeline's dashboard. The specification of `@ui_data` plugin is as follows:
 
-```
+```python
 class ExampleData(pn.viewable.Viewer):
     spec = param.Dict(default={})
     id = param.String(default="")
@@ -326,7 +326,7 @@ class ExampleData(pn.viewable.Viewer):
  The example shown below will register two new tabs to the 
 `example00` pipeline dashboard.
 
-```
+```python
 # kedro_graphql.ui.plugins
 import panel as pn
 import numpy as np
@@ -412,7 +412,7 @@ The `@ui_dashboard` decorator can be used to register one or more dashboards to
 a pipeline that replace the default dashboard.  The specification of 
 `@ui_dashboard` plugin is as follows:
 
-```
+```python
 class ExampleDashboard(pn.viewable.Viewer):
     client = param.ClassSelector(class_=KedroGraphqlClient)
     id = param.String(default="")
@@ -426,7 +426,7 @@ class ExampleDashboard(pn.viewable.Viewer):
 The example shown below will register one custom dashboard to the 
 `example01` pipeline that will replace the default dashboard.
 
-```
+```python
 # kedro_graphql.ui.plugins
 import panel as pn
 import numpy as np
@@ -502,7 +502,7 @@ class Example00PipelineUIV1(pn.viewable.Viewer):
 
 ### UI YAML Specification
 
-```
+```yaml
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
 panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
@@ -562,7 +562,7 @@ https://github.com/holoviz/panel/issues/7979 for more discussion on this
 topic.  Using `oauth_provider: "pkce"` in the conifiguration tells panel
 to use the `kedro_graphql.ui.auth.PKCELoginHandler`.
 
-```
+```yaml
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
 panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function

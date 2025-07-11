@@ -2,6 +2,12 @@
 
 * [\_\_init\_\_](#__init__)
 * [\_\_main\_\_](#__main__)
+* [decorators](#decorators)
+  * [NameConflictError](#decorators.NameConflictError)
+* [pipeline\_registry](#pipeline_registry)
+  * [register\_pipelines](#pipeline_registry.register_pipelines)
+* [settings](#settings)
+* [celeryapp](#celeryapp)
 * [client](#client)
   * [KedroGraphqlClient](#client.KedroGraphqlClient)
     * [\_\_init\_\_](#client.KedroGraphqlClient.__init__)
@@ -15,20 +21,50 @@
     * [delete\_pipeline](#client.KedroGraphqlClient.delete_pipeline)
     * [pipeline\_events](#client.KedroGraphqlClient.pipeline_events)
     * [pipeline\_logs](#client.KedroGraphqlClient.pipeline_logs)
-* [decorators](#decorators)
-  * [NameConflictError](#decorators.NameConflictError)
+* [commands](#commands)
+  * [gql](#commands.gql)
 * [hooks](#hooks)
   * [InvalidPipeline](#hooks.InvalidPipeline)
   * [DataValidationHooks](#hooks.DataValidationHooks)
     * [before\_pipeline\_run](#hooks.DataValidationHooks.before_pipeline_run)
   * [DataLoggingHooks](#hooks.DataLoggingHooks)
-* [pipeline\_registry](#pipeline_registry)
-  * [register\_pipelines](#pipeline_registry.register_pipelines)
-* [settings](#settings)
-* [utils](#utils)
-  * [merge](#utils.merge)
-  * [parse\_s3\_filepath](#utils.parse_s3_filepath)
-* [celeryapp](#celeryapp)
+* [permissions](#permissions)
+  * [IsAuthenticatedAction](#permissions.IsAuthenticatedAction)
+    * [\_\_init\_\_](#permissions.IsAuthenticatedAction.__init__)
+    * [has\_permission](#permissions.IsAuthenticatedAction.has_permission)
+  * [IsAuthenticatedAlways](#permissions.IsAuthenticatedAlways)
+    * [has\_permission](#permissions.IsAuthenticatedAlways.has_permission)
+  * [IsAuthenticatedXForwardedEmail](#permissions.IsAuthenticatedXForwardedEmail)
+    * [has\_permission](#permissions.IsAuthenticatedXForwardedEmail.has_permission)
+  * [IsAuthenticatedXForwardedRBAC](#permissions.IsAuthenticatedXForwardedRBAC)
+    * [has\_permission](#permissions.IsAuthenticatedXForwardedRBAC.has_permission)
+* [pipeline\_event\_monitor](#pipeline_event_monitor)
+  * [PipelineEventMonitor](#pipeline_event_monitor.PipelineEventMonitor)
+    * [\_\_init\_\_](#pipeline_event_monitor.PipelineEventMonitor.__init__)
+    * [\_task\_event\_receiver](#pipeline_event_monitor.PipelineEventMonitor._task_event_receiver)
+    * [\_start\_task\_event\_receiver\_thread](#pipeline_event_monitor.PipelineEventMonitor._start_task_event_receiver_thread)
+    * [start](#pipeline_event_monitor.PipelineEventMonitor.start)
+* [schema](#schema)
+  * [encode\_cursor](#schema.encode_cursor)
+  * [decode\_cursor](#schema.decode_cursor)
+  * [Mutation](#schema.Mutation)
+    * [create\_pipeline](#schema.Mutation.create_pipeline)
+  * [Subscription](#schema.Subscription)
+    * [pipeline](#schema.Subscription.pipeline)
+    * [pipeline\_logs](#schema.Subscription.pipeline_logs)
+* [tasks](#tasks)
+  * [KedroGraphqlTask](#tasks.KedroGraphqlTask)
+    * [before\_start](#tasks.KedroGraphqlTask.before_start)
+    * [on\_success](#tasks.KedroGraphqlTask.on_success)
+    * [on\_retry](#tasks.KedroGraphqlTask.on_retry)
+    * [on\_failure](#tasks.KedroGraphqlTask.on_failure)
+    * [after\_return](#tasks.KedroGraphqlTask.after_return)
+  * [create\_pipeline\_input](#tasks.create_pipeline_input)
+  * [handle\_event](#tasks.handle_event)
+* [asgi](#asgi)
+* [config](#config)
+  * [load\_api\_spec](#config.load_api_spec)
+  * [load\_config](#config.load_config)
 * [models](#models)
   * [Parameter](#models.Parameter)
     * [decode](#models.Parameter.decode)
@@ -61,45 +97,9 @@
     * [decode](#models.PipelineEvent.decode)
   * [PipelineLogMessage](#models.PipelineLogMessage)
     * [decode](#models.PipelineLogMessage.decode)
-* [pipeline\_event\_monitor](#pipeline_event_monitor)
-  * [PipelineEventMonitor](#pipeline_event_monitor.PipelineEventMonitor)
-    * [\_\_init\_\_](#pipeline_event_monitor.PipelineEventMonitor.__init__)
-    * [\_task\_event\_receiver](#pipeline_event_monitor.PipelineEventMonitor._task_event_receiver)
-    * [\_start\_task\_event\_receiver\_thread](#pipeline_event_monitor.PipelineEventMonitor._start_task_event_receiver_thread)
-    * [start](#pipeline_event_monitor.PipelineEventMonitor.start)
-* [schema](#schema)
-  * [encode\_cursor](#schema.encode_cursor)
-  * [decode\_cursor](#schema.decode_cursor)
-  * [Mutation](#schema.Mutation)
-    * [create\_pipeline](#schema.Mutation.create_pipeline)
-  * [Subscription](#schema.Subscription)
-    * [pipeline](#schema.Subscription.pipeline)
-    * [pipeline\_logs](#schema.Subscription.pipeline_logs)
-* [tasks](#tasks)
-  * [KedroGraphqlTask](#tasks.KedroGraphqlTask)
-    * [before\_start](#tasks.KedroGraphqlTask.before_start)
-    * [on\_success](#tasks.KedroGraphqlTask.on_success)
-    * [on\_retry](#tasks.KedroGraphqlTask.on_retry)
-    * [on\_failure](#tasks.KedroGraphqlTask.on_failure)
-    * [after\_return](#tasks.KedroGraphqlTask.after_return)
-  * [create\_pipeline\_input](#tasks.create_pipeline_input)
-  * [handle\_event](#tasks.handle_event)
-* [asgi](#asgi)
-* [commands](#commands)
-  * [gql](#commands.gql)
-* [config](#config)
-  * [load\_api\_spec](#config.load_api_spec)
-  * [load\_config](#config.load_config)
-* [permissions](#permissions)
-  * [IsAuthenticatedAction](#permissions.IsAuthenticatedAction)
-    * [\_\_init\_\_](#permissions.IsAuthenticatedAction.__init__)
-    * [has\_permission](#permissions.IsAuthenticatedAction.has_permission)
-  * [IsAuthenticatedAlways](#permissions.IsAuthenticatedAlways)
-    * [has\_permission](#permissions.IsAuthenticatedAlways.has_permission)
-  * [IsAuthenticatedXForwardedEmail](#permissions.IsAuthenticatedXForwardedEmail)
-    * [has\_permission](#permissions.IsAuthenticatedXForwardedEmail.has_permission)
-  * [IsAuthenticatedXForwardedRBAC](#permissions.IsAuthenticatedXForwardedRBAC)
-    * [has\_permission](#permissions.IsAuthenticatedXForwardedRBAC.has_permission)
+* [utils](#utils)
+  * [merge](#utils.merge)
+  * [parse\_s3\_filepath](#utils.parse_s3_filepath)
 * [backends](#backends)
 * [backends.base](#backends.base)
   * [BaseBackend](#backends.base.BaseBackend)
@@ -150,7 +150,6 @@
 * [pipelines.event00.pipeline](#pipelines.event00.pipeline)
 * [plugins](#plugins)
 * [plugins.plugins](#plugins.plugins)
-  * [IOResolverPlugin](#plugins.plugins.IOResolverPlugin)
 * [runners](#runners)
 * [runners.argo](#runners.argo)
 * [runners.argo.argo](#runners.argo.argo)
@@ -185,11 +184,6 @@
     * [\_add\_tag\_modal](#ui.components.pipeline_cloning.PipelineCloning._add_tag_modal)
     * [\_tag\_edit\_modal](#ui.components.pipeline_cloning.PipelineCloning._tag_edit_modal)
     * [clone\_pipeline](#ui.components.pipeline_cloning.PipelineCloning.clone_pipeline)
-* [ui.components.pipeline\_dashboard\_factory](#ui.components.pipeline_dashboard_factory)
-  * [PipelineDashboardFactory](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory)
-    * [build\_default\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_default_dashboard)
-    * [build\_custom\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_custom_dashboard)
-    * [build\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_dashboard)
 * [ui.components.pipeline\_detail](#ui.components.pipeline_detail)
   * [PipelineDetail](#ui.components.pipeline_detail.PipelineDetail)
     * [build\_detail](#ui.components.pipeline_detail.PipelineDetail.build_detail)
@@ -224,6 +218,15 @@
     * [user\_menu\_action](#ui.components.template.KedroGraphqlMaterialTemplate.user_menu_action)
     * [build\_user\_menu](#ui.components.template.KedroGraphqlMaterialTemplate.build_user_menu)
     * [\_\_init\_\_](#ui.components.template.KedroGraphqlMaterialTemplate.__init__)
+* [ui.components.data\_catalog\_explorer](#ui.components.data_catalog_explorer)
+  * [DataCatalogExplorer](#ui.components.data_catalog_explorer.DataCatalogExplorer)
+* [ui.components.dataset\_perspective](#ui.components.dataset_perspective)
+  * [DatasetPerspective](#ui.components.dataset_perspective.DatasetPerspective)
+* [ui.components.pipeline\_dashboard\_factory](#ui.components.pipeline_dashboard_factory)
+  * [PipelineDashboardFactory](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory)
+    * [build\_default\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_default_dashboard)
+    * [build\_custom\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_custom_dashboard)
+    * [build\_dashboard](#ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_dashboard)
 * [ui.decorators](#ui.decorators)
   * [discover\_plugins](#ui.decorators.discover_plugins)
   * [ui\_form](#ui.decorators.ui_form)
@@ -248,6 +251,19 @@
     * [run](#ui.plugins.BaseExample01Form.run)
   * [Example01PipelineFormV1](#ui.plugins.Example01PipelineFormV1)
   * [Example01PipelineUIV1](#ui.plugins.Example01PipelineUIV1)
+* [presigned\_url](#presigned_url)
+* [presigned\_url.base](#presigned_url.base)
+  * [PreSignedUrlProvider](#presigned_url.base.PreSignedUrlProvider)
+    * [pre\_signed\_url\_read](#presigned_url.base.PreSignedUrlProvider.pre_signed_url_read)
+    * [pre\_signed\_url\_create](#presigned_url.base.PreSignedUrlProvider.pre_signed_url_create)
+* [presigned\_url.local\_file\_provider](#presigned_url.local_file_provider)
+  * [LocalFileProvider](#presigned_url.local_file_provider.LocalFileProvider)
+    * [pre\_signed\_url\_read](#presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_read)
+    * [pre\_signed\_url\_create](#presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_create)
+* [presigned\_url.s3\_provider](#presigned_url.s3_provider)
+  * [S3PreSignedUrlProvider](#presigned_url.s3_provider.S3PreSignedUrlProvider)
+    * [pre\_signed\_url\_read](#presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_read)
+    * [pre\_signed\_url\_create](#presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_create)
 
 <a id="__init__"></a>
 
@@ -261,6 +277,52 @@ kedro-graphql
 
 kedro-graphql file for ensuring the package is executable
 as `kedro-graphql` and `python -m kedro_graphql`
+
+<a id="decorators"></a>
+
+# Module decorators
+
+<a id="decorators.NameConflictError"></a>
+
+## NameConflictError Objects
+
+```python
+class NameConflictError(BaseException)
+```
+
+Raise for errors in adding plugins do to the same name.
+
+<a id="pipeline_registry"></a>
+
+# Module pipeline\_registry
+
+Project pipelines.
+
+<a id="pipeline_registry.register_pipelines"></a>
+
+#### register\_pipelines
+
+```python
+def register_pipelines() -> Dict[str, Pipeline]
+```
+
+Register the project's pipelines.
+
+**Returns**:
+
+  A mapping from pipeline names to ``Pipeline`` objects.
+
+<a id="settings"></a>
+
+# Module settings
+
+Project settings. There is no need to edit this file unless you want to change values
+from the Kedro defaults. For further information, including these default values, see
+https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html.
+
+<a id="celeryapp"></a>
+
+# Module celeryapp
 
 <a id="client"></a>
 
@@ -458,19 +520,98 @@ id (str): pipeline id
 
 - `PipelineLogMessage` _generator_ - a generator of PipelineLogMessage objects
 
-<a id="decorators"></a>
+<a id="commands"></a>
 
-# Module decorators
+# Module commands
 
-<a id="decorators.NameConflictError"></a>
+<a id="commands.gql"></a>
 
-## NameConflictError Objects
+#### gql
 
 ```python
-class NameConflictError(BaseException)
+@commands.command()
+@click.pass_obj
+@click.option("--app",
+              "-a",
+              default=defaults["KEDRO_GRAPHQL_APP"],
+              help="Application import path")
+@click.option(
+    "--backend",
+    default=defaults["KEDRO_GRAPHQL_BACKEND"],
+    help=
+    "The only supported value for this option is 'kedro_graphql.backends.mongodb.MongoBackend'"
+)
+@click.option("--broker",
+              default=defaults["KEDRO_GRAPHQL_BROKER"],
+              help="URI to broker e.g. 'redis://localhost'")
+@click.option(
+    "--celery-result-backend",
+    default=defaults["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"],
+    help="URI to backend for celery results e.g. 'redis://localhost'")
+@click.option(
+    "--conf-source",
+    default=defaults["KEDRO_GRAPHQL_CONF_SOURCE"],
+    help="Path of a directory where project configuration is stored.")
+@click.option(
+    "--env",
+    "-e",
+    default=defaults["KEDRO_GRAPHQL_ENV"],
+    help="Kedro configuration environment name. Defaults to `local`.")
+@click.option("--imports",
+              "-i",
+              default=defaults["KEDRO_GRAPHQL_IMPORTS"],
+              help="Additional import paths")
+@click.option(
+    "--mongo-uri",
+    default=defaults["KEDRO_GRAPHQL_MONGO_URI"],
+    help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'")
+@click.option("--mongo-db-name",
+              default=defaults["KEDRO_GRAPHQL_MONGO_DB_NAME"],
+              help="Name to use for collection in mongo e.g. 'pipelines'")
+@click.option(
+    "--runner",
+    default=defaults["KEDRO_GRAPHQL_RUNNER"],
+    help=
+    "Execution mechanism to run pipelines e.g. 'kedro.runner.SequentialRunner'"
+)
+@click.option("--log-tmp-dir",
+              default=defaults["KEDRO_GRAPHQL_LOG_TMP_DIR"],
+              help="Temporary directory for logs")
+@click.option("--log-path-prefix",
+              default=defaults["KEDRO_GRAPHQL_LOG_PATH_PREFIX"],
+              help="Prefix of path to save logs")
+@click.option("--reload",
+              "-r",
+              is_flag=True,
+              default=False,
+              help="Enable auto-reload.")
+@click.option(
+    "--reload-path",
+    default=None,
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    help="Path to watch for file changes, defaults to <project path>/src")
+@click.option(
+    "--api-spec",
+    default=None,
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    help="Path to watch for file changes, defaults to <project path>/src")
+@click.option("--ui",
+              "-u",
+              is_flag=True,
+              default=False,
+              help="Start a viz app.")
+@click.option("--ui-spec", default="", help="UI YAML specification file")
+@click.option("--worker",
+              "-w",
+              is_flag=True,
+              default=False,
+              help="Start a celery worker.")
+def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
+        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir,
+        log_path_prefix, reload, reload_path, api_spec, ui, ui_spec, worker)
 ```
 
-Raise for errors in adding plugins do to the same name.
+Commands for working with kedro-graphql.
 
 <a id="hooks"></a>
 
@@ -524,462 +665,146 @@ class DataLoggingHooks()
 
 A Kedro hook class to save pipeline logs to S3 bucket.
 
-<a id="pipeline_registry"></a>
+<a id="permissions"></a>
 
-# Module pipeline\_registry
+# Module permissions
 
-Project pipelines.
+<a id="permissions.IsAuthenticatedAction"></a>
 
-<a id="pipeline_registry.register_pipelines"></a>
-
-#### register\_pipelines
+## IsAuthenticatedAction Objects
 
 ```python
-def register_pipelines() -> Dict[str, Pipeline]
+class IsAuthenticatedAction(BasePermission)
 ```
 
-Register the project's pipelines.
+Base class for authentication permissions using actions.
+
+<a id="permissions.IsAuthenticatedAction.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(action)
+```
+
+Initialize the permission with a specific action.
+
+<a id="permissions.IsAuthenticatedAction.has_permission"></a>
+
+#### has\_permission
+
+```python
+def has_permission(source: typing.Any, info: strawberry.Info,
+                   **kwargs) -> bool
+```
+
+Check if the user has permission for the specified action.
+This method should be overridden in subclasses.
+
+Kwargs:
+source: The source of the request, typically the fields of the GraphQL query.
+info: Strawberry Info object containing the request context.
+**kwargs: Additional keyword arguments that may be used in the future.
 
 **Returns**:
 
-  A mapping from pipeline names to ``Pipeline`` objects.
+- `bool` - True if the user has permission, False otherwise.
 
-<a id="settings"></a>
+<a id="permissions.IsAuthenticatedAlways"></a>
 
-# Module settings
-
-Project settings. There is no need to edit this file unless you want to change values
-from the Kedro defaults. For further information, including these default values, see
-https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html.
-
-<a id="utils"></a>
-
-# Module utils
-
-<a id="utils.merge"></a>
-
-#### merge
+## IsAuthenticatedAlways Objects
 
 ```python
-def merge(a, b, path=None)
+class IsAuthenticatedAlways(IsAuthenticatedAction)
 ```
 
-Merges nested dictionaries recursively.  Merges b into a.
+Permission class that always grants access.
 
-<a id="utils.parse_s3_filepath"></a>
+<a id="permissions.IsAuthenticatedAlways.has_permission"></a>
 
-#### parse\_s3\_filepath
+#### has\_permission
 
 ```python
-def parse_s3_filepath(config)
+def has_permission(source: typing.Any, info: strawberry.Info,
+                   **kwargs) -> bool
 ```
 
-Parse the s3 bucket name and key from DataSet filepath field.
+Always grants permission regardless of user authentication.
 
-<a id="celeryapp"></a>
-
-# Module celeryapp
-
-<a id="models"></a>
-
-# Module models
-
-<a id="models.Parameter"></a>
-
-## Parameter Objects
-
-```python
-@strawberry.type
-class Parameter()
-```
-
-<a id="models.Parameter.decode"></a>
-
-#### decode
-
-```python
-@staticmethod
-def decode(input_dict) -> dict
-```
-
-Returns a Parameter object from a dictionary.
-
-<a id="models.Parameter.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialSetInput"></a>
-
-## CredentialSetInput Objects
-
-```python
-@strawberry.input
-class CredentialSetInput()
-```
-
-<a id="models.CredentialSetInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialInput"></a>
-
-## CredentialInput Objects
-
-```python
-@strawberry.input
-class CredentialInput()
-```
-
-<a id="models.CredentialInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialNestedInput"></a>
-
-## CredentialNestedInput Objects
-
-```python
-@strawberry.input
-class CredentialNestedInput()
-```
-
-<a id="models.CredentialNestedInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.DataSet"></a>
-
-## DataSet Objects
-
-```python
-@strawberry.type
-class DataSet()
-```
-
-<a id="models.DataSet.pre_signed_url_create"></a>
-
-#### pre\_signed\_url\_create
-
-```python
-@strawberry.field(extensions=[
-    PermissionExtension(
-        permissions=[PERMISSIONS_CLASS(action="create_dataset")])
-])
-def pre_signed_url_create() -> Optional[JSON]
-```
-
-Generate a presigned URL S3 to upload a file.
+Kwargs:
+source: The source of the request, typically the fields of the GraphQL query.
+info: Strawberry Info object containing the request context.
+**kwargs: Additional keyword arguments that may be used in the future.
 
 **Returns**:
 
-- `Optional[JSON]` - Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
-  
+- `bool` - Always returns True, granting permission.
 
-**Example**:
+<a id="permissions.IsAuthenticatedXForwardedEmail"></a>
 
-  {
-- `"url"` - "https://your-bucket-name.s3.amazonaws.com/",
-- `"fields"` - {
-- `"key"` - "your-object-key",
-- `"AWSAccessKeyId"` - "your-access-key-id",
-- `"x-amz-security-token"` - "your-security-token",
-- `"policy"` - "your-policy",
-- `"signature"` - "your-signature"
-  }
-  }
-
-<a id="models.DataSet.pre_signed_url_read"></a>
-
-#### pre\_signed\_url\_read
+## IsAuthenticatedXForwardedEmail Objects
 
 ```python
-@strawberry.field(extensions=[
-    PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])
-])
-def pre_signed_url_read() -> Optional[str]
+class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction)
 ```
 
-Generate a presigned URL S3 to download a file.
+Permission class that checks for X-Forwarded-Email header.
+
+<a id="permissions.IsAuthenticatedXForwardedEmail.has_permission"></a>
+
+#### has\_permission
+
+```python
+def has_permission(source: typing.Any, info: strawberry.Info,
+                   **kwargs) -> bool
+```
+
+Check if the user has permission based on X-Forwarded-Email header.
+If the header is present, permission is granted.
+If the header is not present, permission is denied.
+
+Kwargs:
+source: The source of the request, typically the fields of the GraphQL query.
+info: Strawberry Info object containing the request context.
+**kwargs: Additional keyword arguments that may be used in the future.
 
 **Returns**:
 
-- `Optional[str]` - download url with query parameters
-  
-- `Example` - https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
+- `bool` - True if the user has permission, False otherwise.
 
-<a id="models.DataSet.serialize"></a>
+<a id="permissions.IsAuthenticatedXForwardedRBAC"></a>
 
-#### serialize
+## IsAuthenticatedXForwardedRBAC Objects
 
 ```python
-def serialize() -> dict
+class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction)
 ```
 
-Returns serializable dict in format compatible with kedro.
+Permission class that checks for X-Forwarded-Groups header and RBAC mapping.
 
-<a id="models.DataSet.decode"></a>
+<a id="permissions.IsAuthenticatedXForwardedRBAC.has_permission"></a>
 
-#### decode
+#### has\_permission
 
 ```python
-@staticmethod
-def decode(payload)
+def has_permission(source: typing.Any, info: strawberry.Info,
+                   **kwargs) -> bool
 ```
 
-Return a new DataSet from a dictionary.
-
-**Arguments**:
-
-- `payload` _dict_ - dict representing DataSet e.g.
-  
-  {
-- `"name"` - "text_in",
-- `"config"` - '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
-- `"tags":[{"key"` - "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
-  }
-
-<a id="models.DataCatalogInput"></a>
-
-## DataCatalogInput Objects
-
-```python
-@strawberry.input
-class DataCatalogInput()
-```
-
-<a id="models.DataCatalogInput.create"></a>
-
-#### create
-
-```python
-@staticmethod
-def create(config)
-```
-
-context.config_loader["catalog"]
-
-{'text_in': {'type': 'text.TextDataSet',
-'filepath': './data/01_raw/text_in.txt'},
-'text_out': {'type': 'text.TextDataSet',
-'filepath': './data/02_intermediate/text_out.txt'}}
-
-Example usage:
-
-from kedro_graphql.models import DataCatalogInput
-
-catalog = DataCatalogInput.create(context.config_loader["catalog"])
-
-print(catalog)
-
-[DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
-DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
-
-<a id="models.PipelineTemplates"></a>
-
-## PipelineTemplates Objects
-
-```python
-@strawberry.type
-class PipelineTemplates()
-```
-
-<a id="models.PipelineTemplates._build_pipeline_index"></a>
-
-#### \_build\_pipeline\_index
-
-```python
-@staticmethod
-def _build_pipeline_index(kedro_pipelines, kedro_catalog, kedro_parameters)
-```
-
-
-
-<a id="models.PipelineSlice"></a>
-
-## PipelineSlice Objects
-
-```python
-@strawberry.input(description="Slice a pipeline.")
-class PipelineSlice()
-```
-
-<a id="models.PipelineSlice.args"></a>
-
-#### args: `List[str]`
-
-e.g. ["node1", "node2"]
-
-<a id="models.PipelineInput"></a>
-
-## PipelineInput Objects
-
-```python
-@strawberry.input(description="PipelineInput")
-class PipelineInput()
-```
-
-<a id="models.PipelineInput.create"></a>
-
-#### create
-
-```python
-@staticmethod
-def create(name=None, data_catalog=None, parameters=None, tags=None)
-```
-
-Example usage:
-
-from kedro_graphql.models import PipelineInput
-from fastapi.encoders import jsonable_encoder
-
-p = PipelineInput(name = "example00",
-data_catalog = context.config_loader["catalog"],
-parameters = context.config_loader["parameters"],
-tags = [{""owner":"person"}])
-
-print(p)
-
-PipelineInput(name='example00',
-parameters=[
-ParameterInput(name='example',
-value='hello',
-type=<ParameterType.STRING: 'string'>),
-ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
-],
-data_catalog=[
-DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
-DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
-],
-tags=[TagInput(key='owner', value='sean')])
-
-print(jsonable_encoder(p))
-
-## this can be used as the PipelineInput parameter when calleing the pipeline mutation via the API
-{'name': 'example00',
-'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
-{'name': 'duration', 'value': '1', 'type': 'string'}],
-'data_catalog': [{'name': 'text_in',
-'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'},
-{'name': 'text_out',
-'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}'}],
-'tags': [{'key': 'owner', 'value': 'sean'}],
-'credentials': None,
-'credentials_nested': None}
-
-<a id="models.Pipeline"></a>
-
-## Pipeline Objects
-
-```python
-@strawberry.type
-class Pipeline()
-```
-
-<a id="models.Pipeline.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new Pipeline from a dictionary or graphql api response.
-
-<a id="models.Pipeline.decode_pipeline_input"></a>
-
-#### decode\_pipeline\_input
-
-```python
-@classmethod
-def decode_pipeline_input(cls, payload)
-```
-
-Factory method to create a new Pipeline from a PipelineInput object.
-
-<a id="models.Pipelines"></a>
-
-## Pipelines Objects
-
-```python
-@strawberry.type
-class Pipelines()
-```
-
-<a id="models.Pipelines.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new Pipelines from a graphql api response.
-
-<a id="models.PipelineEvent"></a>
-
-## PipelineEvent Objects
-
-```python
-@strawberry.type
-class PipelineEvent()
-```
-
-<a id="models.PipelineEvent.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new PipelineEvent from a graphql api response.
-
-<a id="models.PipelineLogMessage"></a>
-
-## PipelineLogMessage Objects
-
-```python
-@strawberry.type
-class PipelineLogMessage()
-```
-
-<a id="models.PipelineLogMessage.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new PipelineLogMessage from a graphql api response.
+Check if the user has permission based on X-Forwarded-Groups header and RBAC mapping.
+If the header is present and the user belongs to a group that has the required role for
+the specified action, permission is granted.
+If the header is not present or the user does not belong to a group with the required
+role for the specified action, permission is denied.
+
+Kwargs:
+source: The source of the request, typically the fields of the GraphQL query.
+info: Strawberry Info object containing the request context.
+**kwargs: Additional keyword arguments that may be used in the future.
+
+**Returns**:
+
+- `bool` - True if the user has permission, False otherwise.
 
 <a id="pipeline_event_monitor"></a>
 
@@ -1348,99 +1173,6 @@ It uses the KedroGraphqlClient to create a pipeline based on the event data.
 
 # Module asgi
 
-<a id="commands"></a>
-
-# Module commands
-
-<a id="commands.gql"></a>
-
-#### gql
-
-```python
-@commands.command()
-@click.pass_obj
-@click.option("--app",
-              "-a",
-              default=defaults["KEDRO_GRAPHQL_APP"],
-              help="Application import path")
-@click.option(
-    "--backend",
-    default=defaults["KEDRO_GRAPHQL_BACKEND"],
-    help=
-    "The only supported value for this option is 'kedro_graphql.backends.mongodb.MongoBackend'"
-)
-@click.option("--broker",
-              default=defaults["KEDRO_GRAPHQL_BROKER"],
-              help="URI to broker e.g. 'redis://localhost'")
-@click.option(
-    "--celery-result-backend",
-    default=defaults["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"],
-    help="URI to backend for celery results e.g. 'redis://localhost'")
-@click.option(
-    "--conf-source",
-    default=defaults["KEDRO_GRAPHQL_CONF_SOURCE"],
-    help="Path of a directory where project configuration is stored.")
-@click.option(
-    "--env",
-    "-e",
-    default=defaults["KEDRO_GRAPHQL_ENV"],
-    help="Kedro configuration environment name. Defaults to `local`.")
-@click.option("--imports",
-              "-i",
-              default=defaults["KEDRO_GRAPHQL_IMPORTS"],
-              help="Additional import paths")
-@click.option(
-    "--mongo-uri",
-    default=defaults["KEDRO_GRAPHQL_MONGO_URI"],
-    help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'")
-@click.option("--mongo-db-name",
-              default=defaults["KEDRO_GRAPHQL_MONGO_DB_NAME"],
-              help="Name to use for collection in mongo e.g. 'pipelines'")
-@click.option(
-    "--runner",
-    default=defaults["KEDRO_GRAPHQL_RUNNER"],
-    help=
-    "Execution mechanism to run pipelines e.g. 'kedro.runner.SequentialRunner'"
-)
-@click.option("--log-tmp-dir",
-              default=defaults["KEDRO_GRAPHQL_LOG_TMP_DIR"],
-              help="Temporary directory for logs")
-@click.option("--log-path-prefix",
-              default=defaults["KEDRO_GRAPHQL_LOG_PATH_PREFIX"],
-              help="Prefix of path to save logs")
-@click.option("--reload",
-              "-r",
-              is_flag=True,
-              default=False,
-              help="Enable auto-reload.")
-@click.option(
-    "--reload-path",
-    default=None,
-    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-    help="Path to watch for file changes, defaults to <project path>/src")
-@click.option(
-    "--api-spec",
-    default=None,
-    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-    help="Path to watch for file changes, defaults to <project path>/src")
-@click.option("--ui",
-              "-u",
-              is_flag=True,
-              default=False,
-              help="Start a viz app.")
-@click.option("--ui-spec", default="", help="UI YAML specification file")
-@click.option("--worker",
-              "-w",
-              is_flag=True,
-              default=False,
-              help="Start a celery worker.")
-def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
-        env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir,
-        log_path_prefix, reload, reload_path, api_spec, ui, ui_spec, worker)
-```
-
-Commands for working with kedro-graphql.
-
 <a id="config"></a>
 
 # Module config
@@ -1465,146 +1197,447 @@ def load_config()
 
 Load configuration from the environment variables and API spec.
 
-<a id="permissions"></a>
+<a id="models"></a>
 
-# Module permissions
+# Module models
 
-<a id="permissions.IsAuthenticatedAction"></a>
+<a id="models.Parameter"></a>
 
-## IsAuthenticatedAction Objects
-
-```python
-class IsAuthenticatedAction(BasePermission)
-```
-
-Base class for authentication permissions using actions.
-
-<a id="permissions.IsAuthenticatedAction.__init__"></a>
-
-#### \_\_init\_\_
+## Parameter Objects
 
 ```python
-def __init__(action)
+@strawberry.type
+class Parameter()
 ```
 
-Initialize the permission with a specific action.
+<a id="models.Parameter.decode"></a>
 
-<a id="permissions.IsAuthenticatedAction.has_permission"></a>
-
-#### has\_permission
+#### decode
 
 ```python
-def has_permission(source: typing.Any, info: strawberry.Info,
-                   **kwargs) -> bool
+@staticmethod
+def decode(input_dict) -> dict
 ```
 
-Check if the user has permission for the specified action.
-This method should be overridden in subclasses.
+Returns a Parameter object from a dictionary.
 
-Kwargs:
-source: The source of the request, typically the fields of the GraphQL query.
-info: Strawberry Info object containing the request context.
-**kwargs: Additional keyword arguments that may be used in the future.
+<a id="models.Parameter.serialize"></a>
+
+#### serialize
+
+```python
+def serialize() -> dict
+```
+
+Returns serializable dict in format compatible with kedro.
+
+<a id="models.CredentialSetInput"></a>
+
+## CredentialSetInput Objects
+
+```python
+@strawberry.input
+class CredentialSetInput()
+```
+
+<a id="models.CredentialSetInput.serialize"></a>
+
+#### serialize
+
+```python
+def serialize() -> dict
+```
+
+Returns serializable dict in format compatible with kedro.
+
+<a id="models.CredentialInput"></a>
+
+## CredentialInput Objects
+
+```python
+@strawberry.input
+class CredentialInput()
+```
+
+<a id="models.CredentialInput.serialize"></a>
+
+#### serialize
+
+```python
+def serialize() -> dict
+```
+
+Returns serializable dict in format compatible with kedro.
+
+<a id="models.CredentialNestedInput"></a>
+
+## CredentialNestedInput Objects
+
+```python
+@strawberry.input
+class CredentialNestedInput()
+```
+
+<a id="models.CredentialNestedInput.serialize"></a>
+
+#### serialize
+
+```python
+def serialize() -> dict
+```
+
+Returns serializable dict in format compatible with kedro.
+
+<a id="models.DataSet"></a>
+
+## DataSet Objects
+
+```python
+@strawberry.type
+class DataSet()
+```
+
+<a id="models.DataSet.pre_signed_url_create"></a>
+
+#### pre\_signed\_url\_create
+
+```python
+@strawberry.field(extensions=[
+    PermissionExtension(
+        permissions=[PERMISSIONS_CLASS(action="create_dataset")])
+])
+def pre_signed_url_create(expires_in_sec: int) -> JSON | None
+```
+
+Get a presigned URL for uploading a dataset.
+
+**Arguments**:
+
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+  
 
 **Returns**:
 
-- `bool` - True if the user has permission, False otherwise.
+  JSON | None: A presigned URL for uploading the dataset or None if not applicable.
+  
 
-<a id="permissions.IsAuthenticatedAlways"></a>
+**Raises**:
 
-## IsAuthenticatedAlways Objects
+- `ValueError` - If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
 
-```python
-class IsAuthenticatedAlways(IsAuthenticatedAction)
-```
+<a id="models.DataSet.pre_signed_url_read"></a>
 
-Permission class that always grants access.
-
-<a id="permissions.IsAuthenticatedAlways.has_permission"></a>
-
-#### has\_permission
+#### pre\_signed\_url\_read
 
 ```python
-def has_permission(source: typing.Any, info: strawberry.Info,
-                   **kwargs) -> bool
+@strawberry.field(extensions=[
+    PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])
+])
+def pre_signed_url_read(expires_in_sec: int) -> str | None
 ```
 
-Always grants permission regardless of user authentication.
+Get a presigned URL for downloading a dataset.
 
-Kwargs:
-source: The source of the request, typically the fields of the GraphQL query.
-info: Strawberry Info object containing the request context.
-**kwargs: Additional keyword arguments that may be used in the future.
+**Arguments**:
+
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
 
 **Returns**:
 
-- `bool` - Always returns True, granting permission.
+  str | None: A presigned URL for downloading the dataset or None if not applicable.
+  
 
-<a id="permissions.IsAuthenticatedXForwardedEmail"></a>
+**Raises**:
 
-## IsAuthenticatedXForwardedEmail Objects
+- `ValueError` - If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
 
-```python
-class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction)
-```
+<a id="models.DataSet.serialize"></a>
 
-Permission class that checks for X-Forwarded-Email header.
-
-<a id="permissions.IsAuthenticatedXForwardedEmail.has_permission"></a>
-
-#### has\_permission
+#### serialize
 
 ```python
-def has_permission(source: typing.Any, info: strawberry.Info,
-                   **kwargs) -> bool
+def serialize() -> dict
 ```
 
-Check if the user has permission based on X-Forwarded-Email header.
-If the header is present, permission is granted.
-If the header is not present, permission is denied.
+Returns serializable dict in format compatible with kedro.
 
-Kwargs:
-source: The source of the request, typically the fields of the GraphQL query.
-info: Strawberry Info object containing the request context.
-**kwargs: Additional keyword arguments that may be used in the future.
+<a id="models.DataSet.decode"></a>
+
+#### decode
+
+```python
+@staticmethod
+def decode(payload)
+```
+
+Return a new DataSet from a dictionary.
+
+**Arguments**:
+
+- `payload` _dict_ - dict representing DataSet e.g.
+  
+  {
+- `"name"` - "text_in",
+- `"config"` - '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
+- `"tags":[{"key"` - "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
+  }
+
+<a id="models.DataCatalogInput"></a>
+
+## DataCatalogInput Objects
+
+```python
+@strawberry.input
+class DataCatalogInput()
+```
+
+<a id="models.DataCatalogInput.create"></a>
+
+#### create
+
+```python
+@staticmethod
+def create(config)
+```
+
+context.config_loader["catalog"]
+
+{'text_in': {'type': 'text.TextDataSet',
+'filepath': './data/01_raw/text_in.txt'},
+'text_out': {'type': 'text.TextDataSet',
+'filepath': './data/02_intermediate/text_out.txt'}}
+
+Example usage:
+
+from kedro_graphql.models import DataCatalogInput
+
+catalog = DataCatalogInput.create(context.config_loader["catalog"])
+
+print(catalog)
+
+[DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
+DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
+
+<a id="models.PipelineTemplates"></a>
+
+## PipelineTemplates Objects
+
+```python
+@strawberry.type
+class PipelineTemplates()
+```
+
+<a id="models.PipelineTemplates._build_pipeline_index"></a>
+
+#### \_build\_pipeline\_index
+
+```python
+@staticmethod
+def _build_pipeline_index(kedro_pipelines, kedro_catalog, kedro_parameters)
+```
+
+
+
+<a id="models.PipelineSlice"></a>
+
+## PipelineSlice Objects
+
+```python
+@strawberry.input(description="Slice a pipeline.")
+class PipelineSlice()
+```
+
+<a id="models.PipelineSlice.args"></a>
+
+#### args: `List[str]`
+
+e.g. ["node1", "node2"]
+
+<a id="models.PipelineInput"></a>
+
+## PipelineInput Objects
+
+```python
+@strawberry.input(description="PipelineInput")
+class PipelineInput()
+```
+
+<a id="models.PipelineInput.create"></a>
+
+#### create
+
+```python
+@staticmethod
+def create(name=None, data_catalog=None, parameters=None, tags=None)
+```
+
+Example usage:
+
+from kedro_graphql.models import PipelineInput
+from fastapi.encoders import jsonable_encoder
+
+p = PipelineInput(name = "example00",
+data_catalog = context.config_loader["catalog"],
+parameters = context.config_loader["parameters"],
+tags = [{""owner":"person"}])
+
+print(p)
+
+PipelineInput(name='example00',
+parameters=[
+ParameterInput(name='example',
+value='hello',
+type=<ParameterType.STRING: 'string'>),
+ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
+],
+data_catalog=[
+DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
+DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
+],
+tags=[TagInput(key='owner', value='sean')])
+
+print(jsonable_encoder(p))
+
+## this can be used as the PipelineInput parameter when calleing the pipeline mutation via the API
+{'name': 'example00',
+'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
+{'name': 'duration', 'value': '1', 'type': 'string'}],
+'data_catalog': [{'name': 'text_in',
+'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'},
+{'name': 'text_out',
+'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}'}],
+'tags': [{'key': 'owner', 'value': 'sean'}],
+'credentials': None,
+'credentials_nested': None}
+
+<a id="models.Pipeline"></a>
+
+## Pipeline Objects
+
+```python
+@strawberry.type
+class Pipeline()
+```
+
+<a id="models.Pipeline.decode"></a>
+
+#### decode
+
+```python
+@classmethod
+def decode(cls, payload, decoder=None)
+```
+
+Factory method to create a new Pipeline from a dictionary or graphql api response.
+
+<a id="models.Pipeline.decode_pipeline_input"></a>
+
+#### decode\_pipeline\_input
+
+```python
+@classmethod
+def decode_pipeline_input(cls, payload)
+```
+
+Factory method to create a new Pipeline from a PipelineInput object.
+
+<a id="models.Pipelines"></a>
+
+## Pipelines Objects
+
+```python
+@strawberry.type
+class Pipelines()
+```
+
+<a id="models.Pipelines.decode"></a>
+
+#### decode
+
+```python
+@classmethod
+def decode(cls, payload, decoder=None)
+```
+
+Factory method to create a new Pipelines from a graphql api response.
+
+<a id="models.PipelineEvent"></a>
+
+## PipelineEvent Objects
+
+```python
+@strawberry.type
+class PipelineEvent()
+```
+
+<a id="models.PipelineEvent.decode"></a>
+
+#### decode
+
+```python
+@classmethod
+def decode(cls, payload, decoder=None)
+```
+
+Factory method to create a new PipelineEvent from a graphql api response.
+
+<a id="models.PipelineLogMessage"></a>
+
+## PipelineLogMessage Objects
+
+```python
+@strawberry.type
+class PipelineLogMessage()
+```
+
+<a id="models.PipelineLogMessage.decode"></a>
+
+#### decode
+
+```python
+@classmethod
+def decode(cls, payload, decoder=None)
+```
+
+Factory method to create a new PipelineLogMessage from a graphql api response.
+
+<a id="utils"></a>
+
+# Module utils
+
+<a id="utils.merge"></a>
+
+#### merge
+
+```python
+def merge(a, b, path=None)
+```
+
+Merges nested dictionaries recursively.  Merges b into a.
+
+<a id="utils.parse_s3_filepath"></a>
+
+#### parse\_s3\_filepath
+
+```python
+def parse_s3_filepath(filepath: str) -> tuple[str, str]
+```
+
+Parse the s3 bucket name and key from DataSet filepath field.
+
+**Arguments**:
+
+- `filepath` _str_ - The S3 file path in the format s3://bucket-name/key
+  
 
 **Returns**:
 
-- `bool` - True if the user has permission, False otherwise.
+- `tuple` - A tuple containing the bucket name and the S3 key (object path).
+  
 
-<a id="permissions.IsAuthenticatedXForwardedRBAC"></a>
+**Raises**:
 
-## IsAuthenticatedXForwardedRBAC Objects
-
-```python
-class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction)
-```
-
-Permission class that checks for X-Forwarded-Groups header and RBAC mapping.
-
-<a id="permissions.IsAuthenticatedXForwardedRBAC.has_permission"></a>
-
-#### has\_permission
-
-```python
-def has_permission(source: typing.Any, info: strawberry.Info,
-                   **kwargs) -> bool
-```
-
-Check if the user has permission based on X-Forwarded-Groups header and RBAC mapping.
-If the header is present and the user belongs to a group that has the required role for
-the specified action, permission is granted.
-If the header is not present or the user does not belong to a group with the required
-role for the specified action, permission is denied.
-
-Kwargs:
-source: The source of the request, typically the fields of the GraphQL query.
-info: Strawberry Info object containing the request context.
-**kwargs: Additional keyword arguments that may be used in the future.
-
-**Returns**:
-
-- `bool` - True if the user has permission, False otherwise.
+- `ValueError` - If the filepath does not start with "s3://" or if the bucket name or S3 key is missing.
 
 <a id="backends"></a>
 
@@ -2117,18 +2150,6 @@ generated using Kedro 0.19.11
 
 # Module plugins.plugins
 
-<a id="plugins.plugins.IOResolverPlugin"></a>
-
-## IOResolverPlugin Objects
-
-```python
-class IOResolverPlugin(ABC)
-```
-
-Implement this class to define custom behavior for pipeline inputs and
-outputs.  The methods of the class will called prior to pipeline
-execution.
-
 <a id="runners"></a>
 
 # Module runners
@@ -2510,83 +2531,6 @@ Clones the pipeline and stages or runs it based on the operation type.
 **Arguments**:
 
 - `type` _str_ - The type of post-cloning operation, either "staged" or "ready".
-
-<a id="ui.components.pipeline_dashboard_factory"></a>
-
-# Module ui.components.pipeline\_dashboard\_factory
-
-<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory"></a>
-
-## PipelineDashboardFactory Objects
-
-```python
-class PipelineDashboardFactory(pn.viewable.Viewer)
-```
-
-A factory for building dashboards for Kedro pipelines using registered @ui_dashboard plugins.
-This component allows users to select a dashboard for a specific pipeline and build the dashboard dynamically.
-
-**Attributes**:
-
-- `id` _str_ - The ID of the pipeline to build the dashboard for.
-- `pipeline` _str_ - The name of the pipeline for which the dashboard is built.
-- `options` _list_ - A list of available dashboards for the selected pipeline.
-- `spec` _dict_ - The specification for the UI, including configuration and pages.
-- `dashboard_name` _str_ - The name of the selected dashboard.
-
-<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_default_dashboard"></a>
-
-#### build\_default\_dashboard
-
-```python
-def build_default_dashboard(p)
-```
-
-Builds the default dashboard for a Kedro pipeline, including monitoring, detail, and visualization components
-registered to the pipeline using the @ui_data plugin.
-
-**Arguments**:
-
-- `p` _Pipeline_ - The Kedro pipeline for which the dashboard is built.
-
-**Returns**:
-
-- `pn.Tabs` - A panel containing tabs for monitoring, detail, and visualization of the pipeline.
-
-<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_custom_dashboard"></a>
-
-#### build\_custom\_dashboard
-
-```python
-def build_custom_dashboard(p)
-```
-
-Builds a custom dashboard for a Kedro pipeline using a registered @ui_dashboard plugin.
-
-**Arguments**:
-
-- `p` _Pipeline_ - The Kedro pipeline for which the dashboard is built.
-
-**Returns**:
-
-- `panel.viewable.Viewer` - An instance of the custom dashboard class.
-
-<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_dashboard"></a>
-
-#### build\_dashboard
-
-```python
-@param.depends("spec", "dashboard_name", "id", "pipeline")
-async def build_dashboard()
-```
-
-Builds the dashboard for the selected pipeline and dashboard name.
-This method checks if a custom dashboard is registered for the pipeline and builds it accordingly.
-If no custom dashboard is registered, it builds the default dashboard with monitoring, detail, and visualization components.
-
-**Yields**:
-
-  pn.Tabs or panel.viewable.Viewer: The built dashboard, either custom or default.
 
 <a id="ui.components.pipeline_detail"></a>
 
@@ -3036,6 +2980,112 @@ Initializes the KedroGraphqlMaterialTemplate with a title and specification.
 - `title` _str_ - The title of the template.
 - `spec` _dict_ - The specification for the UI, including configuration and pages.
 
+<a id="ui.components.data_catalog_explorer"></a>
+
+# Module ui.components.data\_catalog\_explorer
+
+<a id="ui.components.data_catalog_explorer.DataCatalogExplorer"></a>
+
+## DataCatalogExplorer Objects
+
+```python
+class DataCatalogExplorer(pn.viewable.Viewer)
+```
+
+A component that displays the data catalog of a Kedro pipeline, allowing users to filter, view,
+and download datasets using their pre-signed URL implementation of choice.
+
+<a id="ui.components.dataset_perspective"></a>
+
+# Module ui.components.dataset\_perspective
+
+<a id="ui.components.dataset_perspective.DatasetPerspective"></a>
+
+## DatasetPerspective Objects
+
+```python
+class DatasetPerspective(pn.viewable.Viewer)
+```
+
+A Kedro Dataframe viewer that loads a dataset from a presigned URL and displays it using panel Perspective.
+
+<a id="ui.components.pipeline_dashboard_factory"></a>
+
+# Module ui.components.pipeline\_dashboard\_factory
+
+<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory"></a>
+
+## PipelineDashboardFactory Objects
+
+```python
+class PipelineDashboardFactory(pn.viewable.Viewer)
+```
+
+A factory for building dashboards for Kedro pipelines using registered @ui_dashboard plugins.
+This component allows users to select a dashboard for a specific pipeline and build the dashboard dynamically.
+
+**Attributes**:
+
+- `id` _str_ - The ID of the pipeline to build the dashboard for.
+- `pipeline` _str_ - The name of the pipeline for which the dashboard is built.
+- `options` _list_ - A list of available dashboards for the selected pipeline.
+- `spec` _dict_ - The specification for the UI, including configuration and pages.
+- `dashboard_name` _str_ - The name of the selected dashboard.
+
+<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_default_dashboard"></a>
+
+#### build\_default\_dashboard
+
+```python
+def build_default_dashboard(p)
+```
+
+Builds the default dashboard for a Kedro pipeline, including monitoring, detail, and visualization components
+registered to the pipeline using the @ui_data plugin.
+
+**Arguments**:
+
+- `p` _Pipeline_ - The Kedro pipeline for which the dashboard is built.
+
+**Returns**:
+
+- `pn.Tabs` - A panel containing tabs for monitoring, detail, and visualization of the pipeline.
+
+<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_custom_dashboard"></a>
+
+#### build\_custom\_dashboard
+
+```python
+def build_custom_dashboard(p)
+```
+
+Builds a custom dashboard for a Kedro pipeline using a registered @ui_dashboard plugin.
+
+**Arguments**:
+
+- `p` _Pipeline_ - The Kedro pipeline for which the dashboard is built.
+
+**Returns**:
+
+- `panel.viewable.Viewer` - An instance of the custom dashboard class.
+
+<a id="ui.components.pipeline_dashboard_factory.PipelineDashboardFactory.build_dashboard"></a>
+
+#### build\_dashboard
+
+```python
+@param.depends("spec", "dashboard_name", "id", "pipeline")
+async def build_dashboard()
+```
+
+Builds the dashboard for the selected pipeline and dashboard name.
+This method checks if a custom dashboard is registered for the pipeline and builds it accordingly.
+If no custom dashboard is registered, it builds the default dashboard with monitoring, detail, and visualization components.
+
+**Yields**:
+
+  pn.Tabs or panel.viewable.Viewer: The built dashboard, either custom or default.
+
 <a id="ui.decorators"></a>
 
 # Module ui.decorators
@@ -3364,4 +3414,178 @@ It inherits from pn.viewable.Viewer and implements the __panel__ method to creat
 - `spec` _dict_ - The specification for the UI, including configuration and pages.
 - `id` _str_ - The ID of the pipeline.
 - `pipeline` _Pipeline_ - The Kedro pipeline associated with this dashboard.
+
+<a id="presigned_url"></a>
+
+# Module presigned\_url
+
+<a id="presigned_url.base"></a>
+
+# Module presigned\_url.base
+
+<a id="presigned_url.base.PreSignedUrlProvider"></a>
+
+## PreSignedUrlProvider Objects
+
+```python
+class PreSignedUrlProvider(metaclass=abc.ABCMeta)
+```
+
+Abstract base class for providing presigned URLs for kedro datasets
+
+<a id="presigned_url.base.PreSignedUrlProvider.pre_signed_url_read"></a>
+
+#### pre\_signed\_url\_read
+
+```python
+@abc.abstractmethod
+def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+```
+
+Abstract method to get a presigned URL for downloading a dataset.
+
+**Arguments**:
+
+- `filepath` _str_ - The file path of the dataset.
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+  
+
+**Returns**:
+
+  str | None: A presigned URL for downloading the dataset.
+
+<a id="presigned_url.base.PreSignedUrlProvider.pre_signed_url_create"></a>
+
+#### pre\_signed\_url\_create
+
+```python
+@abc.abstractmethod
+def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+```
+
+Abstract method to get a presigned URL for uploading a dataset.
+
+**Arguments**:
+
+- `filepath` _str_ - The file path of the dataset.
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+  
+
+**Returns**:
+
+  dict | None: A dictionary with the URL to post to and form fields and values to submit with the POST.
+
+<a id="presigned_url.local_file_provider"></a>
+
+# Module presigned\_url.local\_file\_provider
+
+<a id="presigned_url.local_file_provider.LocalFileProvider"></a>
+
+## LocalFileProvider Objects
+
+```python
+class LocalFileProvider(PreSignedUrlProvider)
+```
+
+Implementation of PreSignedUrlProvider for a local file system.
+
+<a id="presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_read"></a>
+
+#### pre\_signed\_url\_read
+
+```python
+def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+```
+
+Get a presigned URL for reading a dataset.
+
+**Returns**:
+
+- `str` - A presigned URL for reading the dataset.
+
+<a id="presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_create"></a>
+
+#### pre\_signed\_url\_create
+
+```python
+def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+```
+
+Get a presigned URL for creating a dataset.
+
+**Returns**:
+
+- `dict` - A presigned URL for creating the dataset.
+
+<a id="presigned_url.s3_provider"></a>
+
+# Module presigned\_url.s3\_provider
+
+<a id="presigned_url.s3_provider.S3PreSignedUrlProvider"></a>
+
+## S3PreSignedUrlProvider Objects
+
+```python
+class S3PreSignedUrlProvider(PreSignedUrlProvider)
+```
+
+Implementation of PreSignedUrlProvider for AWS S3.
+
+<a id="presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_read"></a>
+
+#### pre\_signed\_url\_read
+
+```python
+@staticmethod
+def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+```
+
+Generate a presigned URL S3 to download a file.
+
+**Arguments**:
+
+- `filepath` _str_ - The S3 file path in the format s3://bucket-name/key
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+  
+
+**Returns**:
+
+- `Optional[str]` - download url with query parameters
+  
+- `Example` - https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
+
+<a id="presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_create"></a>
+
+#### pre\_signed\_url\_create
+
+```python
+@staticmethod
+def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+```
+
+Generate a presigned URL S3 to upload a file.
+
+**Arguments**:
+
+- `filepath` _str_ - The S3 file path in the format s3://bucket-name/key
+- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+  
+
+**Returns**:
+
+- `Optional[JSON]` - Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+  
+
+**Example**:
+
+  {
+- `"url"` - "https://your-bucket-name.s3.amazonaws.com/",
+- `"fields"` - {
+- `"key"` - "your-object-key",
+- `"AWSAccessKeyId"` - "your-access-key-id",
+- `"x-amz-security-token"` - "your-security-token",
+- `"policy"` - "your-policy",
+- `"signature"` - "your-signature"
+  }
+  }
 

@@ -1,5 +1,10 @@
 # mkdocs.yml
 site_name: Kedro GraphQL
+site_url: https://cellsignal.github.io/kedro-graphql/
+repo_url: https://github.com/cellsignal/kedro-graphql
+extra:
+  version:
+    provider: mike
 theme:
   name: "material"
   features:
@@ -8,7 +13,7 @@ theme:
   palette: 
     # Palette toggle for light mode
     - scheme: default
-      primary: blue grey
+      primary: default
       toggle:
         icon: material/brightness-7 
         name: Switch to dark mode
@@ -41,4 +46,5 @@ nav:
       - Dataset Uploads & Downloads: extend_pre_signed_url_provider.md
       - Authentication & Authorization: extend_permissions.md
       - Application: extend_application.md
+  - Architecture: architecture.md
   - Reference: pydoc.md

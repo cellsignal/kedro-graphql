@@ -5,10 +5,11 @@ from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-
-import boto3
+from kedro.io.core import _parse_filepath
+from .presigned_url.local_file_provider import LocalFileProvider
+from .presigned_url.base import PreSignedUrlProvider
+from importlib import import_module
 import strawberry
-from botocore.exceptions import ClientError
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
@@ -17,7 +18,6 @@ from strawberry.utils.str_converters import to_camel_case, to_snake_case
 from strawberry.permission import PermissionExtension
 
 from .config import load_config
-from .utils import parse_s3_filepath
 from .logs.logger import logger
 from .permissions import get_permissions
 
@@ -170,71 +170,88 @@ class DataSet:
     tags: Optional[List[Tag]] = None
 
     @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
-    def pre_signed_url_create(self) -> Optional[JSON]:
+    def pre_signed_url_create(self, expires_in_sec: int) -> JSON | None:
         """
-        Generate a presigned URL S3 to upload a file.
+        Get a presigned URL for uploading a dataset.
+
+        Args:
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
 
         Returns:
-            Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+            JSON | None: A presigned URL for uploading the dataset or None if not applicable.
 
-            Example:
-                {
-                    "url": "https://your-bucket-name.s3.amazonaws.com/",
-                    "fields": {
-                        "key": "your-object-key",
-                        "AWSAccessKeyId": "your-access-key-id",
-                        "x-amz-security-token": "your-security-token",
-                        "policy": "your-policy",
-                        "signature": "your-signature"
-                    }
-                }
+        Raises:
+            ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
         """
-
-        bucket_name, s3_key = parse_s3_filepath(self.config)
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         try:
-            s3_client = boto3.client('s3')
-            response = s3_client.generate_presigned_post(bucket_name,
-                                                         f"{uuid.uuid4()}/{s3_key}",
-                                                         Fields=None,
-                                                         Conditions=None,
-                                                         ExpiresIn=3600)
-        except ClientError as e:
-            print(f"Failed to generate presigned URL: {e}")
-            return None
+            config = json.loads(self.config)
+            filepath = config.get("filepath", None)
+            if not filepath:
+                raise ValueError(
+                    "Invalid dataset configuration. Must have 'filepath' key")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Unable to parse JSON in config: {e}")
+        except Exception as e:
+            raise ValueError(f"Invalid dataset configuration: {e}")
 
-        return response
+        if _parse_filepath(filepath)["protocol"] == "file":
+            return LocalFileProvider.pre_signed_url_create(filepath, expires_in_sec)
+
+        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(
+            ".", 1)
+        module = import_module(module_path)
+        cls = getattr(module, class_name)
+
+        if not issubclass(cls, PreSignedUrlProvider):
+            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
+
+        return cls.pre_signed_url_create(filepath, expires_in_sec)
 
     @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    def pre_signed_url_read(self) -> Optional[str]:
+    def pre_signed_url_read(self, expires_in_sec: int) -> str | None:
         """
-        Generate a presigned URL S3 to download a file.
+        Get a presigned URL for downloading a dataset.
 
+        Args:
+            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
         Returns:
-            Optional[str]: download url with query parameters
+            str | None: A presigned URL for downloading the dataset or None if not applicable.
 
-            Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
+        Raises:
+            ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
         """
 
-        bucket_name, s3_key = parse_s3_filepath(self.config)
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         try:
-            s3_client = boto3.client('s3')
-            params = {
-                'Bucket': bucket_name,
-                'Key': s3_key
-            }
+            config = json.loads(self.config)
+            filepath = config.get("filepath", None)
+            if not filepath:
+                raise ValueError(
+                    "Invalid dataset configuration. Must have 'filepath' key")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Unable to parse JSON in config: {e}")
+        except Exception as e:
+            raise ValueError(f"Invalid dataset configuration: {e}")
 
-            response = s3_client.generate_presigned_url(
-                'get_object',
-                Params=params,
-                ExpiresIn=3600
-            )
-        except ClientError as e:
-            print(f"Failed to generate presigned URL: {e}")
-            return None
+        if _parse_filepath(filepath)["protocol"] == "file":
+            return LocalFileProvider.pre_signed_url_read(filepath, expires_in_sec)
 
-        return response
+        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(
+            ".", 1)
+        module = import_module(module_path)
+        cls = getattr(module, class_name)
+
+        if not issubclass(cls, PreSignedUrlProvider):
+            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
+
+        return cls.pre_signed_url_read(filepath, expires_in_sec)
 
     @strawberry.field
     def exists(self) -> bool:

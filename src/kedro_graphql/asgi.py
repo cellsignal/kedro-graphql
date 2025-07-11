@@ -1,4 +1,8 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
+import jwt
+import shutil
+from pathlib import Path
 from strawberry.fastapi import GraphQLRouter
 from cloudevents.http import from_http, to_json
 
@@ -114,3 +118,97 @@ class KedroGraphQL(FastAPI):
                 "KEDRO_GRAPHQL_EVENTS_CONFIG is not set or not a dictionary. "
                 "Event handling endpoint will not be available."
             )
+
+        @self.get("/download", dependencies=[Depends(authenticate)])
+        def download_file(token: str):
+            """
+            Endpoint to download a file.
+
+            Args:
+                token (str): The JWT token for authentication.
+
+            Returns:
+                FileResponse: The file to download.
+            """
+            try:
+                payload = jwt.decode(
+                    token,
+                    self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                    algorithms=[
+                        self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]]
+                )
+                path = Path(payload["filepath"])
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=403, detail="Token expired")
+            except jwt.InvalidTokenError:
+                raise HTTPException(status_code=403, detail="Invalid token")
+
+            ALLOWED_ROOTS = []
+
+            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"]:
+                ALLOWED_ROOTS.append(Path(root).resolve())
+                # print(f"Allowed root: {Path(root).resolve()}")
+
+            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
+                )
+
+            if not path.exists() or not path.is_file():
+                raise HTTPException(status_code=404, detail="File not found")
+
+            return FileResponse(
+                path,
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0",
+                         "Access-Control-Allow-Origin": "*"})
+
+        @self.post("/upload", dependencies=[Depends(authenticate)])
+        async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
+            """
+            Endpoint to upload a file.
+
+            Args:
+                token (str): The JWT token for authentication.
+                file (UploadFile): The file to upload.
+
+            Returns:
+                dict: A success message and the file path.
+            """
+
+            if file.size > self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB"] * 1024 * 1024:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File size exceeds the maximum limit of {self.config['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB']} MB"
+                )
+
+            try:
+                payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                                     algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+                path = Path(payload["filepath"]).resolve()
+                # print(f"Destination path: {path}")
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=403, detail="Token expired")
+            except jwt.InvalidTokenError:
+                raise HTTPException(status_code=403, detail="Invalid token")
+
+            ALLOWED_ROOTS = []
+
+            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"]:
+                ALLOWED_ROOTS.append(Path(root).resolve())
+                # print(f"Allowed root: {Path(root).resolve()}")
+
+            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
+                )
+
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "wb") as out_file:
+                    shutil.copyfileobj(file.file, out_file)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
+            return {"status": "success", "path": str(path)}

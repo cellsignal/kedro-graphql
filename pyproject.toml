@@ -34,6 +34,8 @@ dependencies = [
     "boto3>=1.26.160",
     "asyncio>=3.4.3",
     "cloudevents",
+    "PyJWT>=2.10.1",
+    "python-multipart>=0.0.20"
 ]
 
 [project.scripts]

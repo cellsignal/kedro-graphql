@@ -23,6 +23,17 @@ The following table describes each configuration attribute available:
 | `permissions`                          | Python path to the permissions class used for authentication.                                    |
 | `permissions_role_to_action_mapping`   | Mapping of roles to allowed actions within the API.                                              |
 | `permissions_group_to_role_mapping`    | Mapping of external group names to roles for access control.                                     |
+| `presigned_url_max_expires_in_sec`    | Maximum allowed expiration time (in seconds) for presigned URLs. Default: `43200` (12 hours). |
+| `local_file_provider_server_url`       | Base URL for the local file server (e.g., `http://localhost:5000`).                             |
+| `local_file_provider_jwt_secret_key`   | Secret key for signing JWT tokens for local file access.                                        |
+| `local_file_provider_jwt_algorithm`    | Algorithm used for JWT signing (e.g., `HS256`).                                                |
+| `local_file_provider_download_allowed_roots` | List of allowed root directories for downloads.                                          |
+| `local_file_provider_upload_allowed_roots`   | List of allowed root directories for uploads.                                            |
+| `local_file_provider_upload_max_file_size_mb` | Maximum allowed upload file size in megabytes. Default: `10`.                            |
+| `events_config`                        | Dictionary for event configuration.                                                              |
+| `permissions`                          | Python path to the permissions class used for authentication.                                    |
+| `permissions_role_to_action_map`       | Mapping of roles to allowed actions.                                                              |
+| `permissions_group_to_role_map`        | Mapping of external group names to roles.                                                        |
 
 
 
@@ -53,6 +64,13 @@ KEDRO_GRAPHQL_ENV=local
 KEDRO_GRAPHQL_CONF_SOURCE=None
 KEDRO_GRAPHQL_LOG_TMP_DIR=my_tmp_dir/
 KEDRO_GRAPHQL_LOG_PATH_PREFIX=s3://my-bucket/
+KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC=43200
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL=http://localhost:5000
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY=your_secret_key
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM=HS256
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS=/path/to/download
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS=/path/to/upload
+KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB=10
 ```
 
 ## Command line
@@ -130,7 +148,7 @@ config:
 ```
 
 
-Use the `--api-spec` flag to pecify the path to the configuration file 
+Use the `--api-spec` flag to specify the path to the configuration file 
 
 ```
 kedro gql --api-spec api.yaml

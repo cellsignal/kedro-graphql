@@ -23,7 +23,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.config import load_config
 from multiprocessing import Process
 import uvicorn
 from pathlib import Path
@@ -31,6 +30,7 @@ from kedro_graphql.asgi import KedroGraphQL
 import multiprocessing as mp
 import tempfile
 import pytest_asyncio
+from .utilities import kedro_graphql_config
 
 
 if mp.get_start_method(allow_none=True) != "spawn":
@@ -41,21 +41,6 @@ if mp.get_start_method(allow_none=True) != "spawn":
 def kedro_session():
     bootstrap_project(Path.cwd())
     return KedroSession.create()
-
-
-def kedro_graphql_config():
-
-    config = load_config()
-
-    # enable events endpoint
-    config["KEDRO_GRAPHQL_EVENTS_CONFIG"] = {"event00": {
-        "source": "example.com", "type": "com.example.event"}}
-
-    # use "test_pipelines" as the collection name for testing
-    config["KEDRO_GRAPHQL_MONGO_DB_COLLECTION"] = "test_pipelines"
-    config["KEDRO_GRAPHQL_MONGO_DB_NAME"] = "test_pipelines"
-
-    return config
 
 
 def start_server(port=5000, config={}):

@@ -4,9 +4,15 @@ import pytest
 from omegaconf import OmegaConf
 
 from kedro_graphql.models import DataSet, Parameter
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+import jwt
+from .utilities import kedro_graphql_config
 
 
 class TestDataSet:
+
+    config = kedro_graphql_config()
 
     def test_serialize(self):
         params = {"name": "text_in",
@@ -37,13 +43,40 @@ class TestDataSet:
         d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
 
         with pytest.raises(ValueError):
-            output = d.pre_signed_url_create()
+            output = d.pre_signed_url_create(expires_in_sec=10)
+
+    def test_pre_signed_url_create_allowed_local(self, mock_text_in):
+        d = DataSet(
+            name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
+
+        output = d.pre_signed_url_create(expires_in_sec=10)
+        token = output["fields"].get("token", None)
+
+        payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                             algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+
+        # Unique path should be generated
+        assert Path(payload["filepath"]).resolve() != Path(mock_text_in).resolve()
 
     def test_pre_signed_url_read_config_no_filepath(self):
         d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
 
         with pytest.raises(ValueError):
-            output = d.pre_signed_url_read()
+            output = d.pre_signed_url_read(expires_in_sec=10)
+
+    def test_pre_signed_url_read_allowed_local(self, mock_text_in):
+        d = DataSet(
+            name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
+
+        output = d.pre_signed_url_read(expires_in_sec=10)
+        parsed_url = urlparse(output)
+        query_params = parse_qs(parsed_url.query)
+        token = query_params.get("token", [None])[0]
+
+        payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
+                             algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+
+        assert Path(payload["filepath"]).resolve() == Path(mock_text_in).resolve()
 
     def test_does_exist_with_config(self, mock_text_in):
         params = {
@@ -216,10 +249,14 @@ class TestParameter:
         """
         parameter_inputs = [{"name": "example", "value": "hello", "type": "string"},
                             {"name": "duration", "value": "0.1", "type": "float"},
-                            {"name": "model_options.model_params.learning_date", "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.training_date", "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.data_ratio", "value": "14", "type": "float"},
-                            {"name": "data_options.step_size", "value": "123123", "type": "float"},
+                            {"name": "model_options.model_params.learning_date",
+                                "value": "2023-11-01", "type": "string"},
+                            {"name": "model_options.model_params.training_date",
+                                "value": "2023-11-01", "type": "string"},
+                            {"name": "model_options.model_params.data_ratio",
+                                "value": "14", "type": "float"},
+                            {"name": "data_options.step_size",
+                                "value": "123123", "type": "float"},
                             ]
 
         parameters = [Parameter.decode(p) for p in parameter_inputs]
@@ -229,7 +266,8 @@ class TestParameter:
         for p in parameters:
             serialized_parameters.update(p.serialize())
 
-        parameters_dotlist = [f"{key}={value}" for key, value in serialized_parameters.items()]
+        parameters_dotlist = [f"{key}={value}" for key,
+                              value in serialized_parameters.items()]
         conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
         kedro_parameters = {"parameters": conf_parameters}
 
@@ -250,7 +288,8 @@ class TestParameter:
             }
         }
 
-        params_dotlist = [f"params:{key}={value}" for key, value in serialized_parameters.items()]
+        params_dotlist = [f"params:{key}={value}" for key,
+                          value in serialized_parameters.items()]
         kedro_params = OmegaConf.from_dotlist(params_dotlist)
 
         assert kedro_params == {
