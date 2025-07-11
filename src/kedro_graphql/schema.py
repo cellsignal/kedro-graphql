@@ -157,11 +157,7 @@ class Mutation:
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
         serial = p.encode(encoder="kedro")
 
-        runner = (
-            d.get("runner")
-            if d.get("runner")
-            else info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
-        )
+        runner = d.get("runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -236,8 +232,7 @@ class Mutation:
         p.data_catalog = pipeline_input_dict.get("data_catalog")
         p.tags = pipeline_input_dict.get("tags")
         p.parent = pipeline_input_dict.get("parent")
-        runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get(
-            "runner") else config["KEDRO_GRAPHQL_RUNNER"]
+        runner = pipeline_input_dict.get("runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
