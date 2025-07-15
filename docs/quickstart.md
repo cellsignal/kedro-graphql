@@ -1,10 +1,20 @@
 
+## Installation
+
 Install kedro-graphql into your kedro project environnment.
 
 ```bash
 pip install kedro_graphql
 ```
 
+
+The `gql` commmand will now be available via the kedro cli.
+
+```
+kedro gql --help
+```
+
+## Start up
 Start the redis and mongo services using this [docker-compose.yaml](https://github.com/opensean/kedro-graphql/blob/main/docker-compose.yaml).
 
 ```bash
@@ -59,7 +69,7 @@ Create a virtualenv and activate it.
 
 ```bash
 cd kedro-graphql
-python3.10 -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 ```
 

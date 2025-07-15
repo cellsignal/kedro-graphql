@@ -1,4 +1,4 @@
-from .base import PreSignedUrlProvider
+from .base import SignedUrlProvider
 from ...utils import parse_s3_filepath
 import boto3
 from botocore.exceptions import ClientError
@@ -6,18 +6,18 @@ import uuid
 from ...logs.logger import logger
 
 
-class S3PreSignedUrlProvider(PreSignedUrlProvider):
+class S3Provider(SignedUrlProvider):
     """
-    Implementation of PreSignedUrlProvider for AWS S3.
+    Implementation of SignedUrlProvider for AWS S3.
     """
     @staticmethod
-    def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None:
+    def read(filepath: str, expires_in_sec: int) -> str | None:
         """
-        Generate a presigned URL S3 to download a file.
+        Generate a signed URL S3 to download a file.
 
         Args:
             filepath (str): The S3 file path in the format s3://bucket-name/key
-            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
 
         Returns:
             Optional[str]: download url with query parameters
@@ -40,19 +40,19 @@ class S3PreSignedUrlProvider(PreSignedUrlProvider):
                 ExpiresIn=expires_in_sec
             )
         except ClientError as e:
-            logger.error(f"Failed to generate presigned URL: {e}")
+            logger.error(f"Failed to generate signed URL: {e}")
             return None
 
         return response
 
     @staticmethod
-    def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None:
+    def create(filepath: str, expires_in_sec: int) -> dict | None:
         """
-        Generate a presigned URL S3 to upload a file.
+        Generate a signed URL S3 to upload a file.
 
         Args:
             filepath (str): The S3 file path in the format s3://bucket-name/key
-            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
 
         Returns:
             Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
@@ -80,7 +80,7 @@ class S3PreSignedUrlProvider(PreSignedUrlProvider):
                                                          Conditions=None,
                                                          ExpiresIn=expires_in_sec)
         except ClientError as e:
-            logger.error(f"Failed to generate presigned URL: {e}")
+            logger.error(f"Failed to generate /signed URL: {e}")
             return None
 
         return response

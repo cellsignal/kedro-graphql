@@ -36,6 +36,20 @@ class IsAuthenticatedAction(BasePermission):
                              "create_event"]
         self.action = action
 
+    @staticmethod
+    def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        """Get user information from the request context.
+        This method should be overridden in subclasses if needed.
+
+        Args:
+            info: Strawberry Info object containing the request context.
+
+        Returns:
+            Optional[Any]: User information, or None if not available.
+        """
+        raise NotImplementedError(
+            "get_user_info method must be implemented in subclasses")
+
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
@@ -55,6 +69,19 @@ class IsAuthenticatedAction(BasePermission):
 
 class IsAuthenticatedAlways(IsAuthenticatedAction):
     """Permission class that always grants access."""
+
+    @staticmethod
+    def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        """Get user information from the request context.
+        This method returns None since this permission always grants access.
+
+        Args:
+            info: Strawberry Info object containing the request context.
+
+        Returns:
+            Optional[Any]: Always returns None.
+        """
+        return None
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
@@ -80,6 +107,12 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @staticmethod
+    def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        request: typing.Union[Request, WebSocket] = info.context["request"]
+        return {"email": request.headers.get("X-Forwarded-Email", None),
+                "user": request.headers.get("X-Forwarded-User", None)}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
@@ -112,7 +145,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
                 a=str(self.action),
                 s=str(source)))
 
-            return False
+            return {"email": None, "user": None}
 
 
 class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
@@ -120,6 +153,13 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @staticmethod
+    def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        request: typing.Union[Request, WebSocket] = info.context["request"]
+        return {"email": request.headers.get("X-Forwarded-Email", None),
+                "groups": request.headers.get("X-Forwarded-Groups", None),
+                "user": request.headers.get("X-Forwarded-User", None)}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs

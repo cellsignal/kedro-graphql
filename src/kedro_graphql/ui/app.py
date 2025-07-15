@@ -1,7 +1,7 @@
 """A python panel app for visualizing Kedro pipelines."""
 import panel as pn
 from kedro_graphql.ui.components.template import KedroGraphqlMaterialTemplate
-from kedro_graphql.client import KedroGraphqlClient
+# from kedro_graphql.client import KedroGraphqlClient
 # from kedro_graphql.ui.decorators import discover_plugins
 from importlib import import_module
 import tempfile
@@ -65,9 +65,8 @@ def start_ui(config={}, spec=""):
         pn.config.reuse_sessions = True
         pn.config.admin = True
         pn.config.global_loading_spinner = True
-
-        client = KedroGraphqlClient(
-            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"])
+        # client = KedroGraphqlClient(
+        # uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"])
 
         if spec["panel_get_server_kwargs"].get("static_dirs", None):
             spec["panel_get_server_kwargs"]["static_dirs"]["/pipeline/viz-build"] = str(
@@ -76,5 +75,5 @@ def start_ui(config={}, spec=""):
             spec["panel_get_server_kwargs"]["static_dirs"] = {
                 "/pipeline/viz-build": str(tmpdirname + "/build")}
 
-        spec["config"]["client"] = client
+        # spec["config"]["client"] = client
         pn.serve(template_factory(spec=spec), **spec["panel_get_server_kwargs"])

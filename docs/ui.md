@@ -57,7 +57,7 @@ docker compose up -d
 
 ### Cards
 
-Each pipeline with at least one registered `@ui_form` [plugin](#plugins) will be
+Each pipeline with at least one registered `@ui_form` [plugin](#plugins-customization) will be
 displayed as a card on the "pipelines" page.
 
 ![pipeline cards](./00_ui_pipeline_cards.png)
@@ -97,7 +97,7 @@ Visualize the pipeline with [kedro-viz](https://github.com/kedro-org/kedro-viz).
 **Adding Custom Tabs the default dashboard**
 
 Additional tabs with custom components can be added to a pipeline's dashboard 
-by registering one or more `@ui_data` [plugins](#plugins).
+by registering one or more `@ui_data` [plugins](#plugins-customization).
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
 
@@ -316,7 +316,7 @@ a pipeline's dashboard. The specification of `@ui_data` plugin is as follows:
 class ExampleData(pn.viewable.Viewer):
     spec = param.Dict(default={})
     id = param.String(default="")
-    pipeline = param.ClassSelector(class_=Pipeline)
+ Fetch the ui-auth.yaml from above or from the repository.    pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Table 1")
 
     def __panel__(self):
@@ -558,7 +558,7 @@ The `kedro_graphql.ui.auth.PKCELoginHandler` class is a pluggable
 panel OAuth provider that supports the authorization code flow with 
 proof key for code exchange OAuth protocol. The PKCE protocol is the
 default for [Dex](https://dexidp.io/). See 
-https://github.com/holoviz/panel/issues/7979 for more discussion on this
+<https://github.com/holoviz/panel/issues/7979> for more discussion on this
 topic.  Using `oauth_provider: "pkce"` in the conifiguration tells panel
 to use the `kedro_graphql.ui.auth.PKCELoginHandler`.
 
@@ -620,8 +620,8 @@ nav:
 
 ```
 
-Start the UI server.  Fetch the ui-auth.yaml from above or from the repository.
+Start the UI server.
 
 ```
-kedro gql --ui --ui-spec src/kedro_graphql/ui/ui-auth.yaml
+kedro gql --ui --ui-spec ui.yaml
 ```

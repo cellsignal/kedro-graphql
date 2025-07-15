@@ -43,7 +43,7 @@ nav:
   - UI: ui.md
   - Extend Kedro GraphQL:
       - GraphQL: extend_graphql.md
-      - Dataset Uploads & Downloads: extend_pre_signed_url_provider.md
+      - Dataset Uploads & Downloads: extend_signed_url_provider.md
       - Authentication & Authorization: extend_permissions.md
       - Application: extend_application.md
   - Architecture: architecture.md

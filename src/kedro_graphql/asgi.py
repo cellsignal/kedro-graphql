@@ -71,33 +71,43 @@ class KedroGraphQL(FastAPI):
                 self.context = {"request": request}
 
         @staticmethod
-        def authenticate(request: Request):
-            """Dependency to authenticate the user based on permissions.
-            This function checks if the user is authenticated by verifying
-            the permissions class. If the user is not authenticated, it raises
-            an HTTPException with a 403 Forbidden status code.
-            This function is used as a dependency in the event endpoint to ensure
-            that only authenticated users can create events.
+        def authenticate_factory(action: str = None):
+            """Factory function to create an authentication dependency.
 
-            Args:
-                request (Request): The incoming request.
+            Kwargs:
+                action (str): The action for which the user needs to be authenticated.
             Returns:
-                bool: True if the user is authenticated, False otherwise.
-            Raises:
-                HTTPException: If the user is not authenticated.
+                function: A function that checks if the user is authenticated.
             """
 
-            access = PERMISSIONS_CLASS(action="create_event").has_permission(
-                None, Info(request))
-            if not access:
-                raise HTTPException(detail="User is not authenticated",
-                                    status_code=status.HTTP_403_FORBIDDEN)
-            else:
-                return access
+            def authenticate(request: Request):
+                """Dependency to authenticate the user based on permissions.
+                This function checks if the user is authenticated by verifying
+                the permissions class. If the user is not authenticated, it raises
+                an HTTPException with a 403 Forbidden status code.
+                This function is used as a dependency in the event endpoint to ensure
+                that only authenticated users can create events.
+
+                Args:
+                    request (Request): The incoming request.
+                Returns:
+                    bool: True if the user is authenticated, False otherwise.
+                Raises:
+                    HTTPException: If the user is not authenticated.
+                """
+
+                access = PERMISSIONS_CLASS(action=action).has_permission(
+                    None, Info(request))
+                if not access:
+                    raise HTTPException(detail="User is not authenticated",
+                                        status_code=status.HTTP_403_FORBIDDEN)
+                else:
+                    return access
+            return authenticate
 
         if self.config.get("KEDRO_GRAPHQL_EVENTS_CONFIG", None) and isinstance(self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"], dict):
 
-            @self.post("/event/", dependencies=[Depends(authenticate)])
+            @self.post("/event/", dependencies=[Depends(authenticate_factory(action="create_event"))])
             async def event(request: Request):
                 """
                 Endpoint to handle cloudevents.
@@ -119,8 +129,8 @@ class KedroGraphQL(FastAPI):
                 "Event handling endpoint will not be available."
             )
 
-        @self.get("/download", dependencies=[Depends(authenticate)])
-        def download_file(token: str):
+        @self.get("/download", dependencies=[Depends(authenticate_factory(action="read_dataset"))])
+        def download(token: str):
             """
             Endpoint to download a file.
 
@@ -163,8 +173,8 @@ class KedroGraphQL(FastAPI):
                 headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0",
                          "Access-Control-Allow-Origin": "*"})
 
-        @self.post("/upload", dependencies=[Depends(authenticate)])
-        async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
+        @self.post("/upload", dependencies=[Depends(authenticate_factory(action="create_dataset"))])
+        async def upload(token: str = Form(...), file: UploadFile = File(...)):
             """
             Endpoint to upload a file.
 

@@ -19,6 +19,8 @@
     * [read\_pipelines](#client.KedroGraphqlClient.read_pipelines)
     * [update\_pipeline](#client.KedroGraphqlClient.update_pipeline)
     * [delete\_pipeline](#client.KedroGraphqlClient.delete_pipeline)
+    * [read\_dataset](#client.KedroGraphqlClient.read_dataset)
+    * [create\_dataset](#client.KedroGraphqlClient.create_dataset)
     * [pipeline\_events](#client.KedroGraphqlClient.pipeline_events)
     * [pipeline\_logs](#client.KedroGraphqlClient.pipeline_logs)
 * [commands](#commands)
@@ -31,8 +33,10 @@
 * [permissions](#permissions)
   * [IsAuthenticatedAction](#permissions.IsAuthenticatedAction)
     * [\_\_init\_\_](#permissions.IsAuthenticatedAction.__init__)
+    * [get\_user\_info](#permissions.IsAuthenticatedAction.get_user_info)
     * [has\_permission](#permissions.IsAuthenticatedAction.has_permission)
   * [IsAuthenticatedAlways](#permissions.IsAuthenticatedAlways)
+    * [get\_user\_info](#permissions.IsAuthenticatedAlways.get_user_info)
     * [has\_permission](#permissions.IsAuthenticatedAlways.has_permission)
   * [IsAuthenticatedXForwardedEmail](#permissions.IsAuthenticatedXForwardedEmail)
     * [has\_permission](#permissions.IsAuthenticatedXForwardedEmail.has_permission)
@@ -47,6 +51,9 @@
 * [schema](#schema)
   * [encode\_cursor](#schema.encode_cursor)
   * [decode\_cursor](#schema.decode_cursor)
+  * [Query](#schema.Query)
+    * [create\_dataset](#schema.Query.create_dataset)
+    * [read\_dataset](#schema.Query.read_dataset)
   * [Mutation](#schema.Mutation)
     * [create\_pipeline](#schema.Mutation.create_pipeline)
   * [Subscription](#schema.Subscription)
@@ -76,8 +83,6 @@
   * [CredentialNestedInput](#models.CredentialNestedInput)
     * [serialize](#models.CredentialNestedInput.serialize)
   * [DataSet](#models.DataSet)
-    * [pre\_signed\_url\_create](#models.DataSet.pre_signed_url_create)
-    * [pre\_signed\_url\_read](#models.DataSet.pre_signed_url_read)
     * [serialize](#models.DataSet.serialize)
     * [decode](#models.DataSet.decode)
   * [DataCatalogInput](#models.DataCatalogInput)
@@ -217,6 +222,7 @@
   * [KedroGraphqlMaterialTemplate](#ui.components.template.KedroGraphqlMaterialTemplate)
     * [user\_menu\_action](#ui.components.template.KedroGraphqlMaterialTemplate.user_menu_action)
     * [build\_user\_menu](#ui.components.template.KedroGraphqlMaterialTemplate.build_user_menu)
+    * [init\_client](#ui.components.template.KedroGraphqlMaterialTemplate.init_client)
     * [\_\_init\_\_](#ui.components.template.KedroGraphqlMaterialTemplate.__init__)
 * [ui.components.data\_catalog\_explorer](#ui.components.data_catalog_explorer)
   * [DataCatalogExplorer](#ui.components.data_catalog_explorer.DataCatalogExplorer)
@@ -243,7 +249,9 @@
   * [Example00PipelineFormV2](#ui.plugins.Example00PipelineFormV2)
     * [\_\_panel\_\_](#ui.plugins.Example00PipelineFormV2.__panel__)
   * [Example00Data00](#ui.plugins.Example00Data00)
+    * [\_\_panel\_\_](#ui.plugins.Example00Data00.__panel__)
   * [Example00Data01](#ui.plugins.Example00Data01)
+    * [build\_plot](#ui.plugins.Example00Data01.build_plot)
   * [BaseExample01Form](#ui.plugins.BaseExample01Form)
     * [navigate](#ui.plugins.BaseExample01Form.navigate)
     * [upload](#ui.plugins.BaseExample01Form.upload)
@@ -251,19 +259,19 @@
     * [run](#ui.plugins.BaseExample01Form.run)
   * [Example01PipelineFormV1](#ui.plugins.Example01PipelineFormV1)
   * [Example01PipelineUIV1](#ui.plugins.Example01PipelineUIV1)
-* [presigned\_url](#presigned_url)
-* [presigned\_url.base](#presigned_url.base)
-  * [PreSignedUrlProvider](#presigned_url.base.PreSignedUrlProvider)
-    * [pre\_signed\_url\_read](#presigned_url.base.PreSignedUrlProvider.pre_signed_url_read)
-    * [pre\_signed\_url\_create](#presigned_url.base.PreSignedUrlProvider.pre_signed_url_create)
-* [presigned\_url.local\_file\_provider](#presigned_url.local_file_provider)
-  * [LocalFileProvider](#presigned_url.local_file_provider.LocalFileProvider)
-    * [pre\_signed\_url\_read](#presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_read)
-    * [pre\_signed\_url\_create](#presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_create)
-* [presigned\_url.s3\_provider](#presigned_url.s3_provider)
-  * [S3PreSignedUrlProvider](#presigned_url.s3_provider.S3PreSignedUrlProvider)
-    * [pre\_signed\_url\_read](#presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_read)
-    * [pre\_signed\_url\_create](#presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_create)
+* [signed\_url](#signed_url)
+* [signed\_url.base](#signed_url.base)
+  * [SignedUrlProvider](#signed_url.base.SignedUrlProvider)
+    * [read](#signed_url.base.SignedUrlProvider.read)
+    * [create](#signed_url.base.SignedUrlProvider.create)
+* [signed\_url.local\_file\_provider](#signed_url.local_file_provider)
+  * [LocalFileProvider](#signed_url.local_file_provider.LocalFileProvider)
+    * [read](#signed_url.local_file_provider.LocalFileProvider.read)
+    * [create](#signed_url.local_file_provider.LocalFileProvider.create)
+* [signed\_url.s3\_provider](#signed_url.s3_provider)
+  * [S3Provider](#signed_url.s3_provider.S3Provider)
+    * [read](#signed_url.s3_provider.S3Provider.read)
+    * [create](#signed_url.s3_provider.S3Provider.create)
 
 <a id="__init__"></a>
 
@@ -341,7 +349,11 @@ class KedroGraphqlClient()
 #### \_\_init\_\_
 
 ```python
-def __init__(uri_graphql=None, uri_ws=None, pipeline_gql=None)
+def __init__(uri_graphql=None,
+             uri_ws=None,
+             pipeline_gql=None,
+             headers={},
+             cookies=None)
 ```
 
 Kwargs:
@@ -477,6 +489,46 @@ id (str): pipeline id
 **Returns**:
 
 - `Pipeline` - pipeline object that was deleted.
+
+<a id="client.KedroGraphqlClient.read_dataset"></a>
+
+#### read\_dataset
+
+```python
+async def read_dataset(id: str = None,
+                       name: str = None,
+                       expires_in_sec: int = 43200)
+```
+
+Read a dataset.
+Kwargs:
+id (str): pipeline id
+name (str): dataset name
+expires_in_sec (int): number of seconds the signed URL should be valid for
+
+**Returns**:
+
+- `str` - signed URL for reading the dataset
+
+<a id="client.KedroGraphqlClient.create_dataset"></a>
+
+#### create\_dataset
+
+```python
+async def create_dataset(id: str = None,
+                         name: str = None,
+                         expires_in_sec: int = 43200)
+```
+
+create a dataset.
+Kwargs:
+id (str): pipeline id
+name (str): dataset name
+expires_in_sec (int): number of seconds the signed URL should be valid for
+
+**Returns**:
+
+- `str` - signed URL for creating the dataset
 
 <a id="client.KedroGraphqlClient.pipeline_events"></a>
 
@@ -689,6 +741,27 @@ def __init__(action)
 
 Initialize the permission with a specific action.
 
+<a id="permissions.IsAuthenticatedAction.get_user_info"></a>
+
+#### get\_user\_info
+
+```python
+@staticmethod
+def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]
+```
+
+Get user information from the request context.
+This method should be overridden in subclasses if needed.
+
+**Arguments**:
+
+- `info` - Strawberry Info object containing the request context.
+  
+
+**Returns**:
+
+- `Optional[Any]` - User information, or None if not available.
+
 <a id="permissions.IsAuthenticatedAction.has_permission"></a>
 
 #### has\_permission
@@ -719,6 +792,27 @@ class IsAuthenticatedAlways(IsAuthenticatedAction)
 ```
 
 Permission class that always grants access.
+
+<a id="permissions.IsAuthenticatedAlways.get_user_info"></a>
+
+#### get\_user\_info
+
+```python
+@staticmethod
+def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]
+```
+
+Get user information from the request context.
+This method returns None since this permission always grants access.
+
+**Arguments**:
+
+- `info` - Strawberry Info object containing the request context.
+  
+
+**Returns**:
+
+- `Optional[Any]` - Always returns None.
 
 <a id="permissions.IsAuthenticatedAlways.has_permission"></a>
 
@@ -920,6 +1014,90 @@ Decodes the ID from the given cursor.
 :param cursor: The cursor to decode.
 
 :return: The decoded user ID.
+
+<a id="schema.Query"></a>
+
+## Query Objects
+
+```python
+@strawberry.type
+class Query()
+```
+
+<a id="schema.Query.create_dataset"></a>
+
+#### create\_dataset
+
+```python
+@strawberry.field(
+    description="Create a dataset with a signed URL",
+    extensions=[
+        PermissionExtension(
+            permissions=[PERMISSIONS_CLASS(action="create_dataset")])
+    ])
+def create_dataset(
+    id: str,
+    info: Info,
+    name: str,
+    expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]
+) -> JSON | None
+```
+
+Get a signed URL for uploading a dataset.
+
+**Arguments**:
+
+- `id` _str_ - The ID of the pipeline.
+- `info` _Info_ - The GraphQL execution context.
+- `name` _str_ - The name of the dataset.
+- `expires_in_sec` _int_ - The number of seconds the signed URL should be valid for.
+  
+
+**Returns**:
+
+  JSON | None: A signed URL for uploading the dataset or None if not applicable.
+  
+
+**Raises**:
+
+- `ValueError` - If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
+
+<a id="schema.Query.read_dataset"></a>
+
+#### read\_dataset
+
+```python
+@strawberry.field(
+    description="Read a dataset with a signed URL",
+    extensions=[
+        PermissionExtension(
+            permissions=[PERMISSIONS_CLASS(action="read_dataset")])
+    ])
+def read_dataset(
+    id: str,
+    info: Info,
+    name: str,
+    expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]
+) -> str | None
+```
+
+Get a signed URL for downloading a dataset.
+
+**Arguments**:
+
+- `id` _str_ - The ID of the pipeline.
+- `info` _Info_ - The GraphQL execution context.
+- `name` _str_ - The name of the dataset.
+- `expires_in_sec` _int_ - The number of seconds the signed URL should be valid for.
+
+**Returns**:
+
+  str | None: A signed URL for downloading the dataset or None if not applicable.
+  
+
+**Raises**:
+
+- `ValueError` - If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
 
 <a id="schema.Mutation"></a>
 
@@ -1296,60 +1474,6 @@ Returns serializable dict in format compatible with kedro.
 @strawberry.type
 class DataSet()
 ```
-
-<a id="models.DataSet.pre_signed_url_create"></a>
-
-#### pre\_signed\_url\_create
-
-```python
-@strawberry.field(extensions=[
-    PermissionExtension(
-        permissions=[PERMISSIONS_CLASS(action="create_dataset")])
-])
-def pre_signed_url_create(expires_in_sec: int) -> JSON | None
-```
-
-Get a presigned URL for uploading a dataset.
-
-**Arguments**:
-
-- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
-  
-
-**Returns**:
-
-  JSON | None: A presigned URL for uploading the dataset or None if not applicable.
-  
-
-**Raises**:
-
-- `ValueError` - If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
-
-<a id="models.DataSet.pre_signed_url_read"></a>
-
-#### pre\_signed\_url\_read
-
-```python
-@strawberry.field(extensions=[
-    PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])
-])
-def pre_signed_url_read(expires_in_sec: int) -> str | None
-```
-
-Get a presigned URL for downloading a dataset.
-
-**Arguments**:
-
-- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
-
-**Returns**:
-
-  str | None: A presigned URL for downloading the dataset or None if not applicable.
-  
-
-**Raises**:
-
-- `ValueError` - If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
 
 <a id="models.DataSet.serialize"></a>
 
@@ -2965,6 +3089,21 @@ async def build_user_menu()
 Asynchronously retrieves the user context for the template.
 This method can be overridden to provide custom user context data.
 
+<a id="ui.components.template.KedroGraphqlMaterialTemplate.init_client"></a>
+
+#### init\_client
+
+```python
+def init_client(spec)
+```
+
+Initializes the Kedro GraphQL client with the provided specification.
+This method sets up the client to connect to the GraphQL API and WebSocket.
+
+**Arguments**:
+
+- `spec` _dict_ - The specification for the UI, including configuration and pages.
+
 <a id="ui.components.template.KedroGraphqlMaterialTemplate.__init__"></a>
 
 #### \_\_init\_\_
@@ -3279,7 +3418,6 @@ class Example00Data00(pn.viewable.Viewer)
 ```
 
 Data viewer for the example00 pipeline.
-This viewer displays a sample DataFrame in a Tabulator widget.
 It inherits from pn.viewable.Viewer and implements the __panel__ method to create the data view.
 
 **Attributes**:
@@ -3288,6 +3426,16 @@ It inherits from pn.viewable.Viewer and implements the __panel__ method to creat
 - `id` _str_ - The ID of the data viewer.
 - `pipeline` _Pipeline_ - The Kedro pipeline associated with this data viewer.
 - `title` _str_ - The title of the data viewer.
+
+<a id="ui.plugins.Example00Data00.__panel__"></a>
+
+#### \_\_panel\_\_
+
+```python
+def __panel__()
+```
+
+Create the Panel component for the example00 data viewer.
 
 <a id="ui.plugins.Example00Data01"></a>
 
@@ -3308,6 +3456,16 @@ It inherits from pn.viewable.Viewer and implements the __panel__ method to creat
 - `id` _str_ - The ID of the data viewer.
 - `pipeline` _Pipeline_ - The Kedro pipeline associated with this data viewer.
 - `title` _str_ - The title of the data viewer.
+
+<a id="ui.plugins.Example00Data01.build_plot"></a>
+
+#### build\_plot
+
+```python
+async def build_plot()
+```
+
+Create a sample gauge plot using Panel and ECharts.
 
 <a id="ui.plugins.BaseExample01Form"></a>
 
@@ -3415,34 +3573,34 @@ It inherits from pn.viewable.Viewer and implements the __panel__ method to creat
 - `id` _str_ - The ID of the pipeline.
 - `pipeline` _Pipeline_ - The Kedro pipeline associated with this dashboard.
 
-<a id="presigned_url"></a>
+<a id="signed_url"></a>
 
-# Module presigned\_url
+# Module signed\_url
 
-<a id="presigned_url.base"></a>
+<a id="signed_url.base"></a>
 
-# Module presigned\_url.base
+# Module signed\_url.base
 
-<a id="presigned_url.base.PreSignedUrlProvider"></a>
+<a id="signed_url.base.SignedUrlProvider"></a>
 
-## PreSignedUrlProvider Objects
+## SignedUrlProvider Objects
 
 ```python
-class PreSignedUrlProvider(metaclass=abc.ABCMeta)
+class SignedUrlProvider(metaclass=abc.ABCMeta)
 ```
 
-Abstract base class for providing presigned URLs for kedro datasets
+Abstract base class for providing signed URLs for reading and creating kedro datasets
 
-<a id="presigned_url.base.PreSignedUrlProvider.pre_signed_url_read"></a>
+<a id="signed_url.base.SignedUrlProvider.read"></a>
 
-#### pre\_signed\_url\_read
+#### read
 
 ```python
 @abc.abstractmethod
-def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+def read(filepath: str, expires_in_sec: int) -> str | None
 ```
 
-Abstract method to get a presigned URL for downloading a dataset.
+Abstract method to get a signed URL for downloading a dataset.
 
 **Arguments**:
 
@@ -3452,100 +3610,100 @@ Abstract method to get a presigned URL for downloading a dataset.
 
 **Returns**:
 
-  str | None: A presigned URL for downloading the dataset.
+  str | None: A signed URL for downloading the dataset.
 
-<a id="presigned_url.base.PreSignedUrlProvider.pre_signed_url_create"></a>
+<a id="signed_url.base.SignedUrlProvider.create"></a>
 
-#### pre\_signed\_url\_create
+#### create
 
 ```python
 @abc.abstractmethod
-def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+def create(filepath: str, expires_in_sec: int) -> dict | None
 ```
 
-Abstract method to get a presigned URL for uploading a dataset.
+Abstract method to get a signed URL for uploading a dataset.
 
 **Arguments**:
 
 - `filepath` _str_ - The file path of the dataset.
-- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+- `expires_in_sec` _int_ - The number of seconds the signed URL should be valid for.
   
 
 **Returns**:
 
   dict | None: A dictionary with the URL to post to and form fields and values to submit with the POST.
 
-<a id="presigned_url.local_file_provider"></a>
+<a id="signed_url.local_file_provider"></a>
 
-# Module presigned\_url.local\_file\_provider
+# Module signed\_url.local\_file\_provider
 
-<a id="presigned_url.local_file_provider.LocalFileProvider"></a>
+<a id="signed_url.local_file_provider.LocalFileProvider"></a>
 
 ## LocalFileProvider Objects
 
 ```python
-class LocalFileProvider(PreSignedUrlProvider)
+class LocalFileProvider(SignedUrlProvider)
 ```
 
-Implementation of PreSignedUrlProvider for a local file system.
+Implementation of SignedUrlProvider for a local file system.
 
-<a id="presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_read"></a>
+<a id="signed_url.local_file_provider.LocalFileProvider.read"></a>
 
-#### pre\_signed\_url\_read
+#### read
 
 ```python
-def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+def read(filepath: str, expires_in_sec: int) -> str | None
 ```
 
-Get a presigned URL for reading a dataset.
+Get a signed URL for reading a dataset.
 
 **Returns**:
 
-- `str` - A presigned URL for reading the dataset.
+- `str` - A signed URL for reading the dataset.
 
-<a id="presigned_url.local_file_provider.LocalFileProvider.pre_signed_url_create"></a>
+<a id="signed_url.local_file_provider.LocalFileProvider.create"></a>
 
-#### pre\_signed\_url\_create
+#### create
 
 ```python
-def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+def create(filepath: str, expires_in_sec: int) -> dict | None
 ```
 
-Get a presigned URL for creating a dataset.
+Get a signed URL for creating a dataset.
 
 **Returns**:
 
-- `dict` - A presigned URL for creating the dataset.
+- `dict` - A signed URL for creating the dataset.
 
-<a id="presigned_url.s3_provider"></a>
+<a id="signed_url.s3_provider"></a>
 
-# Module presigned\_url.s3\_provider
+# Module signed\_url.s3\_provider
 
-<a id="presigned_url.s3_provider.S3PreSignedUrlProvider"></a>
+<a id="signed_url.s3_provider.S3Provider"></a>
 
-## S3PreSignedUrlProvider Objects
+## S3Provider Objects
 
 ```python
-class S3PreSignedUrlProvider(PreSignedUrlProvider)
+class S3Provider(SignedUrlProvider)
 ```
 
-Implementation of PreSignedUrlProvider for AWS S3.
+Implementation of SignedUrlProvider for AWS S3.
 
-<a id="presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_read"></a>
+<a id="signed_url.s3_provider.S3Provider.read"></a>
 
-#### pre\_signed\_url\_read
+#### read
 
 ```python
 @staticmethod
-def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None
+def read(filepath: str, expires_in_sec: int) -> str | None
 ```
 
-Generate a presigned URL S3 to download a file.
+Generate a signed URL S3 to download a file.
 
 **Arguments**:
 
 - `filepath` _str_ - The S3 file path in the format s3://bucket-name/key
-- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+- `expires_in_sec` _int_ - The number of seconds the signed URL should be valid for.
   
 
 **Returns**:
@@ -3554,21 +3712,21 @@ Generate a presigned URL S3 to download a file.
   
 - `Example` - https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
 
-<a id="presigned_url.s3_provider.S3PreSignedUrlProvider.pre_signed_url_create"></a>
+<a id="signed_url.s3_provider.S3Provider.create"></a>
 
-#### pre\_signed\_url\_create
+#### create
 
 ```python
 @staticmethod
-def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None
+def create(filepath: str, expires_in_sec: int) -> dict | None
 ```
 
-Generate a presigned URL S3 to upload a file.
+Generate a signed URL S3 to upload a file.
 
 **Arguments**:
 
 - `filepath` _str_ - The S3 file path in the format s3://bucket-name/key
-- `expires_in_sec` _int_ - The number of seconds the presigned URL should be valid for.
+- `expires_in_sec` _int_ - The number of seconds the signed URL should be valid for.
   
 
 **Returns**:

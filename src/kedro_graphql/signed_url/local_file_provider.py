@@ -1,6 +1,6 @@
 import jwt
 import uuid
-from .base import PreSignedUrlProvider
+from .base import SignedUrlProvider
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from pathlib import Path
@@ -9,17 +9,17 @@ from ..config import load_config
 CONFIG = load_config()
 
 
-class LocalFileProvider(PreSignedUrlProvider):
+class LocalFileProvider(SignedUrlProvider):
     """
-    Implementation of PreSignedUrlProvider for a local file system.
+    Implementation of SignedUrlProvider for a local file system.
     """
 
-    def pre_signed_url_read(filepath: str, expires_in_sec: int) -> str | None:
+    def read(filepath: str, expires_in_sec: int) -> str | None:
         """
-        Get a presigned URL for reading a dataset.
+        Get a signed URL for reading a dataset.
 
         Returns:
-            str: A presigned URL for reading the dataset.
+            str: A signed URL for reading the dataset.
         """
 
         path = Path(filepath).resolve()
@@ -37,12 +37,12 @@ class LocalFileProvider(PreSignedUrlProvider):
 
         return f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
 
-    def pre_signed_url_create(filepath: str, expires_in_sec: int) -> dict | None:
+    def create(filepath: str, expires_in_sec: int) -> dict | None:
         """
-        Get a presigned URL for creating a dataset.
+        Get a signed URL for creating a dataset.
 
         Returns:
-            dict: A presigned URL for creating the dataset.
+            dict: A signed URL for creating the dataset.
         """
 
         path = Path(filepath).resolve()

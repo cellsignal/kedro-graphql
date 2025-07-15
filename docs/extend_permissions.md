@@ -9,6 +9,7 @@ flowchart TD
     idp -- "Auth Code / Token" --> oauth2[OAuth2 Proxy]
     user -- "HTTP Request (with cookie/token)" --> oauth2
     oauth2 -- "Set X-Forwarded-* Headers" --> kedro[Kedro GraphQL - Upstream Service]
+    oauth2 -- "Set X-Forwarded-* Headers" --> kedroUI[Kedro GraphQL UI - Upstream Service]
 ```
 
 Figure 1. OAuth2 Proxy with Identity Provider passing X-Forwarded-* headers to kedro-graphql
@@ -22,7 +23,7 @@ The `kedro_graphql.permissions` module provides a flexible, header-based permiss
 
 ### Overview
 
-- **Customizable permission logic:** You can use the provided permission classes or define your own custom Strawberry permission class to implement project-specific authentication or authorization logic.
+- **Customizable permission logic:** You can use the provided permission classes or define your own custom Strawberry permission class to implement project-specific authentication and/or authorization logic.
 - **Header-based authentication via Strawberry permission classes:** The project includes some permission classes that uses Strawberry's permission class system to enforce access controls by inspecting the HTTP headers (such as `X-Forwarded-Email`, `X-Forwarded-User`, and `X-Forwarded-Groups`) set by the OAuth2 proxy after successful authentication.
 - **RBAC support:** Fine-grained access control is possible by mapping user groups to roles and roles to allowed actions via application configuration.
 
@@ -59,7 +60,7 @@ The following actions can be used in your RBAC configuration to control access t
 - `subscribe_to_logs`: Subscribe to pipeline logs (e.g., for real-time log streaming).
 - `create_event`: Create or emit a new event in the system (e.g., for custom integrations).
 
-You can assign these actions to roles in your `permissions_role_to_action_mapping` section of the YAML config. Each action corresponds to a specific GraphQL operation or API capability.
+You can assign these actions to roles in your `permissions_role_to_action_mapping` section of the YAML config. Each action corresponds to a specific GraphQL operation.
 
 ### Usage Example
 

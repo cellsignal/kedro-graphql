@@ -3,7 +3,6 @@
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
-from bokeh.plotting import figure
 import tempfile
 from tempfile import _TemporaryFileWrapper
 import param
@@ -11,7 +10,6 @@ import panel as pn
 from kedro_graphql.models import Pipeline
 from kedro_graphql.ui.decorators import ui_data, ui_form, ui_dashboard
 from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
-from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.models import PipelineInput
 import json
 
@@ -167,10 +165,12 @@ class Example00PipelineFormV2(BaseExample00Form):
         return form
 
 
+pn.extension('echarts')
+
+
 @ui_data(pipeline="example00")
 class Example00Data00(pn.viewable.Viewer):
     """Data viewer for the example00 pipeline.
-    This viewer displays a sample DataFrame in a Tabulator widget.
     It inherits from pn.viewable.Viewer and implements the __panel__ method to create the data view.
 
     Attributes:
@@ -184,21 +184,31 @@ class Example00Data00(pn.viewable.Viewer):
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Plot 1")
 
-    def __panel__(self):
-
-        # Create a sample DataFrame
-        data = {
-            'col1': np.random.randint(0, 10, 5),
-            'col2': np.random.rand(5),
-            'col3': ['A', 'B', 'A', 'C', 'B']
+    async def build_plot(self):
+        echart_bar = {
+            'title': {
+                'text': 'ECharts entry example'
+            },
+            'tooltip': {},
+            'legend': {
+                'data': ['Sales']
+            },
+            'xAxis': {
+                'data': ["shirt", "cardign", "chiffon shirt", "pants", "heels", "socks"]
+            },
+            'yAxis': {},
+            'series': [{
+                'name': 'Sales',
+                'type': 'bar',
+                'data': [5, 20, 36, 10, 10, 20]
+            }],
         }
+        yield pn.pane.ECharts(echart_bar, height=480, width=640)
 
-        df = pd.DataFrame(data)
-
-        df_widget = pn.widgets.Tabulator(df,
-                                         theme='materialize',
-                                         show_index=False)
-        return pn.Card(df_widget)
+    def __panel__(self):
+        """Create the Panel component for the example00 data viewer."""
+        pn.state.location.sync(self, {"id": "id"})
+        return self.build_plot
 
 
 @ui_data(pipeline="example00")
@@ -218,18 +228,36 @@ class Example00Data01(pn.viewable.Viewer):
     pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Plot 1")
 
+    async def build_plot(self):
+        """Create a sample gauge plot using Panel and ECharts."""
+
+        gauge = {
+            'tooltip': {
+                'formatter': '{a} <br/>{b} : {c}%'
+            },
+            'series': [
+                {
+                    'name': 'Gauge',
+                    'type': 'gauge',
+                    'detail': {'formatter': '{value}%'},
+                    'data': [{'value': 50, 'name': 'Value'}]
+                }
+            ]
+        }
+        gauge_pane = pn.pane.ECharts(gauge, width=400, height=400)
+
+        slider = pn.widgets.IntSlider(value=50, start=0, end=100)
+
+        slider.jscallback(args={'gauge': gauge_pane}, value="""
+        gauge.data.series[0].data[0].value = cb_obj.value
+        gauge.properties.data.change.emit()
+        """)
+
+        yield pn.Column(slider, gauge_pane)
+
     def __panel__(self):
 
-        p1 = figure(height=250, sizing_mode='stretch_width', margin=5)
-        p2 = figure(height=250, sizing_mode='stretch_width', margin=5)
-
-        p1.line([1, 2, 3], [1, 2, 3])
-        p2.circle([1, 2, 3], [1, 2, 3], radius=0.1,
-                  fill_color="orange", line_color="black")
-
-        c1 = pn.Card(p1, pn.layout.Divider(), p2,
-                     title="An example pipeline dashboard", sizing_mode='stretch_width')
-        return c1
+        return self.build_plot
 
 
 # pipeline: example01

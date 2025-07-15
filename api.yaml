@@ -40,4 +40,6 @@ config:
   permissions_group_to_role_mapping: 
       EXTERNAL_GROUP_NAME: 
           - admin
+  local_file_provider_server_url: "http://localhost:4180"
+
 

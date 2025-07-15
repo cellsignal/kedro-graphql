@@ -54,7 +54,7 @@ services:
     network_mode: host
   oauth2-proxy:
     restart: always
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.2.1
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.9.0
     ports:
       - "4180:4180"
     volumes:

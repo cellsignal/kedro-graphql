@@ -1,6 +1,7 @@
 """A python panel app for visualizing Kedro pipelines."""
 import panel as pn
 import param
+from kedro_graphql.client import KedroGraphqlClient
 
 # pn.extension(theme="dark")
 pn.extension("modal")
@@ -119,16 +120,23 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
         """Asynchronously retrieves the user context for the template.
         This method can be overridden to provide custom user context data.
         """
-        if pn.state.user_info:
-            user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
+        # if hasattr(pn.state, "user_info") and pn.state.user_info:
+        # user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
+        if pn.state.headers.get("X-Forwarded-User", None):
+            user = pn.state.headers.get("X-Forwarded-User", None)
+            email = pn.state.headers.get("X-Forwarded-Email", None)
+            groups = pn.state.headers.get("X-Forwarded-Groups", None)
+            user_info = {"user": user, "email": email, "groups": groups}
         else:
             user = "Guest"
+            user_info = {"user": "Guest", "email": None, "groups": None}
+
         user_menu_items = [("User Information", "User Information")]
+
         login_link = self.spec["panel_get_server_kwargs"].get(
             "login_endpoint", "/login")
         logout_link = self.spec["panel_get_server_kwargs"].get(
             "logout_endpoint", "/logout")
-        user_info = "No user information available"
 
         if user == "Guest":
             if pn.config.oauth_provider:
@@ -137,9 +145,8 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
                 user_menu_items.append("Login")
         else:
             user_menu_items.append("Logout")
-            user_info = pn.state.user_info
 
-        user_menu = pn.widgets.MenuButton(name=user, icon="circle-letter-" + user[0].lower(
+        user_menu = pn.widgets.MenuButton(name=user_info["email"].split("@")[0], icon="circle-letter-" + user_info["email"][0].lower(
         ), icon_size="2em", items=user_menu_items, sizing_mode="stretch_width",)
         user_info_modal = pn.Modal(user_info, name='User Information',
                                    margin=20, background_close=True, show_close_button=True)
@@ -147,6 +154,25 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
                 user_info_modal, login_link, logout_link, watch=True)
         yield pn.Column(pn.Row(user_menu), pn.Row(user_info_modal, height=0)
                         )
+
+    def init_client(self, spec):
+        """Initializes the Kedro GraphQL client with the provided specification.
+        This method sets up the client to connect to the GraphQL API and WebSocket.
+
+        Args:
+            spec (dict): The specification for the UI, including configuration and pages.
+        """
+
+        if pn.state.cookies:
+            cookies = pn.state.cookies
+        else:
+            cookies = None
+
+        client = KedroGraphqlClient(
+            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"], cookies=cookies)
+
+        spec["config"]["client"] = client
+        return spec
 
     def __init__(self, title="kedro-graphql", spec=None):
         """Initializes the KedroGraphqlMaterialTemplate with a title and specification.
@@ -157,7 +183,8 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
         super().__init__(
             title=spec["panel_get_server_kwargs"]["title"],
             sidebar_width=200)
-        self.spec = spec
+
+        self.spec = self.init_client(spec)
         self.sidebar.append(self.build_user_menu)
         self.sidebar.append(pn.layout.Divider())
         for nav in spec["nav"]["sidebar"]:
