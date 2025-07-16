@@ -15,6 +15,7 @@ from kedro.io import AbstractDataset, DataCatalog
 from omegaconf import OmegaConf
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
+from kedro_graphql.utils import add_param_to_feed_dict
 from kedro_graphql.runners import init_runner
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
@@ -277,16 +278,17 @@ def run_pipeline(self,
             logger.info("using data_catalog parameter to build data catalog")
             catalog = data_catalog
 
-        io = DataCatalog().from_config(catalog=catalog)
+        io = DataCatalog.from_config(catalog=catalog)
 
         # add parameters to DataCatalog using OmegaConf and dotlist notation
         parameters_dotlist = [f"{key}={value}" for key, value in parameters.items()]
-        conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
-        io.add_feed_dict({"parameters": conf_parameters})
+        conf_parameters = OmegaConf.to_container(OmegaConf.from_dotlist(parameters_dotlist), resolve=True)
 
-        params_dotlist = [f"params:{key}={value}" for key, value in parameters.items()]
-        conf_params = OmegaConf.from_dotlist(params_dotlist)
-        io.add_feed_dict(conf_params)
+        feed_dict = {"parameters": conf_parameters}
+        for param_name, param_value in conf_parameters.items():
+            add_param_to_feed_dict(feed_dict, param_name, param_value)
+
+        io.add_feed_dict(feed_dict)
 
         try:
             # Populate the filtering parameters based on the slices input

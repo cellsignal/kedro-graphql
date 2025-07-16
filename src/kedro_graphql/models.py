@@ -109,20 +109,26 @@ class ParameterInput:
 
     @staticmethod
     def create(parameters: dict):
-        params = []
-        for k, v in parameters.items():
-            ptype = type(v)
+        
+        def _create_parameter_input(name, value):
 
-            if isinstance(ptype, int):
-                ptype = ParameterType.INTEGER
-            elif isinstance(ptype, float):
-                ptype = ParameterType.FLOAT
-            elif isinstance(ptype, bool):
-                ptype = ParameterType.BOOLEAN
-            else:
-                ptype = ParameterType.STRING
+            type_map = [
+                (int, ParameterType.INTEGER),
+                (float, ParameterType.FLOAT),
+                (bool, ParameterType.BOOLEAN),
+                (str, ParameterType.STRING),
+            ]
 
-            params.append(ParameterInput(name=k, value=str(v), type=ptype))
+            try:
+                type_enum: ParameterType = next(t[1] for t in type_map if type(value) == t[0])
+            except StopIteration:
+                raise ValueError(
+                    f"Only primitive types are supported ({' '.join(str(x[0]) for x in type_map)}). Got {type(value)}"
+                )
+            
+            return ParameterInput(name = name, value = str(value), type = type_enum.value.upper())
+            
+        params =[_create_parameter_input(k,v) for k,v in parameters.items()]
         return params
 
 

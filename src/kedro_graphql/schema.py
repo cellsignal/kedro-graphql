@@ -249,6 +249,8 @@ class Mutation:
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
         serial = p.encode(encoder="kedro")
 
+        runner = d.get(
+            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -272,7 +274,7 @@ class Mutation:
 
         if d["state"] == "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
-                                           runner=None,
+                                           runner=runner,
                                            session=None,
                                            started_at=None,
                                            finished_at=None,
@@ -285,7 +287,7 @@ class Mutation:
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
-                                           runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                                           runner=runner,
                                            session=None,
                                            started_at=started_at,
                                            finished_at=None,
@@ -299,7 +301,7 @@ class Mutation:
                 name=serial["name"],
                 parameters=serial["parameters"],
                 data_catalog=serial["data_catalog"],
-                runner=info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"],
+                runner=runner,
                 slices=d.get("slices", None),
                 only_missing=d.get("only_missing", False)
             )
@@ -326,8 +328,8 @@ class Mutation:
         p.data_catalog = pipeline_input_dict.get("data_catalog")
         p.tags = pipeline_input_dict.get("tags")
         p.parent = pipeline_input_dict.get("parent")
-        runner = pipeline_input_dict.get("runner") if pipeline_input_dict.get(
-            "runner") else CONFIG["KEDRO_GRAPHQL_RUNNER"]
+        runner = pipeline_input_dict.get(
+            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
