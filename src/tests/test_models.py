@@ -3,7 +3,7 @@ import json
 import pytest
 from omegaconf import OmegaConf
 
-from kedro_graphql.models import DataSet, Parameter
+from kedro_graphql.models import DataSet, Parameter, ParameterInput
 from kedro_graphql.config import config as CONFIG
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -92,7 +92,25 @@ class TestDataSet:
         d = DataSet(**params)
         assert d.exists() == False
 
+class TestParameterInput:
+    
+    def test_create_from_dict(self):
+        correct = {
+            "a": "b",
+            "c": 0,
+            "d": True,
+            "e": 0.1,}
+        
+        incorrect = {**correct, "f": [1,2]}
 
+        params_input_list = ParameterInput.create(correct)
+
+        assert len(params_input_list) == 4
+        assert any(p.name == "a" and p.value == "b" for p in params_input_list)
+
+        with pytest.raises(ValueError):
+            ParameterInput.create(incorrect)
+            
 class TestParameter:
 
     def test_serialize_string(self):
