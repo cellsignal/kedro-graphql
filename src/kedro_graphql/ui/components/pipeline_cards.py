@@ -33,11 +33,13 @@ class PipelineCards(pn.viewable.Viewer):
         """
 
         if event == "run":
-            pn.state.location.search = "?page=" + self.form_page + \
-                "&pipeline=" + pipeline + "&form=" + form.__name__
+            pn.state.location.pathname = "/" + self.form_page
+            pn.state.location.search = "?pipeline=" + pipeline + "&form=" + form.__name__
+            pn.state.location.reload = True
         elif event == "explore":
-            pn.state.location.search = "?page=" + self.explore_page + \
-                "&pipeline=" + pipeline
+            pn.state.location.pathname = "/" + self.explore_page
+            pn.state.location.search = "?pipeline=" + pipeline
+            pn.state.location.reload = True
 
     @param.depends("explore_page", "form_page")
     async def build_component(self):

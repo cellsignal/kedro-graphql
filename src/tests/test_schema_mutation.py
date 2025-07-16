@@ -151,6 +151,12 @@ class TestSchemaMutations:
         }
         """
 
+    create_datasets_mutation = """
+        mutation CreateDatasets($id: String!, $names: [String!]!, $expiresInSec: Int!) {
+          createDatasets(id: $id, names: $names, expiresInSec: $expiresInSec)
+        }
+        """
+
     @pytest.mark.asyncio
     async def test_pipeline(self,
                             mock_app,
@@ -525,3 +531,20 @@ class TestSchemaMutations:
         assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
                                      ["id"]).status[-1].filtered_nodes == ["timestamp_node"]
         create_pipeline_resp.errors is None
+
+    @pytest.mark.asyncio
+    async def test_create_datasets(self,
+                                   mock_app,
+                                   mock_info_context,
+                                   mock_pipeline):
+
+        create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
+                                                             variable_values={"id": str(mock_pipeline.id),
+                                                                              "names": ["text_in", "text_out"],
+                                                                              "expiresInSec": 3600})
+
+        assert create_datasets_resp.errors is None
+        assert create_datasets_resp.data["createDatasets"] is not None
+        assert isinstance(create_datasets_resp.data["createDatasets"], list)
+        assert isinstance(create_datasets_resp.data["createDatasets"][0], dict)
+        assert len(create_datasets_resp.data["createDatasets"]) == 2

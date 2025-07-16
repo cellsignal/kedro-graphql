@@ -252,8 +252,7 @@ class KedroGraphqlClient():
         """
         query = """
             mutation createDatasets($id: String!, $names: [String!]!, $expires_in_sec: Int!) {
-              createDatasets(id: $id, names: $names, expiresInSec: $expires_in_sec) {
-              }
+              createDatasets(id: $id, names: $names, expiresInSec: $expires_in_sec)
             }
         """
 

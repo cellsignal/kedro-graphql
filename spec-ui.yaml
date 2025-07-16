@@ -6,32 +6,12 @@ panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/
   admin: true
   base_url: /
   port: 5006
-  ##oauth_provider: "pkce"
-  ##oauth_secret: "kedro-graphql"
-  ##oauth_key: "kedro-graphql"
-  ##oauth_extra_params: 
-  ##  AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
-  ##  TOKEN_URL: "http://localhost:5556/oidc/token"
-  ##  USER_URL: "http://localhost:4180/oauth2/userinfo"
-  #cookie_secret: egUK4U4uydLio-EDc3uBpe47zJLHVTe-IgebKxZa4cU=
-  ##oauth_provider: "pkce"
-  ##oauth_secret: "kedro-graphql"
-  ##oauth_key: "kedro-graphql"
-  ##login_endpoint: "http://localhost:4180/oauth2/sign_in"
-  ##logout_endpoint: "http://localhost:4180/oauth2/sign_out"
-  ##oauth_extra_params: 
-  ##  AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
-  ##  TOKEN_URL: "http://localhost:5556/oidc/token"
-  ##  USER_URL: "http://localhost:4180/oauth2/userinfo"
-  ##cookie_secret: egUK4U4uydLio-EDc3uBpe47zJLHVTe-IgebKxZa4cU=
-  #oauth_encryption_key: 1txhYRzdbCpBRKKcvyChR0qH9QSm60BU4UJq0NqZz2I=
   allow_websocket_origin: 
     - "localhost:5006"
-    - "localhost:4180"
-  #oauth_redirect_uri: "http://localhost:5006/login"
+  warm: true
 config:
-  client_uri_graphql: "http://localhost:4180/graphql"
-  client_uri_ws: "ws://localhost:4180/graphql"
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
   imports:
     - "kedro_graphql.ui.plugins"
 pages:

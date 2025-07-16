@@ -42,7 +42,7 @@ class PipelineViz(pn.viewable.Viewer):
             <iframe frameBorder="0" style="height:100%; width:100%" src="http://localhost:5006/pipeline/viz-build/index.html?pid={pipeline}&sid={sid}"></iframe>
             """.format(pipeline=self.pipeline, sid=self.sid)
 
-        return pn.pane.HTML(iframe, height=self.height, sizing_mode="stretch_width")
+        yield pn.pane.HTML(iframe, height=self.height, sizing_mode="stretch_width")
 
     def __panel__(self):
         pn.state.location.sync(self, {"pipeline": "pipeline", "sid": "sid"})

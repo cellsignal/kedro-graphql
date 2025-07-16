@@ -81,7 +81,7 @@ class IsAuthenticatedAlways(IsAuthenticatedAction):
         Returns:
             Optional[Any]: Always returns None.
         """
-        return None
+        return {"user": None, "email": None, "groups": None}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
@@ -145,7 +145,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
                 a=str(self.action),
                 s=str(source)))
 
-            return {"email": None, "user": None}
+            return False
 
 
 class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):

@@ -44,8 +44,9 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         viz = PipelineViz(pipeline=p.name, spec=self.spec)
         retry = PipelineRetry(client=self.spec["config"]["client"], pipeline=p)
         cloning = PipelineCloning(client=self.spec["config"]["client"], pipeline=p)
-        explorer = DataCatalogExplorer(spec=self.spec, pipeline=p, dataset_map=self.dataset_map)
-        tabs = pn.Tabs(dynamic=False)
+        explorer = DataCatalogExplorer(
+            spec=self.spec, pipeline=p, dataset_map=self.dataset_map)
+        tabs = pn.Tabs(dynamic=True)
         tabs.append(("Explorer", explorer))
         tabs.append(("Monitor", monitor))
         tabs.append(("Detail", detail))
@@ -82,7 +83,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         Yields:
             pn.Tabs or panel.viewable.Viewer: The built dashboard, either custom or default.
         """
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
         p = await self.spec["config"]["client"].read_pipeline(id=self.id)
 
@@ -92,6 +93,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
             yield self.build_default_dashboard(p)
 
     def __panel__(self):
+
         pn.state.location.sync(
             self, {"id": "id", "pipeline": "pipeline", "dashboard_name": "dashboard_name"})
         if not UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):

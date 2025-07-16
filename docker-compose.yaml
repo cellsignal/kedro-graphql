@@ -34,16 +34,6 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
     depends_on:
       - mongo
-  caddy:
-    image: caddy:2.9.1-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    network_mode: host
   dex:
     image: ghcr.io/dexidp/dex:v2.31.1
     ports:

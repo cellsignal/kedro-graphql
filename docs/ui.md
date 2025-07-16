@@ -1,5 +1,9 @@
 # UI
 
+!!! note 
+    Many of the examples in this document are out of date. Refer to kedro_graphql.ui.plugins for 
+    working examples.
+
 **The user interface is experimental**
 
 The `kedro_graphql.ui` module provides a graphical user interface
@@ -29,23 +33,23 @@ Start the UI server.  Fetch the ui.yaml from the [UI YAML Specification](#ui-yam
 section below or from the repository.
 
 ```bash
-kedro gql --ui --ui-spec ui.yaml
+kedro gql --ui --ui-spec spec-ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
 ```bash
-kedro gql -r -u --ui-spec ui.yaml
+kedro gql -r -u --ui-spec spec-ui.yaml
 ```
 
 Start the GraphQL API.
 ```bash
-kedro gql -r  --api-spec api.yaml
+kedro gql -r  --api-spec spec-api.yaml
 ```
 
 Start a worker.
 ```bash
-kedro gql -r -w --api-spec api.yaml
+kedro gql -r -w --api-spec spec-api.yaml
 ```
 
 Start supporting services (e.g. mongo, redis, etc...).

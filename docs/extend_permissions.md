@@ -100,6 +100,29 @@ config:
 
 This will require only that the `X-Forwarded-Email` header is present for access.
 
+### Example: Starting the API and UI with Authenticated Specs
+
+To start the Kedro GraphQL API and UI using authenticated YAML specs, use the following commands:
+
+```bash
+# Start the API server with authentication
+kedro gql --api-spec spec-api-auth.yaml
+
+# Start the UI server with authentication
+kedro gql --ui --ui-spec spec-ui-auth.yaml
+```
+
+Once started, you can open your web browser to access:
+
+- **API GraphQL Playground:** [http://localhost:4180/graphql](http://localhost:4180/graphql)
+- **Kedro GraphQL UI:** [http://localhost:4180/](http://localhost:4180/)
+
+These endpoints will be protected by OAuth2 Proxy and require authentication as configured in your spec files.
+
+!!! note 
+    The OAuth2 Proxy must be running.
+    ```docker compose up```
+
 ### How It Works
 
 1. The OAuth2 proxy authenticates the user and sets the appropriate headers.

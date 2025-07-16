@@ -24,13 +24,13 @@ docker-compose up -d
 Start the api server.
 
 ```bash
-kedro gql --api-spec api.yaml
+kedro gql --api-spec spec-api.yaml
 ```
 
 Start a worker (in another terminal).
 
 ```bash
-kedro gql -w --api-spec api.yaml
+kedro gql -w --api-spec spec-api.yaml
 ```
 
 Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
@@ -94,13 +94,13 @@ docker-compose up -d
 Start the api server.
 
 ```bash
-kedro gql --api-spec api.yaml
+kedro gql --api-spec spec-api.yaml
 ```
 
 Start a worker (in another terminal).
 
 ```bash
-kedro gql -w --api-spec api.yaml
+kedro gql -w --api-spec sepc-api.yaml
 ```
 
 ### Start a pipeline

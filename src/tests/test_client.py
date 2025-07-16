@@ -125,6 +125,24 @@ class TestKedroGraphqlClient:
         assert r.id == pipeline.id
 
     @pytest.mark.asyncio
+    async def test_read_datasets(self, mock_create_pipeline_staged, mock_client):
+
+        pipeline_input, expected, pipeline = mock_create_pipeline_staged
+        r = await mock_client.read_datasets(id=pipeline.id, names=["text_in", "text_out"], expires_in_sec=3600)
+        assert isinstance(r, list)
+        assert len(r) == 2
+        assert isinstance(r[0], str)
+
+    @pytest.mark.asyncio
+    async def test_create_datasets(self, mock_create_pipeline_staged, mock_client):
+
+        pipeline_input, expected, pipeline = mock_create_pipeline_staged
+        r = await mock_client.create_datasets(id=pipeline.id, names=["text_in", "text_out"], expires_in_sec=3600)
+        assert isinstance(r, list)
+        assert len(r) == 2
+        assert isinstance(r[0], dict)
+
+    @pytest.mark.asyncio
     async def test_pipeline_events(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline

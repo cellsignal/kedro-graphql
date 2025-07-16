@@ -12,6 +12,8 @@ from kedro_graphql.ui.decorators import ui_data, ui_form, ui_dashboard
 from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
 from kedro_graphql.models import PipelineInput
 import json
+import requests
+from io import StringIO
 
 pn.extension('filedropper')
 
@@ -41,8 +43,7 @@ class BaseExample00Form(pn.viewable.Viewer):
     This class should be subclassed to implement specific forms for the example00 pipeline.
     """
     spec = param.Dict(default={})
-    text_in = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
+    text_in = param.Dict(default={})
     text_out = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     duration = param.Number(default=3)
@@ -51,30 +52,29 @@ class BaseExample00Form(pn.viewable.Viewer):
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
-        pn.state.location.search = "?page=dashboard&pipeline=example00&id=" + pipeline_id
+        pn.state.location.pathname = "/dashboard"
+        pn.state.location.search = "?pipeline=example00&id=" + pipeline_id
+        pn.state.location.reload = True
 
-    async def upload(self, file_dropper):
-        """write a files contents to a temporary file"""
-        for k, v in file_dropper.items():
-            self.text_in = tempfile.NamedTemporaryFile(delete=False)
-            self.text_out = tempfile.NamedTemporaryFile(delete=False)
-            with open(self.text_in.name, "w") as f:
-                f.write(v)
-            print(f"Uploaded {k} to {self.text_in.name}")
-            self.disabled = False
+    async def enable(self, file_dropper):
+        """
+        Enable the run button by setting the disabled flag to False.
+        """
+        self.text_in = file_dropper
+        self.disabled = False
 
     @param.depends("text_in", "text_out", 'duration', 'example')
     async def pipeline_input(self):
         """Create a PipelineInput object with the current parameters."""
 
-        input_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
+        input_dict = {"type": "text.TextDataset", "filepath": next(iter(self.text_in))}
         output_dict = {"type": "text.TextDataset",
                        "filepath": self.text_out.name}
 
         # PipelineInput object
         return PipelineInput(**{
             "name": "example00",
-            "state": "READY",
+            "state": "STAGED",
             "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
                              {"name": "text_out", "config": json.dumps(output_dict)}],
             "parameters": [{"name": "example", "value": self.example},
@@ -90,10 +90,21 @@ class BaseExample00Form(pn.viewable.Viewer):
         yield button
 
     async def run(self, event):
-        """Run the pipeline with the current input and parameters."""
+        """Stages the pipeline, creates the datasets, then updates the pipeline to READY state."""
         p_input = await self.pipeline_input()
-        result = await self.spec["config"]["client"].create_pipeline(p_input)
-        self.navigate(result.id)
+        # Stage the pipeline
+        p = await self.spec["config"]["client"].create_pipeline(p_input)
+        # Create the datasets
+        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        # Upload the file to the signed URL
+        r = requests.post(signed_urls[0]["url"], files=self.text_in,
+                          params=signed_urls[0]["fields"])
+
+        # update the pipeline to READY state
+        p_input.state = "READY"
+        p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
+        # Navigate to the pipeline dashboard
+        self.navigate(p.id)
 
     def __panel__(self):
         raise NotImplementedError
@@ -108,11 +119,13 @@ class Example00PipelineFormV1(BaseExample00Form):
 
     def __init__(self, **params):
         super().__init__(**params)
+        self.text_out = tempfile.NamedTemporaryFile(delete=False)
 
     def __panel__(self):
         """Create the Panel component for the example00 pipeline form."""
         file_dropper = pn.widgets.FileDropper(multiple=False)
-        pn.bind(self.upload, file_dropper, watch=True)
+        # pn.bind(self.upload, file_dropper, watch=True)
+        pn.bind(self.enable, file_dropper, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
@@ -137,11 +150,13 @@ class Example00PipelineFormV2(BaseExample00Form):
 
     def __init__(self, **params):
         super().__init__(**params)
+        self.text_out = tempfile.NamedTemporaryFile(delete=False)
 
     def __panel__(self):
         """Create the Panel component for the example00 pipeline form with additional parameters."""
         file_dropper = pn.widgets.FileDropper(multiple=False)
-        pn.bind(self.upload, file_dropper, watch=True)
+        # pn.bind(self.upload, file_dropper, watch=True)
+        pn.bind(self.enable, file_dropper, watch=True)
 
         form = pn.Card(
             "Another example pipeline form.",
@@ -286,8 +301,7 @@ class BaseExample01Form(pn.viewable.Viewer):
     """
 
     spec = param.Dict(default={})
-    text_in = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
+    text_in = param.Dict(default={})
     uppercase = param.ClassSelector(
         class_=_TemporaryFileWrapper, default=None)
     reversed = param.ClassSelector(
@@ -301,25 +315,22 @@ class BaseExample01Form(pn.viewable.Viewer):
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
-        pn.state.location.search = "?page=dashboard&pipeline=example00&id=" + pipeline_id
+        pn.state.location.pathname = "/dashboard"
+        pn.state.location.search = "?pipeline=example00&id=" + pipeline_id
 
-    async def upload(self, file_dropper):
-        """write a files contents to a temporary file"""
-        for k, v in file_dropper.items():
-            self.text_in = tempfile.NamedTemporaryFile(delete=False)
-            self.uppercase = tempfile.NamedTemporaryFile(delete=False)
-            self.reversed = tempfile.NamedTemporaryFile(delete=False)
-            self.timestamped = tempfile.NamedTemporaryFile(delete=False)
-            with open(self.text_in.name, "w") as f:
-                f.write(v)
-            print(f"Uploaded {k} to {self.text_in.name}")
-            self.disabled = False
+    async def enable(self, file_dropper):
+        """
+        Enable the run button by setting the disabled flag to False.
+        """
+        self.text_in = file_dropper
+        self.disabled = False
 
     @param.depends("text_in", "uppercase", 'reversed', 'timestamped')
     async def pipeline_input(self):
         """Create a PipelineInput object with the current parameters."""
 
-        text_in_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
+        text_in_dict = {"type": "text.TextDataset",
+                        "filepath": next(iter(self.text_in))}
         uppercase_dict = {"type": "text.TextDataset",
                           "filepath": self.uppercase.name}
         reversed_dict = {"type": "text.TextDataset",
@@ -349,8 +360,19 @@ class BaseExample01Form(pn.viewable.Viewer):
     async def run(self, event):
         """Run the pipeline with the current input and parameters."""
         p_input = await self.pipeline_input()
-        result = await self.spec["config"]["client"].create_pipeline(p_input)
-        self.navigate(result.id)
+        # Stage the pipeline
+        p = await self.spec["config"]["client"].create_pipeline(p_input)
+        # Create the datasets
+        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        # Upload the file to the signed URL
+        r = requests.post(signed_urls[0]["url"], files=self.text_in,
+                          params=signed_urls[0]["fields"])
+
+        # update the pipeline to READY state
+        p_input.state = "READY"
+        p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
+        # Navigate to the pipeline dashboard
+        self.navigate(p.id)
 
     def __panel__(self):
         raise NotImplementedError
@@ -368,7 +390,7 @@ class Example01PipelineFormV1(BaseExample01Form):
 
     def __panel__(self):
         file_dropper = pn.widgets.FileDropper(multiple=False)
-        pn.bind(self.upload, file_dropper, watch=True)
+        pn.bind(self.enable, file_dropper, watch=True)
 
         form = pn.Card(
             "An example pipeline form.",
