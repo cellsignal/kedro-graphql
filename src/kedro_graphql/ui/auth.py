@@ -1,7 +1,7 @@
 from panel.auth import GenericLoginHandler, log, _deserialize_state, decode_response_body, decode_token, OAuthLoginHandler
 from panel.config import config
 from panel.io.state import state
-from tornado.httpclient import HTTPError as HTTPClientError, HTTPRequest
+from tornado.httpclient import HTTPError as HTTPClientError, HTTPRequest, HTTPError
 import urllib.parse as urlparse
 
 
