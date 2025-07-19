@@ -19,11 +19,7 @@ The following table describes each configuration attribute available:
 | `deprecation_docs`                     | URL to documentation about deprecated features.                                                  |
 | `log_tmp_dir`                          | Directory path for temporary log files.                                                          |
 | `log_path_prefix`                      | Optional prefix for log file paths.                                                              |
-| `events_config`                        | Dictionary mapping event names to their configuration (source, type, etc.).                      |
-| `permissions`                          | Python path to the permissions class used for authentication.                                    |
-| `permissions_role_to_action_mapping`   | Mapping of roles to allowed actions within the API.                                              |
-| `permissions_group_to_role_mapping`    | Mapping of external group names to roles for access control.                                     |
-| `presigned_url_max_expires_in_sec`    | Maximum allowed expiration time (in seconds) for presigned URLs. Default: `43200` (12 hours). |
+| `signed_url_max_expires_in_sec`    | Maximum allowed expiration time (in seconds) for presigned URLs. Default: `43200` (12 hours). |
 | `local_file_provider_server_url`       | Base URL for the local file server (e.g., `http://localhost:5000`).                             |
 | `local_file_provider_jwt_secret_key`   | Secret key for signing JWT tokens for local file access.                                        |
 | `local_file_provider_jwt_algorithm`    | Algorithm used for JWT signing (e.g., `HS256`).                                                |
@@ -34,7 +30,7 @@ The following table describes each configuration attribute available:
 | `permissions`                          | Python path to the permissions class used for authentication.                                    |
 | `permissions_role_to_action_map`       | Mapping of roles to allowed actions.                                                              |
 | `permissions_group_to_role_map`        | Mapping of external group names to roles.                                                        |
-| `presigned_url_provider`                  | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
+| `signed_url_provider`                  | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
 
 
 
@@ -65,7 +61,7 @@ KEDRO_GRAPHQL_ENV=local
 KEDRO_GRAPHQL_CONF_SOURCE=None
 KEDRO_GRAPHQL_LOG_TMP_DIR=my_tmp_dir/
 KEDRO_GRAPHQL_LOG_PATH_PREFIX=s3://my-bucket/
-KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC=43200
+KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC=43200
 KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL=http://localhost:5000
 KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY=your_secret_key
 KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM=HS256
@@ -127,7 +123,7 @@ config:
       source: "example.com"
       type: "com.example.event"
   permissions: "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail"
-  permissions_role_to_action_mapping:
+  permissions_role_to_action_map:
     admin:
       - "create_pipeline"
       - "read_pipeline"
@@ -141,7 +137,7 @@ config:
       - "subscribe_to_events"
       - "subscribe_to_logs"
       - "create_event"
-  permissions_group_to_role_mapping: 
+  permissions_group_to_role_map: 
       EXTERNAL_GROUP_NAME: 
           - admin
 
@@ -152,5 +148,5 @@ config:
 Use the `--api-spec` flag to specify the path to the configuration file 
 
 ```
-kedro gql --api-spec api.yaml
+kedro gql --api-spec spec-api.yaml
 ```

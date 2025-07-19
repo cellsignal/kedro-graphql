@@ -85,6 +85,7 @@ config:
 ```
 
 This configuration will:
+
 - Use the `IsAuthenticatedXForwardedRBAC` permission class for all API actions.
 - Map external groups (e.g., from your identity provider) to roles (`admin-group` → `admin`, `user-group` → `user`).
 - Define which actions each role is allowed to perform.

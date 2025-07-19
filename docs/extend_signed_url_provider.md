@@ -38,7 +38,7 @@ The `kedro_graphql.signed_url` module provides a standardized interface for gene
 ### Available Providers
 
 - **LocalFileProvider**
-    - Generates esigned URLs for files stored on the local filesystem.
+    - Generates signed URLs for files stored on the local filesystem.
     - Uses JWT tokens to authorize access and uses the following REST endpoints:
         - `/upload`
         - `/download`
@@ -54,14 +54,14 @@ The provider is selected via configuration (e.g., in your config or YAML spec):
 
 ```yaml
 config:
-  KEDRO_GRAPHQL_SIGNED_URL_PROVIDER: "kedro_graphql.presigned_url.s3_provider.S3Provider"
+  KEDRO_GRAPHQL_SIGNED_URL_PROVIDER: "kedro_graphql.signed_url.s3_provider.S3Provider"
 ```
 
 Or for local files:
 
 ```yaml
 config:
-  KEDRO_GRAPHQL_SIGNED_URL_PROVIDER: "kedro_graphql.presigned_url.local_file_provider.LocalFileProvider"
+  KEDRO_GRAPHQL_SIGNED_URL_PROVIDER: "kedro_graphql.signed_url.local_file_provider.LocalFileProvider"
 ```
 
 The API will use the configured provider to generate signed URLs for dataset operations.

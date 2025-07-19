@@ -23,7 +23,7 @@ config:
       source: "example.com"
       type: "com.example.event"
   permissions: "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail"
-  permissions_role_to_action_mapping:
+  permissions_role_to_action_map:
     admin:
       - "create_pipeline"
       - "read_pipeline"
@@ -37,7 +37,7 @@ config:
       - "subscribe_to_events"
       - "subscribe_to_logs"
       - "create_event"
-  permissions_group_to_role_mapping: 
+  permissions_group_to_role_map: 
       EXTERNAL_GROUP_NAME: 
           - admin
   local_file_provider_server_url: "http://localhost:4180"

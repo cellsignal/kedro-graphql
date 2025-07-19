@@ -40,7 +40,7 @@ Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
 The [docker-compose.yaml](./docker-compose.yaml) includes
 [mongo-express](https://github.com/mongo-express/mongo-express) and
 [redis-commander](https://github.com/joeferner/redis-commander) services
-to provide easy acess to MongoDB and redis.
+to provide easy access to MongoDB and redis.
 
 Navigate to <http://127.0.0.1:8082> to access mongo-express interface.
 
@@ -54,7 +54,7 @@ One can access the task queues created and managed by
 
 ## Example
 
-The kedro-graphl package contains an very simple example
+The kedro-graphql package contains an very simple example
 pipeline called "example00".
 
 ### Setup
@@ -100,7 +100,7 @@ kedro gql --api-spec spec-api.yaml
 Start a worker (in another terminal).
 
 ```bash
-kedro gql -w --api-spec sepc-api.yaml
+kedro gql -w --api-spec spec-api.yaml
 ```
 
 ### Start a pipeline

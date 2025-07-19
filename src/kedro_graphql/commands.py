@@ -46,7 +46,7 @@ def commands():
 @click.option(
     "--app",
     "-a",
-    default=defaults["KEDRO_GRAPHQL_APP"],
+    default=None,
     help="Application import path"
 )
 @click.option(
@@ -78,7 +78,7 @@ def commands():
 @click.option(
     "--imports",
     "-i",
-    default=defaults["KEDRO_GRAPHQL_IMPORTS"],
+    default=None
     help="Additional import paths"
 )
 @click.option(

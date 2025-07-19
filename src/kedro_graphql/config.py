@@ -28,7 +28,7 @@ defaults = {
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
     "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
     "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
-    "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.plugins.presigned_url.s3_provider.S3PreSignedUrlProvider",
+    "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.signed_url.s3_provider.S3Provider",
     "KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC": 43200,
     "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL": "http://localhost:5000",
     "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY": "my-secret-key",
@@ -97,6 +97,15 @@ def env_var_parser(config):
         if isinstance(config["KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP"], str):
             config["KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP"] = json.loads(
                 (config["KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP"]))
+    if config.get("KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS", None):
+        if isinstance(config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"], str):
+            config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"] = json.loads(
+                config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"])
+    if config.get("KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS", None):
+        if isinstance(config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"], str):
+            config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"] = json.loads(
+                config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"])
+
     return config
 
 
