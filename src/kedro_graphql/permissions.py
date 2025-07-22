@@ -98,7 +98,7 @@ class IsAuthenticatedAlways(IsAuthenticatedAction):
         """
 
         logger.info(
-            "authentication disabled - permission granted    - user=None, action=None, source={s}".format(s=str(source)))
+            "authentication disabled - permission granted - user=None, action={a}, source={s}".format(s=str(source), a=str(self.action)))
         return True
 
 

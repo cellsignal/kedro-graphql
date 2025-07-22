@@ -1,6 +1,5 @@
 from cloudevents.pydantic import CloudEvent
 import json
-import uuid
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
@@ -13,7 +12,6 @@ import strawberry
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
-# from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 # from strawberry.permission import PermissionExtension
 
@@ -31,11 +29,6 @@ CONFIG = load_config()
 
 def mark_deprecated(default=None):
     return strawberry.field(default=default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
-
-
-@strawberry.type
-class SignedUrlRead:
-    url: str
 
 
 @strawberry.type
@@ -109,7 +102,7 @@ class ParameterInput:
 
     @staticmethod
     def create(parameters: dict):
-        
+
         def _create_parameter_input(name, value):
 
             type_map = [
@@ -120,15 +113,16 @@ class ParameterInput:
             ]
 
             try:
-                type_enum: ParameterType = next(t[1] for t in type_map if type(value) == t[0])
+                type_enum: ParameterType = next(
+                    t[1] for t in type_map if type(value) == t[0])
             except StopIteration:
                 raise ValueError(
                     f"Only primitive types are supported ({' '.join(str(x[0]) for x in type_map)}). Got {type(value)}"
                 )
-            
-            return ParameterInput(name = name, value = str(value), type = type_enum.value.upper())
-            
-        params =[_create_parameter_input(k,v) for k,v in parameters.items()]
+
+            return ParameterInput(name=name, value=str(value), type=type_enum.value.upper())
+
+        params = [_create_parameter_input(k, v) for k, v in parameters.items()]
         return params
 
 
@@ -179,90 +173,6 @@ class DataSet:
     name: str
     config: Optional[str] = None
     tags: Optional[List[Tag]] = None
-
-    # @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
-    # def pre_signed_url_create(self, expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> JSON | None:
-    # """
-    # Get a presigned URL for uploading a dataset.
-
-    # Args:
-    # expires_in_sec (int): The number of seconds the presigned URL should be valid for.
-
-    # Returns:
-    # JSON | None: A presigned URL for uploading the dataset or None if not applicable.
-
-    # Raises:
-    # ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
-    # """
-    # if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
-    # raise ValueError(
-    # f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
-
-    # try:
-    # config = json.loads(self.config)
-    # filepath = config.get("filepath", None)
-    # if not filepath:
-    # raise ValueError(
-    # "Invalid dataset configuration. Must have 'filepath' key")
-    # except json.JSONDecodeError as e:
-    # raise ValueError(f"Unable to parse JSON in config: {e}")
-    # except Exception as e:
-    # raise ValueError(f"Invalid dataset configuration: {e}")
-
-    # if _parse_filepath(filepath)["protocol"] == "file":
-    # return LocalFileProvider.pre_signed_url_create(filepath, expires_in_sec)
-
-    # module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(
-    # ".", 1)
-    # module = import_module(module_path)
-    # cls = getattr(module, class_name)
-
-    # if not issubclass(cls, PreSignedUrlProvider):
-    # raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
-
-    # return cls.pre_signed_url_create(filepath, expires_in_sec)
-
-    # @strawberry.field(extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    # def pre_signed_url_read(self, expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> str | None:
-    # """
-    # Get a presigned URL for downloading a dataset.
-
-    # Args:
-    # expires_in_sec (int): The number of seconds the presigned URL should be valid for.
-    # Returns:
-    # str | None: A presigned URL for downloading the dataset or None if not applicable.
-
-    # Raises:
-    # ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
-    # """
-
-    # if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
-    # raise ValueError(
-    # f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
-
-    # try:
-    # config = json.loads(self.config)
-    # filepath = config.get("filepath", None)
-    # if not filepath:
-    # raise ValueError(
-    # "Invalid dataset configuration. Must have 'filepath' key")
-    # except json.JSONDecodeError as e:
-    # raise ValueError(f"Unable to parse JSON in config: {e}")
-    # except Exception as e:
-    # raise ValueError(f"Invalid dataset configuration: {e}")
-
-    # if _parse_filepath(filepath)["protocol"] == "file":
-    # return LocalFileProvider.pre_signed_url_read(filepath, expires_in_sec)
-
-    # module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(
-    # ".", 1)
-    # module = import_module(module_path)
-    # cls = getattr(module, class_name)
-
-    # if not issubclass(cls, PreSignedUrlProvider):
-    # raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
-
-    # return cls.pre_signed_url_read(filepath, expires_in_sec)
 
     @strawberry.field
     def exists(self) -> bool:
@@ -339,7 +249,7 @@ class DataCatalogInput:
 
             print(catalog)
 
-            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None), 
+            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
              DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
 
         """
@@ -494,17 +404,19 @@ class PipelineInput:
 
             print(p)
 
-            PipelineInput(name='example00', 
+            PipelineInput(name='example00',
                           parameters=[
-                            ParameterInput(name='example', 
-                                           value='hello', 
-                                           type=<ParameterType.STRING: 'string'>), 
+                            ParameterInput(name='example',
+                                           value='hello',
+                                           type=<ParameterType.STRING: 'string'>),
                             ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
-                          ], 
+                          ],
                           data_catalog=[
-                            DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'), 
-                            DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
-                          ], 
+                            DataSetInput(
+                                name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
+                            DataSetInput(
+                                name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
+                          ],
                           tags=[TagInput(key='owner', value='sean')])
 
             print(jsonable_encoder(p))
@@ -523,7 +435,7 @@ class PipelineInput:
 
         """
         if tags:
-            tags = [TagInput(key=k, value=v) for t in tags for k, v in t.items()]
+            tags = [TagInput(key=k, value=v) for t in tags for k, v in tags.items()]
 
         if data_catalog:
             data_catalog = DataCatalogInput.create(data_catalog)

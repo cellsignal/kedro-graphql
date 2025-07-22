@@ -43,9 +43,7 @@ class BaseExample00Form(pn.viewable.Viewer):
     This class should be subclassed to implement specific forms for the example00 pipeline.
     """
     spec = param.Dict(default={})
-    text_in = param.Dict(default={})
-    text_out = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
+    upload = param.Dict(default={})
     duration = param.Number(default=3)
     example = param.String(default="hello")
     disabled = param.Boolean(default=True)
@@ -60,14 +58,14 @@ class BaseExample00Form(pn.viewable.Viewer):
         """
         Enable the run button by setting the disabled flag to False.
         """
-        self.text_in = file_dropper
+        self.upload = file_dropper
         self.disabled = False
 
     @param.depends("text_in", "text_out", 'duration', 'example')
     async def pipeline_input(self):
         """Create a PipelineInput object with the current parameters."""
 
-        input_dict = {"type": "text.TextDataset", "filepath": next(iter(self.text_in))}
+        input_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
         output_dict = {"type": "text.TextDataset",
                        "filepath": self.text_out.name}
 
@@ -95,11 +93,17 @@ class BaseExample00Form(pn.viewable.Viewer):
         # Stage the pipeline
         p = await self.spec["config"]["client"].create_pipeline(p_input)
         # Create the datasets
-        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
-        # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=self.text_in,
-                          params=signed_urls[0]["fields"])
+        signed_urls, pipeline = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
 
+        filename, content = list(self.upload.items())[0]
+        files = {
+            "token": (None, signed_urls[0]["fields"]["token"]),
+            "file": (filename, content),
+        }
+        # Upload the file to the signed URL
+        r = requests.post(signed_urls[0]["url"], files=files)
+
+        p_input = pipeline.encode(encoder="input")
         # update the pipeline to READY state
         p_input.state = "READY"
         p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
@@ -119,6 +123,7 @@ class Example00PipelineFormV1(BaseExample00Form):
 
     def __init__(self, **params):
         super().__init__(**params)
+        self.text_in = tempfile.NamedTemporaryFile(delete=False)
         self.text_out = tempfile.NamedTemporaryFile(delete=False)
 
     def __panel__(self):
@@ -364,9 +369,13 @@ class BaseExample01Form(pn.viewable.Viewer):
         p = await self.spec["config"]["client"].create_pipeline(p_input)
         # Create the datasets
         signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        filename, content = list(self.text_in.items())[0]
+        files = {
+            "token": (None, signed_urls[0]["fields"]["token"]),
+            "file": (filename, content),
+        }
         # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=self.text_in,
-                          params=signed_urls[0]["fields"])
+        r = requests.post(signed_urls[0]["url"], files=files)
 
         # update the pipeline to READY state
         p_input.state = "READY"

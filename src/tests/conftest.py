@@ -276,6 +276,34 @@ def mock_pipeline(mock_celery_session_app,
 
 
 @pytest.fixture
+def mock_pipeline_staged(mock_app):
+
+    inputs = [{"name": "text_in", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.csv"})}]
+    outputs = [{"name": "text_out", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": "./data/01_raw/text_out.csv"})}]
+    parameters = [{"name": "example", "value": "hello"}]
+    tags = [{"key": "author", "value": "opensean"}, {
+        "key": "package", "value": "kedro-graphql"}]
+
+    p = Pipeline(
+        name="example00",
+        data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
+        parameters=[Parameter(**p) for p in parameters],
+        tags=[Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.STAGED,
+                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                               session=mock_app.kedro_session.session_id,
+                               started_at=datetime.now(),
+                               task_name=str(run_pipeline))]
+    )
+
+    p.created_at = datetime.now()
+    p = mock_app.backend.create(p)
+    return p
+
+
+@pytest.fixture
 def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     inputs = [{"name": "text_in", "config": json.dumps(

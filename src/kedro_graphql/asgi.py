@@ -47,7 +47,7 @@ class KedroGraphQL(FastAPI):
         self.resolver_plugins = RESOLVER_PLUGINS
         self.type_plugins = TYPE_PLUGINS
 
-        discover_plugins(self.config)
+        # discover_plugins(self.config)
         self.schema = build_schema(self.type_plugins)
         self.backend = init_backend(self.config)
         self.graphql_app = GraphQLRouter(self.schema)

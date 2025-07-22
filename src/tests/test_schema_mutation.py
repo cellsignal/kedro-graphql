@@ -8,8 +8,8 @@ IN_DEV = True
 
 class TestSchemaMutations:
     create_pipeline_mutation = """
-        mutation CreatePipeline($pipeline: PipelineInput!) {
-          createPipeline(pipeline: $pipeline) {
+        mutation CreatePipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
+          createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) {
               id
               name
               describe
@@ -56,8 +56,8 @@ class TestSchemaMutations:
         """
 
     update_pipeline_mutation = """
-        mutation UpdatePipeline($pipeline: PipelineInput!, $id: String!) {
-          updatePipeline(pipeline: $pipeline, id: $id) {
+        mutation UpdatePipeline($pipeline: PipelineInput!, $id: String!, $uniquePaths: [String!]) {
+          updatePipeline(pipeline: $pipeline, id: $id, uniquePaths: $uniquePaths) {
             id
             name
             describe
@@ -158,13 +158,13 @@ class TestSchemaMutations:
         """
 
     @pytest.mark.asyncio
-    async def test_pipeline(self,
-                            mock_app,
-                            mock_celery_session_app,
-                            celery_session_worker,
-                            mock_info_context,
-                            mock_text_in,
-                            mock_text_out):
+    async def test_create_pipeline_00(self,
+                                      mock_app,
+                                      mock_celery_session_app,
+                                      celery_session_worker,
+                                      mock_info_context,
+                                      mock_text_in,
+                                      mock_text_out):
 
         resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                              variable_values={"pipeline": {
@@ -176,56 +176,65 @@ class TestSchemaMutations:
                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                             }})
+                                             },
+                                                 "uniquePaths": ["text_in", "text_out"]})
 
         assert resp.errors is None
+        # check filepaths are unique
+        datasets = {d["name"]: json.loads(d["config"])
+                    for d in resp.data["createPipeline"]["dataCatalog"]}
+        assert datasets["text_in"]["filepath"] != str(mock_text_in)
+        assert datasets["text_out"]["filepath"] != str(mock_text_out)
+        # making sure the uniquePaths parameter is working
+        assert str(resp.data["createPipeline"]["id"]
+                   ) == datasets["text_in"]["filepath"].rsplit("/", 2)[1]
 
-    @pytest.mark.skipif(IN_DEV, reason="credential support in development")
+    # @pytest.mark.skipif(IN_DEV, reason="credential support in development")
+    # @pytest.mark.asyncio
+    # async def test_pipeline_creds(self,
+    # mock_app,
+    # mock_celery_worker_app,
+    # celery_session_worker,
+    # mock_info_context,
+    # mock_text_in,
+    # mock_text_out):
+
+    # resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+    # variable_values={"pipeline": {
+    # "name": "example00",
+    # "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in), "credentials": "my_creds"})},
+    # {"name": "text_out", "config": json.dumps(
+    # {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+    # ],
+    # "parameters": [{"name": "example", "value": "hello"}],
+    # "tags": [{"key": "author", "value": "opensean"},
+    # {"key": "package", "value": "kedro-graphql"}],
+    # "credentials": [{"name": "my_creds",
+    # "value": [
+    # {"name": "key",
+    # "value": "admin"},
+    # {"name": "secret",
+    # "value": "password"}
+    # ]}],
+    # "credentialsNested": [{"name": "my_creds",
+    # "value": [{"name": "client_kwargs",
+    # "value": [{"name": "endpoint_url",
+    # "value": "http://localhost:9000"
+    # }]
+    # }]
+    # }]
+    # }})
+
+    # assert resp.errors is None
+
     @pytest.mark.asyncio
-    async def test_pipeline_creds(self,
-                                  mock_app,
-                                  mock_celery_worker_app,
-                                  celery_session_worker,
-                                  mock_info_context,
-                                  mock_text_in,
-                                  mock_text_out):
-
-        resp = await mock_app.schema.execute(self.create_pipeline_mutation,
-                                             variable_values={"pipeline": {
-                                                 "name": "example00",
-                                                 "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in), "credentials": "my_creds"})},
-                                                                 {"name": "text_out", "config": json.dumps(
-                                                                     {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
-                                                                 ],
-                                                 "parameters": [{"name": "example", "value": "hello"}],
-                                                 "tags": [{"key": "author", "value": "opensean"},
-                                                          {"key": "package", "value": "kedro-graphql"}],
-                                                 "credentials": [{"name": "my_creds",
-                                                                  "value": [
-                                                                      {"name": "key",
-                                                                          "value": "admin"},
-                                                                      {"name": "secret",
-                                                                          "value": "password"}
-                                                                  ]}],
-                                                 "credentialsNested": [{"name": "my_creds",
-                                                                        "value": [{"name": "client_kwargs",
-                                                                                   "value": [{"name": "endpoint_url",
-                                                                                              "value": "http://localhost:9000"
-                                                                                              }]
-                                                                                   }]
-                                                                        }]
-                                             }})
-
-        assert resp.errors is None
-
-    @pytest.mark.asyncio
-    async def test_pipeline2(self,
-                             mock_app,
-                             mock_celery_session_app,
-                             celery_session_worker,
-                             mock_info_context,
-                             mock_text_in_tsv,
-                             mock_text_out_tsv):
+    async def test_create_pipeline_01(self,
+                                      mock_app,
+                                      mock_celery_session_app,
+                                      celery_session_worker,
+                                      mock_info_context,
+                                      mock_text_in_tsv,
+                                      mock_text_out_tsv):
 
         resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                              variable_values={"pipeline": {
@@ -238,12 +247,13 @@ class TestSchemaMutations:
                                                  ],
                                                  "parameters": [{"name": "example", "value": "hello"}],
                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                             }})
+                                             },
+                                                 "uniquePaths": None})
 
         assert resp.errors is None
 
     @pytest.mark.asyncio
-    async def test_create_staged_pipeline(self,
+    async def test_create_pipeline_staged(self,
                                           mock_app,
                                           mock_celery_session_app,
                                           celery_session_worker,
@@ -262,7 +272,8 @@ class TestSchemaMutations:
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "STAGED",
                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                                             }})
+                                                             },
+                                                                 "uniquePaths": None})
 
         pipeline_state = create_pipeline_resp.data["createPipeline"]["status"][-1]["state"]
 
@@ -270,13 +281,13 @@ class TestSchemaMutations:
         assert pipeline_state == "STAGED"
 
     @pytest.mark.asyncio
-    async def test_create_valid_ready_pipeline(self,
-                                               mock_app,
-                                               mock_celery_session_app,
-                                               celery_session_worker,
-                                               mock_info_context,
-                                               mock_text_in,
-                                               mock_text_out):
+    async def test_create_pipeline_ready(self,
+                                         mock_app,
+                                         mock_celery_session_app,
+                                         celery_session_worker,
+                                         mock_info_context,
+                                         mock_text_in,
+                                         mock_text_out):
 
         create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
@@ -289,7 +300,8 @@ class TestSchemaMutations:
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                                             }})
+                                                             },
+                                                                 "uniquePaths": None})
 
         pipeline_state = create_pipeline_resp.data["createPipeline"]["status"][-1]["state"]
 
@@ -297,7 +309,7 @@ class TestSchemaMutations:
         assert pipeline_state != "STAGED"
 
     @pytest.mark.asyncio
-    async def test_create_invalid_name_ready_pipeline(self,
+    async def test_create_pipeline_ready_invalid_name(self,
                                                       mock_app,
                                                       mock_celery_session_app,
                                                       celery_session_worker,
@@ -316,7 +328,8 @@ class TestSchemaMutations:
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                                             }})
+                                                             },
+                                                                 "uniquePaths": None})
 
         assert create_pipeline_resp.errors is not None
 
@@ -333,7 +346,9 @@ class TestSchemaMutations:
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "state": "STAGED",
-                                                             }})
+                                                             },
+                                                                 "uniquePaths": None
+                                                             })
 
         pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
 
@@ -349,7 +364,8 @@ class TestSchemaMutations:
                                                                                                  {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                                   "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}],
                                                                                   "state": "READY",
-                                                                              }
+                                                                              },
+                                                                              "uniquePaths": None
                                                                               })
         assert update_pipeline_resp.errors is None
         assert update_pipeline_resp.data["updatePipeline"]["status"][-1]["state"] != "STAGED"
@@ -385,7 +401,7 @@ class TestSchemaMutations:
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
-                                                             }})
+                                                             }, "uniquePaths": None})
 
         pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
 
@@ -414,7 +430,7 @@ class TestSchemaMutations:
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
 
-                                                             }})
+                                                             }, "uniquePaths": None})
 
         query = """
     	  subscription {
@@ -431,8 +447,6 @@ class TestSchemaMutations:
             assert not result.errors
             if result.data["pipeline"]["status"] == "SUCCESS":
                 break
-        print("RESULT:", mock_app.backend.read(
-            create_pipeline_resp.data["createPipeline"]["id"]))
         dataset_names = {ds.name for ds in mock_app.backend.read(
             create_pipeline_resp.data["createPipeline"]["id"]).data_catalog}
 
@@ -463,7 +477,7 @@ class TestSchemaMutations:
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
-                                                             }})
+                                                             }, "uniquePaths": None})
 
         query = """
     	  subscription {
@@ -510,7 +524,7 @@ class TestSchemaMutations:
                                                                  "parameters": [{"name": "example", "value": "hello"},
                                                                                 {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                                  "state": "READY",
-                                                             }})
+                                                             }, "uniquePaths": None})
         query = """
     	  subscription {
           	pipeline(id:""" + '"' + str(create_pipeline_resp.data["createPipeline"]["id"]) + '"' + """) {
@@ -535,11 +549,18 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_create_datasets(self,
                                    mock_app,
-                                   mock_info_context,
-                                   mock_pipeline):
+                                   mock_info_context):
+
+        # create a staged pipeline
+        response = await mock_app.schema.execute(self.create_pipeline_mutation,
+                                                 variable_values={"pipeline": {
+                                                     "name": "example00",
+                                                     "state": "STAGED",
+                                                 },
+                                                     "uniquePaths": None})
 
         create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
-                                                             variable_values={"id": str(mock_pipeline.id),
+                                                             variable_values={"id": str(response.data["createPipeline"]["id"]),
                                                                               "names": ["text_in", "text_out"],
                                                                               "expiresInSec": 3600})
 
@@ -548,3 +569,16 @@ class TestSchemaMutations:
         assert isinstance(create_datasets_resp.data["createDatasets"], list)
         assert isinstance(create_datasets_resp.data["createDatasets"][0], dict)
         assert len(create_datasets_resp.data["createDatasets"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_create_datasets_not_staged(self,
+                                              mock_app,
+                                              mock_pipeline,
+                                              mock_info_context):
+
+        create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
+                                                             variable_values={"id": str(mock_pipeline.id),
+                                                                              "names": ["text_in", "text_out"],
+                                                                              "expiresInSec": 3600})
+        assert create_datasets_resp.errors is not None
+        assert create_datasets_resp.data is None

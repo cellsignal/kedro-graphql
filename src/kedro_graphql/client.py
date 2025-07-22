@@ -5,7 +5,7 @@ from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEve
 from kedro_graphql.config import load_config
 import backoff
 from gql.transport.exceptions import TransportQueryError
-from typing import Optional
+from typing import Optional, List
 import logging
 
 logger = logging.getLogger("kedro-graphql")
@@ -124,7 +124,7 @@ class KedroGraphqlClient():
         result = await session.execute(gql(query), variable_values=variable_values)
         return result
 
-    async def create_pipeline(self, pipeline_input: PipelineInput = None):
+    async def create_pipeline(self, pipeline_input: PipelineInput = None, unique_paths: List[str] = None):
         """Create a pipeline
 
         Kwargs:
@@ -134,12 +134,12 @@ class KedroGraphqlClient():
             Pipeline: pipeline object
         """
         query = """
-            mutation createPipeline($pipeline: PipelineInput!) {
-              createPipeline(pipeline: $pipeline) """ + self.pipeline_gql + """
+            mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
+              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) """ + self.pipeline_gql + """
             }
         """
 
-        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql")})
+        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths})
         return Pipeline.decode(result["createPipeline"], decoder="graphql")
 
     async def read_pipeline(self, id: str = None):
@@ -184,7 +184,7 @@ class KedroGraphqlClient():
         result = await self.execute_query(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
         return Pipelines.decode(result, decoder="graphql")
 
-    async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None):
+    async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None, unique_paths: List[str] = None):
         """Update a pipeline
 
         Kwargs:
@@ -195,12 +195,12 @@ class KedroGraphqlClient():
             Pipeline: pipeline object
         """
         query = """
-            mutation updatePipeline($id: String!, $pipeline: PipelineInput!) {
-              updatePipeline(id: $id, pipeline: $pipeline) """ + self.pipeline_gql + """
+            mutation updatePipeline($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!]) {
+              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths) """ + self.pipeline_gql + """
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql")})
+        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths})
         return Pipeline.decode(result["updatePipeline"], decoder="graphql")
 
     async def delete_pipeline(self, id: str = None):

@@ -5,23 +5,21 @@ from importlib import import_module
 from typing import Optional, Union, List
 from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
-import json
 
 import strawberry
 from bson.objectid import ObjectId
 from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
-from kedro.io.core import _parse_filepath
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
 from strawberry.types import Info
-from strawberry.scalars import JSON
 from strawberry.directive import StrawberryDirective
 from strawberry.types.base import StrawberryType
 from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
 from strawberry.schema.config import StrawberryConfig
+from strawberry.scalars import JSON
 
 from . import __version__ as kedro_graphql_version
 from .config import load_config
@@ -43,7 +41,7 @@ from .models import (
 from .tasks import run_pipeline
 from .permissions import get_permissions
 from .signed_url.base import SignedUrlProvider
-from .signed_url.local_file_provider import LocalFileProvider
+from .utils import generate_unique_paths
 
 CONFIG = load_config()
 logger.debug("configuration loaded by {s}".format(s=__name__))
@@ -179,54 +177,31 @@ class Query:
                 f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         urls = []
-        try:
-            p = info.context["request"].app.backend.read(id=id)
-            for n in names:
-                dataset = None
-                for d in p.data_catalog:
-                    if d.name == n:
-                        dataset = d
-                        break
-                if dataset is None:
-                    logger.warning(
-                        f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
-                    urls.append(None)
-                    continue
+        p = info.context["request"].app.backend.read(id=id)
 
-                c = json.loads(dataset.config)
-                filepath = c.get("filepath", None)
-                if not filepath:
-                    raise ValueError(
-                        "Invalid dataset configuration. Must have 'filepath' key")
+        catalog = {d.name: d for d in p.data_catalog}
 
-                if _parse_filepath(filepath)["protocol"] == "file":
-                    logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, filepath={filepath}, expires_in_sec={expires_in_sec}")
-                    urls.append(LocalFileProvider.read(
-                        filepath, expires_in_sec))
-                    continue
+        for n in names:
+            dataset = catalog.get(n, None)
+            if dataset is None:
+                logger.warning(
+                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                urls.append(None)
+                continue
 
-                else:
-                    module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
-                        ".", 1)
-                    module = import_module(module_path)
-                    cls = getattr(module, class_name)
+            module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
+                ".", 1)
+            module = import_module(module_path)
+            cls = getattr(module, class_name)
 
-                    if not issubclass(cls, SignedUrlProvider):
-                        raise TypeError(
-                            f"{class_name} must inherit from SignedUrlProvider")
+            if not issubclass(cls, SignedUrlProvider):
+                raise TypeError(
+                    f"{class_name} must inherit from SignedUrlProvider")
 
-                    urls.append(LocalFileProvider.get_signed_url(
-                        filepath, expires_in_sec))
-                    logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, filepath={filepath}, expires_in_sec={expires_in_sec}")
-                    urls.append(cls.read(filepath, expires_in_sec))
-                    continue
-
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Unable to parse JSON in config: {e}")
-        except Exception as e:
-            raise ValueError(f"Invalid dataset configuration: {e}")
+            logger.info(
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
+            urls.append(cls.read(info, dataset, expires_in_sec))
+            continue
 
         return urls
 
@@ -234,7 +209,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")])])
-    def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
+    def create_pipeline(self, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
@@ -282,6 +257,10 @@ class Mutation:
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
             p = info.context["request"].app.backend.create(p)
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+                p = info.context["request"].app.backend.update(p)
+
             logger.info(
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
             return p
@@ -295,6 +274,9 @@ class Mutation:
                                            task_name=str(run_pipeline)))
 
             p = info.context["request"].app.backend.create(p)
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+                p = info.context["request"].app.backend.update(p)
 
             result = run_pipeline.delay(
                 id=str(p.id),
@@ -311,7 +293,7 @@ class Mutation:
             return p
 
     @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")])])
-    def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
+    def update_pipeline(self, id: str, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
 
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -353,6 +335,9 @@ class Mutation:
                                               task_id=None,
                                               task_name=str(run_pipeline))
 
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+
             # Update pipeline in backend before running task
             p = info.context["request"].app.backend.update(p)
 
@@ -372,7 +357,7 @@ class Mutation:
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        if pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
+        elif pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
                                            runner=runner,
                                            session=None,
@@ -381,6 +366,8 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
+        if unique_paths:
+            p = generate_unique_paths(p, unique_paths)
         p = info.context["request"].app.backend.update(p)
         logger.info(
             f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
@@ -409,7 +396,7 @@ class Mutation:
         Args:
             id (str): The ID of the pipeline.
             info (Info): The GraphQL execution context.
-            name (str): The name of the dataset.
+            names (List[str]): The names of the datasets.
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
 
         Returns:
@@ -422,55 +409,37 @@ class Mutation:
             raise ValueError(
                 f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
         urls = []
-        try:
-            p = info.context["request"].app.backend.read(id=id)
-            for n in names:
-                dataset = None
-                for d in p.data_catalog:
-                    if d.name == n:
-                        dataset = d
-                        break
-                if dataset is None:
-                    logger.warning(
-                        f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
-                    urls.append(None)
-                    continue
+        p = info.context["request"].app.backend.read(id=id)
 
-                c = json.loads(dataset.config)
-                filepath = c.get("filepath", None)
-                if not filepath:
-                    raise ValueError(
-                        "Invalid dataset configuration. Must have 'filepath' key")
+        if p.status[-1].state.value != "STAGED":
+            raise ValueError(
+                f"Pipeline {p.name} with id {id} must be staged before creating datasets.")
 
-                if _parse_filepath(filepath)["protocol"] == "file":
-                    logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, filepath={filepath}, expires_in_sec={expires_in_sec}")
-                    urls.append(LocalFileProvider.create(
-                        filepath, expires_in_sec))
-                    continue
+        # create dict from pipeline data catalog
+        catalog = {d.name: d for d in p.data_catalog}
 
-                else:
-                    module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
-                        ".", 1)
-                    module = import_module(module_path)
-                    cls = getattr(module, class_name)
+        for n in names:
+            dataset = catalog.get(n, None)
+            if dataset is None:
+                logger.warning(
+                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                urls.append({"name": n, "filepath": None,
+                            "url": None, "fields": {}})
+                continue
+            else:
+                module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
+                    ".", 1)
+                module = import_module(module_path)
+                cls = getattr(module, class_name)
 
-                    if not issubclass(cls, SignedUrlProvider):
-                        raise TypeError(
-                            f"{class_name} must inherit from SignedUrlProvider")
-
-                    urls.append(LocalFileProvider.get_signed_url(
-                        filepath, expires_in_sec))
-                    logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, filepath={filepath}, expires_in_sec={expires_in_sec}")
-                    urls.append(cls.create(filepath, expires_in_sec))
-                    continue
-
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Unable to parse JSON in config: {e}")
-        except Exception as e:
-            raise ValueError(f"Invalid dataset configuration: {e}")
-
+                if not issubclass(cls, SignedUrlProvider):
+                    raise TypeError(
+                        f"{class_name} must inherit from SignedUrlProvider")
+                logger.info(
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, expires_in_sec={expires_in_sec}")
+                url = cls.create(info, dataset, expires_in_sec)
+                urls.append(url)
+                continue
         return urls
 
 

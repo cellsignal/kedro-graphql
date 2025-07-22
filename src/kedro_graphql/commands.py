@@ -78,7 +78,7 @@ def commands():
 @click.option(
     "--imports",
     "-i",
-    default=None
+    default=None,
     help="Additional import paths"
 )
 @click.option(
@@ -209,8 +209,8 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
 
     else:
         if reload:
-            run_process(reload_path, target=start_app, args=(app, config, conf_source,
+            run_process(reload_path, target=start_app, args=(config["KEDRO_GRAPHQL_APP"], config, conf_source,
                         env, metadata.package_name, metadata.project_path))
         else:
-            start_app(app, config, conf_source, env,
+            start_app(config["KEDRO_GRAPHQL_APP"], config, conf_source, env,
                       metadata.package_name, metadata.project_path)
