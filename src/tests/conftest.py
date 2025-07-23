@@ -171,6 +171,7 @@ def mock_info_context(mock_app):
 
     class Request():
         app = mock_app
+        headers = {}
 
     with patch("strawberry.types.Info.context", {"request": Request()}) as m:
         yield m

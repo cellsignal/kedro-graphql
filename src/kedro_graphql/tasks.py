@@ -282,7 +282,8 @@ def run_pipeline(self,
 
         # add parameters to DataCatalog using OmegaConf and dotlist notation
         parameters_dotlist = [f"{key}={value}" for key, value in parameters.items()]
-        conf_parameters = OmegaConf.to_container(OmegaConf.from_dotlist(parameters_dotlist), resolve=True)
+        conf_parameters = OmegaConf.to_container(
+            OmegaConf.from_dotlist(parameters_dotlist), resolve=True)
 
         feed_dict = {"parameters": conf_parameters}
         for param_name, param_value in conf_parameters.items():
@@ -434,8 +435,8 @@ class KedroGraphqlEventTask(Task):
     def create_pipeline_mutation(self):
         if self._create_pipeline_mutation is None:
             self._create_pipeline_mutation = """
-            mutation createPipeline($pipeline: PipelineInput!) {
-              createPipeline(pipeline: $pipeline) """ + PIPELINE_GQL + """
+            mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
+              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) """ + PIPELINE_GQL + """
             }
         """
         return self._create_pipeline_mutation
@@ -444,8 +445,8 @@ class KedroGraphqlEventTask(Task):
     def update_pipeline_mutation(self):
         if self._update_pipeline_mutation is None:
             self._update_pipeline_mutation = """
-            mutation updatePipeline($id: String!, $pipeline: PipelineInput!) {
-              updatePipeline(id: $id, pipeline: $pipeline) """ + PIPELINE_GQL + """
+            mutation updatePipeline($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!]) {
+              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths) """ + PIPELINE_GQL + """
             }
         """
         return self._update_pipeline_mutation
@@ -500,7 +501,7 @@ def handle_event(self, event: str, config: dict):
             pipeline_input = create_pipeline_input(name=k, event=event)
             # Need to STAGE to get a pipeline id to pass as parameter
             resp = asyncio.run(self.schema.execute(self.create_pipeline_mutation,
-                                                   variable_values={"pipeline": pipeline_input.encode(encoder="graphql")}))
+                                                   variable_values={"pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": None}))
             p = Pipeline.decode(resp.data["createPipeline"], decoder="graphql")
             pipeline_input.state = "READY"
             pipeline_input.parameters.append(ParameterInput(
@@ -508,7 +509,7 @@ def handle_event(self, event: str, config: dict):
 
             resp = asyncio.run(self.schema.execute(self.update_pipeline_mutation,
                                                    variable_values={"id": p.id,
-                                                                    "pipeline": pipeline_input.encode(encoder="graphql")}))
+                                                                    "pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": None}))
             p = Pipeline.decode(resp.data["updatePipeline"], decoder="graphql")
             pipelines.append(p.encode(encoder="dict"))
             logger.info(
