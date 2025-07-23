@@ -27,8 +27,7 @@ class BaseExample00Form(pn.viewable.Viewer):
 
     Attributes:
         spec (dict): The specification for the UI, including configuration and pages.
-        text_in (_TemporaryFileWrapper): A temporary file wrapper for the input text file.
-        text_out (_TemporaryFileWrapper): A temporary file wrapper for the output text file.
+        upload (dict): A dictionary to hold the uploaded file.
         duration (int): The duration parameter for the pipeline.
         example (str): An example string parameter for the pipeline.
         button_disabled (bool): A flag to disable the run button until a file is uploaded.
@@ -61,13 +60,14 @@ class BaseExample00Form(pn.viewable.Viewer):
         self.upload = file_dropper
         self.disabled = False
 
-    @param.depends("text_in", "text_out", 'duration', 'example')
+    @param.depends("upload", "duration", "example")
     async def pipeline_input(self):
         """Create a PipelineInput object with the current parameters."""
 
-        input_dict = {"type": "text.TextDataset", "filepath": self.text_in.name}
+        input_dict = {"type": "text.TextDataset",
+                      "filepath": "./data/01_raw/text_in.txt"}
         output_dict = {"type": "text.TextDataset",
-                       "filepath": self.text_out.name}
+                       "filepath": "./data/02_intermediate/text_out.txt"}
 
         # PipelineInput object
         return PipelineInput(**{
@@ -91,9 +91,9 @@ class BaseExample00Form(pn.viewable.Viewer):
         """Stages the pipeline, creates the datasets, then updates the pipeline to READY state."""
         p_input = await self.pipeline_input()
         # Stage the pipeline
-        p = await self.spec["config"]["client"].create_pipeline(p_input)
+        p = await self.spec["config"]["client"].create_pipeline(pipeline_input=p_input, unique_paths=["text_in", "text_out"])
         # Create the datasets
-        signed_urls, pipeline = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
 
         filename, content = list(self.upload.items())[0]
         files = {
@@ -103,8 +103,8 @@ class BaseExample00Form(pn.viewable.Viewer):
         # Upload the file to the signed URL
         r = requests.post(signed_urls[0]["url"], files=files)
 
-        p_input = pipeline.encode(encoder="input")
         # update the pipeline to READY state
+        p_input = p.encode(encoder="input")
         p_input.state = "READY"
         p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
         # Navigate to the pipeline dashboard
@@ -123,8 +123,6 @@ class Example00PipelineFormV1(BaseExample00Form):
 
     def __init__(self, **params):
         super().__init__(**params)
-        self.text_in = tempfile.NamedTemporaryFile(delete=False)
-        self.text_out = tempfile.NamedTemporaryFile(delete=False)
 
     def __panel__(self):
         """Create the Panel component for the example00 pipeline form."""
@@ -306,14 +304,7 @@ class BaseExample01Form(pn.viewable.Viewer):
     """
 
     spec = param.Dict(default={})
-    text_in = param.Dict(default={})
-    uppercase = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
-    reversed = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
-    timestamped = param.ClassSelector(
-        class_=_TemporaryFileWrapper, default=None)
-
+    upload = param.Dict(default={})
     duration = param.Number(default=3)
     example = param.String(default="hello")
     disabled = param.Boolean(default=True)
@@ -322,31 +313,32 @@ class BaseExample01Form(pn.viewable.Viewer):
         """Navigate to the pipeline dashboard with the given ID."""
         pn.state.location.pathname = "/dashboard"
         pn.state.location.search = "?pipeline=example00&id=" + pipeline_id
+        pn.state.location.reload = True
 
     async def enable(self, file_dropper):
         """
         Enable the run button by setting the disabled flag to False.
         """
-        self.text_in = file_dropper
+        self.upload = file_dropper
         self.disabled = False
 
-    @param.depends("text_in", "uppercase", 'reversed', 'timestamped')
+    @param.depends("upload", "duration", "example")
     async def pipeline_input(self):
         """Create a PipelineInput object with the current parameters."""
 
         text_in_dict = {"type": "text.TextDataset",
-                        "filepath": next(iter(self.text_in))}
+                        "filepath": "./data/01_raw/text_in.txt"}
         uppercase_dict = {"type": "text.TextDataset",
-                          "filepath": self.uppercase.name}
+                          "filepath": "./data/02_intermediate/uppercased.txt"}
         reversed_dict = {"type": "text.TextDataset",
-                         "filepath": self.reversed.name}
+                         "filepath": "./data/02_intermediate/reversed.txt"}
         timestamped_dict = {"type": "text.TextDataset",
-                            "filepath": self.timestamped.name}
+                            "filepath": "./data/02_intermediate/timestamped.txt"}
 
         # PipelineInput object
         return PipelineInput(**{
             "name": "example01",
-            "state": "READY",
+            "state": "STAGED",
             "data_catalog": [{"name": "text_in", "config": json.dumps(text_in_dict)},
                              {"name": "uppercased",
                                  "config": json.dumps(uppercase_dict)},
@@ -363,13 +355,14 @@ class BaseExample01Form(pn.viewable.Viewer):
         yield button
 
     async def run(self, event):
-        """Run the pipeline with the current input and parameters."""
+        """Stages the pipeline, creates the datasets, then updates the pipeline to READY state."""
         p_input = await self.pipeline_input()
         # Stage the pipeline
-        p = await self.spec["config"]["client"].create_pipeline(p_input)
+        p = await self.spec["config"]["client"].create_pipeline(pipeline_input=p_input, unique_paths=["text_in", "uppercased", "reversed", "timestamped"])
         # Create the datasets
         signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
-        filename, content = list(self.text_in.items())[0]
+
+        filename, content = list(self.upload.items())[0]
         files = {
             "token": (None, signed_urls[0]["fields"]["token"]),
             "file": (filename, content),
@@ -378,6 +371,7 @@ class BaseExample01Form(pn.viewable.Viewer):
         r = requests.post(signed_urls[0]["url"], files=files)
 
         # update the pipeline to READY state
+        p_input = p.encode(encoder="input")
         p_input.state = "READY"
         p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
         # Navigate to the pipeline dashboard

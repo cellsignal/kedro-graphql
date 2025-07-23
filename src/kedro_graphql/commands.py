@@ -202,9 +202,9 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
     elif worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
-                app, config, conf_source, env, metadata.package_name, metadata.project_path))
+                config["KEDRO_GRAPHQL_APP"], config, conf_source, env, metadata.package_name, metadata.project_path))
         else:
-            start_worker(app, config, conf_source, env,
+            start_worker(config["KEDRO_GRAPHQL_APP"], config, conf_source, env,
                          metadata.package_name, metadata.project_path)
 
     else:

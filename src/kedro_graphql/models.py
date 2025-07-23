@@ -453,7 +453,13 @@ class PipelineInput:
             return jsonable_encoder(self)
         elif encoder == "graphql":
             p = jsonable_encoder(self)
-            return {to_camel_case(k): v for k, v in p.items()}
+            p = {to_camel_case(k): v for k, v in p.items()}
+            # make sure parameter types are uppercase
+            if p.get("parameters", None):
+                for param in p["parameters"]:
+                    if param.get("type", None):
+                        param["type"] = param["type"].upper()
+            return p
         else:
             raise TypeError("encoder must be 'dict' or 'graphql'")
 
@@ -538,8 +544,22 @@ class Pipeline:
             return encoded_pipeline
         elif encoder == "kedro":
             return self.serialize()
+        elif encoder == "input":
+            if self.parameters:
+                parameters = [ParameterInput(name=p.name, value=p.value, type=p.type.value)
+                              for p in self.parameters]
+            else:
+                parameters = None
+            return PipelineInput(
+                name=self.name,
+                data_catalog=[DataSetInput(name=d.name, config=d.config)
+                              for d in self.data_catalog],
+                parameters=parameters,
+                tags=[TagInput(key=t.key, value=t.value)
+                      for t in self.tags] if self.tags else None
+            )
         else:
-            raise TypeError("encoder must be 'dict' or 'kedro'")
+            raise TypeError("encoder must be 'dict', 'kedro', or 'input'")
 
     @classmethod
     def decode(cls, payload, decoder=None):

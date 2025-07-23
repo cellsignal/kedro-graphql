@@ -94,13 +94,37 @@ To implement your own provider, create a new class that inherits from the `Signe
 from kedro_graphql.signed_url.base import SignedUrlProvider
 
 class MyCustomProvider(SignedUrlProvider):
-    def read(self, filepath: str, expires_in_sec: int) -> str | None:
+
+    def read(info: Info, dataset: DataSet, expires_in_sec: int) -> str | None:
+        """
+        Method to get a signed URL for downloading a dataset.
+
+        Args:
+            info (Info): Strawberry GraphQL Info object.
+            dataset (DataSet): The dataset for which to create a signed URL.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
+
+        Returns:
+            str | None: A signed URL for downloading the dataset.
+        """
         # Your logic to generate a signed URL for reading
         pass
 
-    def create(self, filepath: str, expires_in_sec: int) -> dict | None:
+    def create(info: Info, dataset: DataSet, expires_in_sec: int) -> dict | None:
+        """
+        Method to get a signed URL for uploading a dataset.
+
+        Args:
+            info (Info): Strawberry GraphQL Info object.
+            dataset (DataSet): The dataset for which to create a signed URL.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
+
+        Returns:
+            dict | None: A dictionary with the URL to post to and form fields and values to submit with the POST.
+        """
         # Your logic to generate a signed URL for uploading
         pass
+
 ```
 
 - `read`: Should return a signed URL for downloading the dataset.

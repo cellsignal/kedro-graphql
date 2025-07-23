@@ -103,4 +103,7 @@ def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
             else:
                 raise ValueError(
                     f"Dataset {d.name} does not have a 'filepath' key in its configuration.")
+        else:
+            logger.info(
+                f"Dataset {d.name} not in specified datasets list, skipping filepath modification.")
     return pipeline

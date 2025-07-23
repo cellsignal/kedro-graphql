@@ -3,11 +3,7 @@ import json
 import pytest
 from omegaconf import OmegaConf
 
-from kedro_graphql.models import DataSet, Parameter
-from kedro_graphql.models import DataSet, Parameter, ParameterInput
-from pathlib import Path
-from urllib.parse import urlparse, parse_qs
-import jwt
+from kedro_graphql.models import DataSet, Parameter, ParameterInput, PipelineInput, TagInput
 from .utilities import kedro_graphql_config
 
 
@@ -288,3 +284,14 @@ class TestParameter:
                 'step_size': 123123
             }
         }
+
+    def test_pipeline_encode_as_input(self, mock_pipeline_staged):
+        """
+        Tests the Pipeline.encode(encoder="input") method returns a PipelineInput object
+        """
+        result = mock_pipeline_staged.encode(encoder="input")
+        assert isinstance(result, PipelineInput)
+        assert result.name == mock_pipeline_staged.name
+        assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
+        assert len(result.parameters) == len(mock_pipeline_staged.parameters)
+        assert len(result.tags) == len(mock_pipeline_staged.tags)
