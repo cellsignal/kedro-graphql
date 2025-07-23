@@ -1,7 +1,10 @@
 import json
 from functools import reduce
-from urllib.parse import urlparse
 from typing import Any
+from .models import Pipeline
+from urllib.parse import urlparse
+from .logs.logger import logger
+
 
 def merge(a, b, path=None):
     """
@@ -34,7 +37,7 @@ def parse_s3_filepath(filepath: str) -> tuple[str, str]:
         filepath (str): The S3 file path in the format s3://bucket-name/key
 
     Returns:
-        tuple: A tuple containing the bucket name and the S3 key (object path).
+        tuple: A tuple containing the bucket name, the S3 prefix, and the S3 object name.
 
     Raises:
         ValueError: If the filepath does not start with "s3://" or if the bucket name or S3 key is missing.
@@ -46,16 +49,18 @@ def parse_s3_filepath(filepath: str) -> tuple[str, str]:
     parsed = urlparse(filepath)
     bucket_name = parsed.netloc
     s3_key = parsed.path.lstrip("/")
+    filename = s3_key.split("/")[-1]
+    s3_key = "/".join(s3_key.split("/")[:-1])  # Remove the filename from the key
 
     if not bucket_name:
         raise ValueError("Invalid S3 path. Bucket name is missing.")
-    if not s3_key:
-        raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
+    # if not s3_key:
+    #    raise ValueError("Invalid S3 path. S3 key (object path) is missing.")
 
-    return bucket_name, s3_key
+    return bucket_name, s3_key, filename
 
 
-def add_param_to_feed_dict(feed_dict, param_name: str, param_value: Any, add_prefix = True) -> None:
+def add_param_to_feed_dict(feed_dict, param_name: str, param_value: Any, add_prefix=True) -> None:
     """Context-free version of utility found inside KedroContext._get_feed_dict method. Option to add params: prefix if desired.
 
     Example:
@@ -74,3 +79,31 @@ def add_param_to_feed_dict(feed_dict, param_name: str, param_value: Any, add_pre
             add_param_to_feed_dict(feed_dict, f"{param_name}.{key}", val)
 
 
+def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
+    """Modifies filepaths in the pipeline's data catalog to ensure they are unique.
+
+    Args:
+        pipeline (Pipeline): The Kedro pipeline to scope filepaths for.
+        datasets (list): List of dataset names to create unique filepaths for.
+
+    Returns:
+        Pipeline: The same pipeline with a modified data catalog containing unique filepaths for specified datasets.
+    """
+    for d in pipeline.data_catalog:
+        if d.name in datasets:
+            c = json.loads(d.config)
+            if c.get("filepath", None):
+                filepath = c["filepath"]
+                parts = filepath.rsplit("/", 1)
+                new_path = parts[0] + "/" + pipeline.id + "/" + parts[1]
+                c["filepath"] = new_path
+                logger.info(
+                    f"Modifying dataset {d.name} filepath to {new_path} to ensure uniqueness.")
+                d.config = json.dumps(c)
+            else:
+                raise ValueError(
+                    f"Dataset {d.name} does not have a 'filepath' key in its configuration.")
+        else:
+            logger.info(
+                f"Dataset {d.name} not in specified datasets list, skipping filepath modification.")
+    return pipeline

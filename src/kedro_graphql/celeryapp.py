@@ -2,7 +2,7 @@ from celery import Celery
 from celery import signals
 
 
-def celery_app(config, backend):
+def celery_app(config, backend, schema):
     app = Celery()
 
     class Config:
@@ -16,9 +16,12 @@ def celery_app(config, backend):
         worker_send_task_events = True
         task_send_sent_event = True
         imports = "kedro_graphql.tasks"
+        worker_soft_shutdown_timeout = 10
 
     app.config_from_object(Config)
     app.kedro_graphql_backend = backend
+    app.kedro_graphql_schema = schema
+    app.kedro_graphql_config = config
     return app
 
 

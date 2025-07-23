@@ -4,6 +4,7 @@ import param
 import pandas as pd
 import json
 
+pn.extension('ace', 'jsoneditor')
 pn.extension('tabulator', css_files=[
              "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"])
 
@@ -49,7 +50,8 @@ class PipelineSearch(pn.viewable.Viewer):
             df (pd.DataFrame): The DataFrame containing pipeline data.
         """
         if event.column == "Open":
-            pn.state.location.search = "?page=" + self.dashboard_page + "&pipeline=" + \
+            pn.state.location.pathname = "/" + self.dashboard_page.lower()
+            pn.state.location.search = "?pipeline=" + \
                 df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
             pn.state.location.reload = True
 
@@ -223,13 +225,6 @@ class PipelineSearch(pn.viewable.Viewer):
         load_more = pn.widgets.Button(name="Load More")
         load_prev = pn.widgets.Button(name="Load Previous")
 
-        t = pn.bind(self.build_table,
-                    limit=results_per_page,
-                    filter=search,
-                    load_more=load_more.param.clicks,
-                    load_prev=load_prev.param.clicks,
-                    show_lineage=show_lineage)
-
         return pn.Card(
             pn.Row(
                 pn.pane.Markdown("""Search for pipelines with the following syntax:
@@ -245,7 +240,12 @@ class PipelineSearch(pn.viewable.Viewer):
                 search, results_per_page, show_lineage
             ),
             pn.Row(
-                t
+                pn.bind(self.build_table,
+                        limit=results_per_page,
+                        filter=search,
+                        load_more=load_more.param.clicks,
+                        load_prev=load_prev.param.clicks,
+                        show_lineage=show_lineage)
             ),
             pn.Row(
                 load_prev, load_more

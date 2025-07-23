@@ -31,7 +31,7 @@ class PipelineMonitor(pn.viewable.Viewer):
         Yields:
             pn.widgets.Tabulator: A table displaying the pipeline status.
         """
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
         p = await self.client.read_pipeline(id=self.pipeline.id)
         df = pd.DataFrame({
             'name': [p.name],
@@ -62,7 +62,7 @@ class PipelineMonitor(pn.viewable.Viewer):
         Yields:
             pn.widgets.Terminal: A terminal displaying the pipeline logs.
         """
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
+        # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
         terminal = pn.widgets.Terminal(
             "Welcome to the Panel Terminal!\nI'm based on xterm.js\n\n",

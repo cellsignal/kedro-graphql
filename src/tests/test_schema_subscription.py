@@ -1,9 +1,6 @@
 import pytest
 
 
-@pytest.mark.usefixtures('mock_celery_session_app')
-@pytest.mark.usefixtures('celery_session_worker')
-@pytest.mark.usefixtures('depends_on_current_app')
 class TestSchemaSubscriptions:
     @pytest.mark.asyncio
     async def test_pipeline(self, mock_app, mock_info_context, mock_pipeline):
@@ -52,7 +49,8 @@ class TestSchemaSubscriptions:
         async for result in sub:
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline.id)
-            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline.status[-1].task_id)
+            assert result.data["pipelineLogs"]["taskId"] == str(
+                mock_pipeline.status[-1].task_id)
 
         query2 = """
     	  subscription {
@@ -71,4 +69,5 @@ class TestSchemaSubscriptions:
         async for result in sub2:
             assert not result.errors
             assert result.data["pipelineLogs"]["id"] == str(mock_pipeline2.id)
-            assert result.data["pipelineLogs"]["taskId"] == str(mock_pipeline2.status[-1].task_id)
+            assert result.data["pipelineLogs"]["taskId"] == str(
+                mock_pipeline2.status[-1].task_id)

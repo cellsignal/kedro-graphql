@@ -1,0 +1,18 @@
+loaders:
+- type: python
+  search_path: [src/kedro_graphql/]
+processors:
+  - type: filter
+    exclude_private: false
+  - type: google
+
+renderer:
+  type: markdown
+  render_toc: true
+  render_page_title: false
+  toc_maxdepth: 3 
+  descriptive_module_title: true
+  render_typehint_in_data_header: true
+  classdef_with_decorators: true
+  signature_with_decorators: true
+  #docstrings_as_blockquote: true

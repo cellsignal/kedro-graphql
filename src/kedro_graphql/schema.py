@@ -2,7 +2,7 @@ import asyncio
 from base64 import b64decode, b64encode
 from datetime import datetime
 from importlib import import_module
-from typing import Optional, Union
+from typing import Optional, Union, List
 from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
@@ -12,16 +12,18 @@ from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
 from strawberry.extensions import SchemaExtension
+from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
 from strawberry.types import Info
 from strawberry.directive import StrawberryDirective
 from strawberry.types.base import StrawberryType
 from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
 from strawberry.schema.config import StrawberryConfig
+from strawberry.scalars import JSON
 
 from . import __version__ as kedro_graphql_version
-from .config import config
-from .events import PipelineEventMonitor
+from .config import load_config
+from .pipeline_event_monitor import PipelineEventMonitor
 from .hooks import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (
@@ -37,6 +39,15 @@ from .models import (
     State,
 )
 from .tasks import run_pipeline
+from .permissions import get_permissions
+from .signed_url.base import SignedUrlProvider
+from .utils import generate_unique_paths
+
+CONFIG = load_config()
+logger.debug("configuration loaded by {s}".format(s=__name__))
+
+PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
+logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
 
 
 def encode_cursor(id: int) -> str:
@@ -64,15 +75,16 @@ def decode_cursor(cursor: str) -> int:
 
 @strawberry.type
 class Query:
-
-    @strawberry.field(description="Get a pipeline template.")
+    @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
             print(p.id, type(p.id))
             if p.id == id:
+                logger.info(
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
 
-    @strawberry.field(description="Get a list of pipeline templates.")
+    @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
         if cursor is not None:
             # decode the user ID from the given cursor.
@@ -97,23 +109,27 @@ class Query:
             # We have reached the last page, and
             # don't have the next cursor.
             next_cursor = None
-
+        logger.info(
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_templates, limit={limit}, cursor={cursor}")
         return PipelineTemplates(
-            pipeline_templates=sliced_pipes, page_meta=PageMeta(next_cursor=next_cursor)
+            pipeline_templates=sliced_pipes, page_meta=PageMeta(
+                next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Get a pipeline instance.")
+    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")])])
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
-
+        logger.info(
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline, id={id}")
         return p
 
-    @strawberry.field(description="Get a list of pipeline instances.")
+    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipelines")])])
     def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
@@ -133,16 +149,67 @@ class Query:
             # We have reached the last page, and
             # don't have the next cursor.
             next_cursor = None
-
+        logger.info(
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, sort={sort}, cursor={cursor}")
         return Pipelines(
             pipelines=results, page_meta=PageMeta(next_cursor=next_cursor)
         )
 
+    @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
+    def read_datasets(self, id: str, info: Info, names: List[str], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[str | None]:
+        """
+        Get a signed URL for downloading a dataset.
+
+        Args:
+            id (str): The ID of the pipeline.
+            info (Info): The GraphQL execution context.
+            names (List[str]): The names of the datasets.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
+        Returns:
+            [str | None]: An array of signed URLs for downloading the dataset or None if not applicable.
+
+        Raises:
+            ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
+        """
+
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
+
+        urls = []
+        p = info.context["request"].app.backend.read(id=id)
+
+        catalog = {d.name: d for d in p.data_catalog}
+
+        for n in names:
+            dataset = catalog.get(n, None)
+            if dataset is None:
+                logger.warning(
+                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                urls.append(None)
+                continue
+
+            module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
+                ".", 1)
+            module = import_module(module_path)
+            cls = getattr(module, class_name)
+
+            if not issubclass(cls, SignedUrlProvider):
+                raise TypeError(
+                    f"{class_name} must inherit from SignedUrlProvider")
+
+            logger.info(
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
+            urls.append(cls.read(info, dataset, expires_in_sec))
+            continue
+
+        return urls
+
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Execute a pipeline.")
-    def create_pipeline(self, pipeline: PipelineInput, info: Info) -> Pipeline:
+    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")])])
+    def create_pipeline(self, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
@@ -157,7 +224,8 @@ class Mutation:
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
         serial = p.encode(encoder="kedro")
 
-        runner = d.get("runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        runner = d.get(
+            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -167,10 +235,10 @@ class Mutation:
         p.created_at = started_at
 
         # Get kedro project, kedro-graphql, and pipeline versions
-        p.project_version = config.get("KEDRO_PROJECT_VERSION", None)
+        p.project_version = CONFIG.get("KEDRO_PROJECT_VERSION", None)
         p.kedro_graphql_version = kedro_graphql_version
         p.pipeline_version = None
-        package_name = config.get("KEDRO_PROJECT_NAME", None)
+        package_name = CONFIG.get("KEDRO_PROJECT_NAME", None)
         if package_name:
             try:
                 module = import_module(
@@ -189,6 +257,12 @@ class Mutation:
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
             p = info.context["request"].app.backend.create(p)
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+                p = info.context["request"].app.backend.update(p)
+
+            logger.info(
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
@@ -200,6 +274,9 @@ class Mutation:
                                            task_name=str(run_pipeline)))
 
             p = info.context["request"].app.backend.create(p)
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+                p = info.context["request"].app.backend.update(p)
 
             result = run_pipeline.delay(
                 id=str(p.id),
@@ -212,16 +289,17 @@ class Mutation:
             )
 
             logger.info(
-                f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
             return p
 
-    @strawberry.mutation(description="Update a pipeline.")
-    def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info) -> Pipeline:
+    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")])])
+    def update_pipeline(self, id: str, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
 
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -232,7 +310,8 @@ class Mutation:
         p.data_catalog = pipeline_input_dict.get("data_catalog")
         p.tags = pipeline_input_dict.get("tags")
         p.parent = pipeline_input_dict.get("parent")
-        runner = pipeline_input_dict.get("runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        runner = pipeline_input_dict.get(
+            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
         if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
@@ -256,6 +335,9 @@ class Mutation:
                                               task_id=None,
                                               task_name=str(run_pipeline))
 
+            if unique_paths:
+                p = generate_unique_paths(p, unique_paths)
+
             # Update pipeline in backend before running task
             p = info.context["request"].app.backend.update(p)
 
@@ -272,10 +354,10 @@ class Mutation:
             )
 
             logger.info(
-                f'Running {p.name} pipeline with task_id: ' + str(result.task_id))
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        if pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
+        elif pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
                                            runner=runner,
                                            session=None,
@@ -284,16 +366,21 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
+        if unique_paths:
+            p = generate_unique_paths(p, unique_paths)
         p = info.context["request"].app.backend.update(p)
+        logger.info(
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
 
         return p
 
-    @strawberry.mutation(description="Delete a pipeline.")
+    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")])])
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -301,17 +388,72 @@ class Mutation:
         logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
         return p
 
+    @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
+    def create_datasets(self, id: str, info: Info, names: List[str], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[JSON | None]:
+        """
+        Get a signed URL for uploading a dataset.
+
+        Args:
+            id (str): The ID of the pipeline.
+            info (Info): The GraphQL execution context.
+            names (List[str]): The names of the datasets.
+            expires_in_sec (int): The number of seconds the signed URL should be valid for.
+
+        Returns:
+            JSON | None: A signed URL for uploading the dataset or None if not applicable.
+
+        Raises:
+            ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
+        """
+        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+            raise ValueError(
+                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
+        urls = []
+        p = info.context["request"].app.backend.read(id=id)
+
+        if p.status[-1].state.value != "STAGED":
+            raise ValueError(
+                f"Pipeline {p.name} with id {id} must be staged before creating datasets.")
+
+        # create dict from pipeline data catalog
+        catalog = {d.name: d for d in p.data_catalog}
+
+        for n in names:
+            dataset = catalog.get(n, None)
+            if dataset is None:
+                logger.warning(
+                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                urls.append({"name": n, "filepath": None,
+                            "url": None, "fields": {}})
+                continue
+            else:
+                module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
+                    ".", 1)
+                module = import_module(module_path)
+                cls = getattr(module, class_name)
+
+                if not issubclass(cls, SignedUrlProvider):
+                    raise TypeError(
+                        f"{class_name} must inherit from SignedUrlProvider")
+                logger.info(
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, expires_in_sec={expires_in_sec}")
+                url = cls.create(info, dataset, expires_in_sec)
+                urls.append(url)
+                continue
+        return urls
+
 
 @strawberry.type
 class Subscription:
-    @strawberry.subscription(description="Subscribe to pipeline events.")
+    @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_events")])])
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
         """Subscribe to pipeline events.
         """
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -325,13 +467,14 @@ class Subscription:
                 e["id"] = id
                 yield PipelineEvent(**e)
 
-    @strawberry.subscription(description="Subscribe to pipeline logs.")
+    @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_logs")])])
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:
             p = info.context["request"].app.backend.read(id=id)
             if p is None:
-                raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+                raise InvalidPipeline(
+                    f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
@@ -359,6 +502,7 @@ def build_schema(
         ] = None,
         schema_directives: Iterable[object] = ()
 ):
+
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
     ComboMutation = merge_types("Mutation", tuple(
         [Mutation] + type_plugins["mutation"]))

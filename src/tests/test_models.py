@@ -3,14 +3,13 @@ import json
 import pytest
 from omegaconf import OmegaConf
 
-from kedro_graphql.models import DataSet, Parameter, ParameterInput
-from kedro_graphql.config import config as CONFIG
-from pathlib import Path
-from urllib.parse import urlparse, parse_qs
-import jwt
+from kedro_graphql.models import DataSet, Parameter, ParameterInput, PipelineInput, TagInput
+from .utilities import kedro_graphql_config
 
 
 class TestDataSet:
+
+    config = kedro_graphql_config()
 
     def test_serialize(self):
         params = {"name": "text_in",
@@ -37,43 +36,6 @@ class TestDataSet:
 
         assert output == expected
 
-    def test_pre_signed_url_create_config_no_filepath(self):
-        d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
-
-        with pytest.raises(ValueError):
-            output = d.pre_signed_url_create(expires_in_sec=10)
-
-    def test_pre_signed_url_create_allowed_local(self, mock_text_in):
-        d = DataSet(name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
-
-        output = d.pre_signed_url_create(expires_in_sec=10)
-        token = output["fields"].get("token", None)
-
-        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                             algorithms=[CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
-
-        # Unique path should be generated
-        assert Path(payload["filepath"]).resolve() != Path(mock_text_in).resolve()
-
-    def test_pre_signed_url_read_config_no_filepath(self):
-        d = DataSet(name="text_in", config='{"type":"text.TextDataset"}')
-
-        with pytest.raises(ValueError):
-            output = d.pre_signed_url_read(expires_in_sec=10)
-
-    def test_pre_signed_url_read_allowed_local(self, mock_text_in):
-        d = DataSet(name="text_in", config=f'{{"type":"text.TextDataset", "filepath": "{str(mock_text_in)}"}}')
-
-        output = d.pre_signed_url_read(expires_in_sec=10)
-        parsed_url = urlparse(output)
-        query_params = parse_qs(parsed_url.query)
-        token = query_params.get("token", [None])[0]
-
-        payload = jwt.decode(token, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                             algorithms=[CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
-
-        assert Path(payload["filepath"]).resolve() == Path(mock_text_in).resolve()
-
     def test_does_exist_with_config(self, mock_text_in):
         params = {
             "name": "text_in",
@@ -92,16 +54,17 @@ class TestDataSet:
         d = DataSet(**params)
         assert d.exists() == False
 
+
 class TestParameterInput:
-    
+
     def test_create_from_dict(self):
         correct = {
             "a": "b",
             "c": 0,
             "d": True,
-            "e": 0.1,}
-        
-        incorrect = {**correct, "f": [1,2]}
+            "e": 0.1, }
+
+        incorrect = {**correct, "f": [1, 2]}
 
         params_input_list = ParameterInput.create(correct)
 
@@ -110,7 +73,8 @@ class TestParameterInput:
 
         with pytest.raises(ValueError):
             ParameterInput.create(incorrect)
-            
+
+
 class TestParameter:
 
     def test_serialize_string(self):
@@ -263,10 +227,14 @@ class TestParameter:
         """
         parameter_inputs = [{"name": "example", "value": "hello", "type": "string"},
                             {"name": "duration", "value": "0.1", "type": "float"},
-                            {"name": "model_options.model_params.learning_date", "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.training_date", "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.data_ratio", "value": "14", "type": "float"},
-                            {"name": "data_options.step_size", "value": "123123", "type": "float"},
+                            {"name": "model_options.model_params.learning_date",
+                                "value": "2023-11-01", "type": "string"},
+                            {"name": "model_options.model_params.training_date",
+                                "value": "2023-11-01", "type": "string"},
+                            {"name": "model_options.model_params.data_ratio",
+                                "value": "14", "type": "float"},
+                            {"name": "data_options.step_size",
+                                "value": "123123", "type": "float"},
                             ]
 
         parameters = [Parameter.decode(p) for p in parameter_inputs]
@@ -276,7 +244,8 @@ class TestParameter:
         for p in parameters:
             serialized_parameters.update(p.serialize())
 
-        parameters_dotlist = [f"{key}={value}" for key, value in serialized_parameters.items()]
+        parameters_dotlist = [f"{key}={value}" for key,
+                              value in serialized_parameters.items()]
         conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
         kedro_parameters = {"parameters": conf_parameters}
 
@@ -297,7 +266,8 @@ class TestParameter:
             }
         }
 
-        params_dotlist = [f"params:{key}={value}" for key, value in serialized_parameters.items()]
+        params_dotlist = [f"params:{key}={value}" for key,
+                          value in serialized_parameters.items()]
         kedro_params = OmegaConf.from_dotlist(params_dotlist)
 
         assert kedro_params == {
@@ -314,3 +284,14 @@ class TestParameter:
                 'step_size': 123123
             }
         }
+
+    def test_pipeline_encode_as_input(self, mock_pipeline_staged):
+        """
+        Tests the Pipeline.encode(encoder="input") method returns a PipelineInput object
+        """
+        result = mock_pipeline_staged.encode(encoder="input")
+        assert isinstance(result, PipelineInput)
+        assert result.name == mock_pipeline_staged.name
+        assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
+        assert len(result.parameters) == len(mock_pipeline_staged.parameters)
+        assert len(result.tags) == len(mock_pipeline_staged.tags)

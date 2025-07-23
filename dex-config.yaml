@@ -17,8 +17,10 @@ staticPasswords:
     username: "admin"
     userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
 staticClients:
-  - id: panel
-    name: 'panel'
-    secret: panel
+  - id: kedro-graphql
+    name: 'kedro-graphql'
+    secret: 'kedro-graphql'
     redirectURIs:
-      - 'http://localhost:5006/login'
+      - "http://localhost:4180/oauth2/callback"
+      - "http://localhost:5006/login"
+

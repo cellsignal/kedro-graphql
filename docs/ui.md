@@ -1,5 +1,9 @@
 # UI
 
+!!! note 
+    Many of the examples in this document are out of date. Refer to kedro_graphql.ui.plugins for 
+    working examples.
+
 **The user interface is experimental**
 
 The `kedro_graphql.ui` module provides a graphical user interface
@@ -13,13 +17,13 @@ data exploration and web app framework for python.
 
 Clone the repository and install the dependencies,
 
-```
+```bash
 pip install -e .[ui]
 ```
 
 Once released, the UI dependencies will installable via pip.
 
-```
+```bash
 pip install kedro_graphql[ui]
 ```
 
@@ -28,28 +32,28 @@ pip install kedro_graphql[ui]
 Start the UI server.  Fetch the ui.yaml from the [UI YAML Specification](#ui-yaml-specification)
 section below or from the repository.
 
-```
-kedro gql --ui --ui-spec src/kedro_graphql/ui/ui.yaml
+```bash
+kedro gql --ui --ui-spec spec-ui.yaml
 ```
 
 Shorthand flags and auto-reloading (for development) are also supported.
 
-```
-kedro gql -r -u --ui-spec src/kedro_graphql/ui/ui.yaml
+```bash
+kedro gql -r -u --ui-spec spec-ui.yaml
 ```
 
 Start the GraphQL API.
-```
-kedro gql -r 
+```bash
+kedro gql -r  --api-spec spec-api.yaml
 ```
 
 Start a worker.
-```
-kedro gql -r -w
+```bash
+kedro gql -r -w --api-spec spec-api.yaml
 ```
 
 Start supporting services (e.g. mongo, redis, etc...).
-```
+```bash
 docker compose up -d
 ```
 
@@ -57,7 +61,7 @@ docker compose up -d
 
 ### Cards
 
-Each pipeline with at least one registered `@ui_form` [plugin](#plugins) will be
+Each pipeline with at least one registered `@ui_form` [plugin](#plugins-customization) will be
 displayed as a card on the "pipelines" page.
 
 ![pipeline cards](./00_ui_pipeline_cards.png)
@@ -97,7 +101,7 @@ Visualize the pipeline with [kedro-viz](https://github.com/kedro-org/kedro-viz).
 **Adding Custom Tabs the default dashboard**
 
 Additional tabs with custom components can be added to a pipeline's dashboard 
-by registering one or more `@ui_data` [plugins](#plugins).
+by registering one or more `@ui_data` [plugins](#plugins-customization).
 
 ![pipeline viz](./07_ui_pipeline_dashboard.png)
 
@@ -132,7 +136,7 @@ kedro gql --ui --imports "kedro_graphql.ui.plugins"
 The `@ui_form` decorator can be used to register one or more forms to
 a pipeline.  The specification of `@ui_form` plugin is as follows:
 
-```
+```python
 class ExampleForm(pn.viewable.Viewer):
     spec = param.Dict(default={})
     client = param.ClassSelector(class_=KedroGraphqlClient)
@@ -147,7 +151,7 @@ class ExampleForm(pn.viewable.Viewer):
 The example shown below will register two forms to the 
 `example00` pipeline.
 
-```
+```python
 # kedro_graphql.ui.plugins
 
 import tempfile
@@ -312,11 +316,11 @@ class Example00PipelineFormV2(BaseExample00Form):
 The `@ui_data` decorator can be used to register one or more custom components to
 a pipeline's dashboard. The specification of `@ui_data` plugin is as follows:
 
-```
+```python
 class ExampleData(pn.viewable.Viewer):
     spec = param.Dict(default={})
     id = param.String(default="")
-    pipeline = param.ClassSelector(class_=Pipeline)
+ Fetch the ui-auth.yaml from above or from the repository.    pipeline = param.ClassSelector(class_=Pipeline)
     title = param.String(default="Table 1")
 
     def __panel__(self):
@@ -326,7 +330,7 @@ class ExampleData(pn.viewable.Viewer):
  The example shown below will register two new tabs to the 
 `example00` pipeline dashboard.
 
-```
+```python
 # kedro_graphql.ui.plugins
 import panel as pn
 import numpy as np
@@ -412,7 +416,7 @@ The `@ui_dashboard` decorator can be used to register one or more dashboards to
 a pipeline that replace the default dashboard.  The specification of 
 `@ui_dashboard` plugin is as follows:
 
-```
+```python
 class ExampleDashboard(pn.viewable.Viewer):
     client = param.ClassSelector(class_=KedroGraphqlClient)
     id = param.String(default="")
@@ -426,7 +430,7 @@ class ExampleDashboard(pn.viewable.Viewer):
 The example shown below will register one custom dashboard to the 
 `example01` pipeline that will replace the default dashboard.
 
-```
+```python
 # kedro_graphql.ui.plugins
 import panel as pn
 import numpy as np
@@ -502,7 +506,7 @@ class Example00PipelineUIV1(pn.viewable.Viewer):
 
 ### UI YAML Specification
 
-```
+```yaml
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
 panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
@@ -558,11 +562,11 @@ The `kedro_graphql.ui.auth.PKCELoginHandler` class is a pluggable
 panel OAuth provider that supports the authorization code flow with 
 proof key for code exchange OAuth protocol. The PKCE protocol is the
 default for [Dex](https://dexidp.io/). See 
-https://github.com/holoviz/panel/issues/7979 for more discussion on this
+<https://github.com/holoviz/panel/issues/7979> for more discussion on this
 topic.  Using `oauth_provider: "pkce"` in the conifiguration tells panel
 to use the `kedro_graphql.ui.auth.PKCELoginHandler`.
 
-```
+```yaml
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
 panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
@@ -571,8 +575,8 @@ panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/
   base_url: /
   port: 5006
   oauth_provider: "pkce"
-  oauth_secret: "panel"
-  oauth_key: "panel"
+  oauth_secret: "kedro-graphql"
+  oauth_key: "kedro-graphql"
   oauth_extra_params: 
     AUTHORIZE_URL: "http://localhost:5556/oidc/auth"
     TOKEN_URL: "http://localhost:5556/oidc/token"
@@ -599,20 +603,29 @@ pages:
       dashboard_page: dashboard
   dashboard:
     module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+    params:
+      dataset_map:
+        pandas.CSVDataset: dataset_perspective
+        pandas.ParquetDataset: dataset_perspective
   form:
     module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
   explore:
     module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+  dataset_perspective:
+    module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
+    params:
+      file_size_limit_mb: 10
 nav:
   sidebar:
     - name: Pipelines
       page: pipelines
     - name: Search 
       page: search
-```
-
-Start the UI server.  Fetch the ui-auth.yaml from above or from the repository.
 
 ```
-kedro gql --ui --ui-spec src/kedro_graphql/ui/ui-auth.yaml
+
+Start the UI server.
+
+```
+kedro gql --ui --ui-spec ui.yaml
 ```

@@ -1,53 +1,9 @@
 import pytest
-from kedro.framework.session import KedroSession
-from kedro.framework.startup import bootstrap_project
-from kedro_graphql.client import KedroGraphqlClient
-from kedro_graphql.config import config as CONFIG
 from kedro_graphql.models import PipelineInput, Pipeline, TagInput
-from multiprocessing import Process
-import uvicorn
 import json
-from pathlib import Path
-from kedro_graphql.asgi import KedroGraphQL
 from celery.states import ALL_STATES
 from kedro_graphql.schema import encode_cursor
-import multiprocessing as mp
-import tempfile
 import pytest_asyncio
-
-
-if mp.get_start_method(allow_none=True) != "spawn":
-    mp.set_start_method("spawn")
-
-
-def start_server():
-
-    with tempfile.TemporaryDirectory() as tmp:
-        with tempfile.TemporaryDirectory() as tmp2:
-            bootstrap_project(Path.cwd())
-            session = KedroSession.create()
-            app = KedroGraphQL(kedro_session=session, config=CONFIG)
-            app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
-            app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
-            uvicorn.run(app,
-                        host="localhost",
-                        port=5000)
-
-
-@pytest_asyncio.fixture(scope="session")
-def setup():
-    proc = Process(target=start_server, args=())
-    proc.start()
-    yield
-    proc.terminate()
-
-
-@pytest_asyncio.fixture
-async def mock_client(setup):
-    client = KedroGraphqlClient(uri_graphql="http://localhost:5000/graphql",
-                                uri_ws="ws://localhost:5000/graphql")
-    yield client
-    await client.close_sessions()
 
 
 @pytest_asyncio.fixture
@@ -168,22 +124,34 @@ class TestKedroGraphqlClient:
         r = await mock_client.delete_pipeline(id=pipeline.id)
         assert r.id == pipeline.id
 
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
     @pytest.mark.asyncio
-    async def test_pipeline_events(self, mock_create_pipeline, mock_client):
+    async def test_read_datasets(self, mock_create_pipeline_staged, mock_client):
+
+        pipeline_input, expected, pipeline = mock_create_pipeline_staged
+        r = await mock_client.read_datasets(id=pipeline.id, names=["text_in", "text_out"], expires_in_sec=3600)
+        assert isinstance(r, list)
+        assert len(r) == 2
+        assert isinstance(r[0], str)
+
+    @pytest.mark.asyncio
+    async def test_create_datasets(self, mock_create_pipeline_staged, mock_client):
+
+        pipeline_input, expected, pipeline = mock_create_pipeline_staged
+        r = await mock_client.create_datasets(id=pipeline.id, names=["text_in", "text_out"], expires_in_sec=3600)
+        assert isinstance(r, list)
+        assert len(r) == 2
+        assert isinstance(r[0], dict)
+
+    @pytest.mark.asyncio
+    async def test_pipeline_events(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 
         async for result in mock_client.pipeline_events(id=pipeline.id):
             assert result.status in ALL_STATES
 
-    @pytest.mark.usefixtures('mock_celery_session_app')
-    @pytest.mark.usefixtures('celery_session_worker')
-    @pytest.mark.usefixtures('depends_on_current_app')
     @pytest.mark.asyncio
-    async def test_pipeline_logs(self, mock_create_pipeline, mock_client):
+    async def test_pipeline_logs(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 

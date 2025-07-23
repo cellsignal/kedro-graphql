@@ -41,7 +41,8 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         tags_df = pd.DataFrame(tags_list).fillna("")
         ds_df = pd.concat([base_df, tags_df], axis=1)
 
-        js_download = pn.pane.HTML("", width=0, height=0)  # this is used to inject JS dynamically
+        # this is used to inject JS dynamically
+        js_download = pn.pane.HTML("", width=0, height=0)
 
         def trigger_popout(url):
             js_code = f"""
@@ -96,7 +97,7 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             """
             js_download.object = js_code
 
-        def on_row_click(event):
+        async def on_row_click(event):
             row = event.row
             dataset_name = ds_df.iloc[row]['Name']
             dataset_filepath = ds_df.iloc[row]['Filepath']
@@ -104,30 +105,39 @@ class DataCatalogExplorer(pn.viewable.Viewer):
             if event.column == 'Download':
                 for ds in self.pipeline.data_catalog:
                     if ds.name == dataset_name:
-                        presigned_url = ds.pre_signed_url_read(expires_in_sec=3600)
+                        presigned_urls = await self.spec["config"]["client"].read_datasets(
+                            id=self.pipeline.id, names=[ds.name], expires_in_sec=3600)
+                        presigned_url = presigned_urls[0]
+                        print(f"signed URL for {dataset_name}: {presigned_url}")
                         if presigned_url:
                             trigger_download(presigned_url, dataset_filepath)
                         else:
-                            pn.state.notifications.warning(f"No presigned URL available for {dataset_name}", duration=10000)
+                            pn.state.notifications.warning(
+                                f"No signed URL available for {dataset_name}", duration=10000)
                             return
             if event.column == 'Popout':
                 for ds in self.pipeline.data_catalog:
                     if ds.name == dataset_name:
-                        presigned_url = ds.pre_signed_url_read(expires_in_sec=3600)
+                        presigned_urls = await self.spec["config"]["client"].read_datasets(
+                            id=self.pipeline.id, names=[ds.name], expires_in_sec=3600)
+                        presigned_url = presigned_urls[0]
                         for dataset_type, panel_page in self.dataset_map.items():
                             if json.loads(ds.config)["type"] == dataset_type:
-                                open_dataset_viewer(panel_page, presigned_url, dataset_name, dataset_type)
+                                open_dataset_viewer(
+                                    panel_page, presigned_url, dataset_name, dataset_type)
                                 return
                         if presigned_url:
                             trigger_popout(presigned_url)
                         else:
-                            pn.state.notifications.warning(f"No presigned URL available for {dataset_name}", duration=10000)
+                            pn.state.notifications.warning(
+                                f"No signed URL available for {dataset_name}", duration=10000)
                             return
 
         filters = {
             "Name": {"type": "input", "placeholder": "Filter by name", "func": "like"},
             "Type":
-            {"type": "list", "placeholder": "Select dataset type(s)", "func": "in", "valuesLookup": True, "multiselect": True},
+            {"type": "list",
+                "placeholder": "Select dataset type(s)", "func": "in", "valuesLookup": True, "multiselect": True},
             "Filepath": {"type": "input", "placeholder": "Filter by filepath", "func": "like"}}
 
         for tag in tags_df.columns.tolist():
@@ -149,7 +159,8 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         ds_widget.on_click(on_row_click)
 
         yield pn.Column(
-            pn.Card(ds_widget, title="Data Catalog Explorer", sizing_mode="stretch_width"),
+            pn.Card(ds_widget, title="Data Catalog Explorer",
+                    sizing_mode="stretch_width"),
             js_download,
             sizing_mode="stretch_width",)
 

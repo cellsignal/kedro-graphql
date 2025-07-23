@@ -1,21 +1,30 @@
+from cloudevents.pydantic import CloudEvent
 import json
-import uuid
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-from kedro.io.core import _parse_filepath
-from .plugins.presigned_url.local_file_provider import LocalFileProvider
-from .plugins.presigned_url.base import PreSignedUrlProvider
-from importlib import import_module
+# from kedro.io.core import _parse_filepath
+# from .signed_url.local_file_provider import LocalFileProvider
+# from .signed_url.base import PreSignedUrlProvider
+# from importlib import import_module
 import strawberry
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
-from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
+# from strawberry.permission import PermissionExtension
 
-from .config import config as CONFIG
+from .config import load_config
+from .logs.logger import logger
+# from .permissions import get_permissions
+
+
+CONFIG = load_config()
+# logger.debug("configuration loaded by {s}".format(s=__name__))
+##
+# PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
+# logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
 
 
 def mark_deprecated(default=None):
@@ -93,7 +102,7 @@ class ParameterInput:
 
     @staticmethod
     def create(parameters: dict):
-        
+
         def _create_parameter_input(name, value):
 
             type_map = [
@@ -104,15 +113,16 @@ class ParameterInput:
             ]
 
             try:
-                type_enum: ParameterType = next(t[1] for t in type_map if type(value) == t[0])
+                type_enum: ParameterType = next(
+                    t[1] for t in type_map if type(value) == t[0])
             except StopIteration:
                 raise ValueError(
                     f"Only primitive types are supported ({' '.join(str(x[0]) for x in type_map)}). Got {type(value)}"
                 )
-            
-            return ParameterInput(name = name, value = str(value), type = type_enum.value.upper())
-            
-        params =[_create_parameter_input(k,v) for k,v in parameters.items()]
+
+            return ParameterInput(name=name, value=str(value), type=type_enum.value.upper())
+
+        params = [_create_parameter_input(k, v) for k, v in parameters.items()]
         return params
 
 
@@ -163,87 +173,6 @@ class DataSet:
     name: str
     config: Optional[str] = None
     tags: Optional[List[Tag]] = None
-
-    @strawberry.field
-    def pre_signed_url_create(self, expires_in_sec: int) -> JSON | None:
-        """
-        Get a presigned URL for uploading a dataset.
-
-        Args:
-            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
-
-        Returns:
-            JSON | None: A presigned URL for uploading the dataset or None if not applicable.
-
-        Raises:
-            ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
-        """
-        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
-            raise ValueError(
-                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
-
-        try:
-            config = json.loads(self.config)
-            filepath = config.get("filepath", None)
-            if not filepath:
-                raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Unable to parse JSON in config: {e}")
-        except Exception as e:
-            raise ValueError(f"Invalid dataset configuration: {e}")
-
-        if _parse_filepath(filepath)["protocol"] == "file":
-            return LocalFileProvider.pre_signed_url_create(filepath, expires_in_sec)
-
-        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
-        module = import_module(module_path)
-        cls = getattr(module, class_name)
-
-        if not issubclass(cls, PreSignedUrlProvider):
-            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
-
-        return cls.pre_signed_url_create(filepath, expires_in_sec)
-
-    @strawberry.field
-    def pre_signed_url_read(self, expires_in_sec: int) -> str | None:
-        """
-        Get a presigned URL for downloading a dataset.
-
-        Args:
-            expires_in_sec (int): The number of seconds the presigned URL should be valid for.
-
-        Returns:
-            str | None: A presigned URL for downloading the dataset or None if not applicable.
-
-        Raises:
-            ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
-        """
-
-        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC"]:
-            raise ValueError(
-                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_PRESIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
-
-        try:
-            config = json.loads(self.config)
-            filepath = config.get("filepath", None)
-            if not filepath:
-                raise ValueError("Invalid dataset configuration. Must have 'filepath' key")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Unable to parse JSON in config: {e}")
-        except Exception as e:
-            raise ValueError(f"Invalid dataset configuration: {e}")
-
-        if _parse_filepath(filepath)["protocol"] == "file":
-            return LocalFileProvider.pre_signed_url_read(filepath, expires_in_sec)
-
-        module_path, class_name = CONFIG["KEDRO_GRAPHQL_PRESIGNED_URL_PROVIDER"].rsplit(".", 1)
-        module = import_module(module_path)
-        cls = getattr(module, class_name)
-
-        if not issubclass(cls, PreSignedUrlProvider):
-            raise TypeError(f"{class_name} must inherit from PreSignedUrlProvider")
-
-        return cls.pre_signed_url_read(filepath, expires_in_sec)
 
     @strawberry.field
     def exists(self) -> bool:
@@ -320,7 +249,7 @@ class DataCatalogInput:
 
             print(catalog)
 
-            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None), 
+            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
              DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
 
         """
@@ -383,8 +312,13 @@ class PipelineTemplate:
     def outputs(self) -> List[DataSet]:
         outputs_resolved = []
         for n in self.kedro_pipelines[self.name].all_outputs():
-            config = self.kedro_catalog[n]
-            outputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
+            if self.kedro_catalog.get(n, None):
+                config = self.kedro_catalog[n]
+                outputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
+            else:
+                logger.warning(
+                    f"PipelineTemplate '{self.name}' has an output '{n}' that is not defined in the catalog. This may be due to a missing dataset configuration or because it is a MemoryDataset."
+                )
 
         return outputs_resolved
 
@@ -450,7 +384,7 @@ class PipelineInput:
     parameters: Optional[List[ParameterInput]] = None
     data_catalog: Optional[List[DataSetInput]] = None
     tags: Optional[List[TagInput]] = None
-    parent: Optional[uuid.UUID] = None
+    parent: Optional[strawberry.ID] = None
     runner: Optional[str] = None
     slices: Optional[List[PipelineSlice]] = None
     only_missing: Optional[bool] = False
@@ -470,17 +404,19 @@ class PipelineInput:
 
             print(p)
 
-            PipelineInput(name='example00', 
+            PipelineInput(name='example00',
                           parameters=[
-                            ParameterInput(name='example', 
-                                           value='hello', 
-                                           type=<ParameterType.STRING: 'string'>), 
+                            ParameterInput(name='example',
+                                           value='hello',
+                                           type=<ParameterType.STRING: 'string'>),
                             ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
-                          ], 
+                          ],
                           data_catalog=[
-                            DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'), 
-                            DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
-                          ], 
+                            DataSetInput(
+                                name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
+                            DataSetInput(
+                                name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
+                          ],
                           tags=[TagInput(key='owner', value='sean')])
 
             print(jsonable_encoder(p))
@@ -499,7 +435,7 @@ class PipelineInput:
 
         """
         if tags:
-            tags = [TagInput(key=k, value=v) for t in tags for k, v in t.items()]
+            tags = [TagInput(key=k, value=v) for t in tags for k, v in tags.items()]
 
         if data_catalog:
             data_catalog = DataCatalogInput.create(data_catalog)
@@ -517,7 +453,13 @@ class PipelineInput:
             return jsonable_encoder(self)
         elif encoder == "graphql":
             p = jsonable_encoder(self)
-            return {to_camel_case(k): v for k, v in p.items()}
+            p = {to_camel_case(k): v for k, v in p.items()}
+            # make sure parameter types are uppercase
+            if p.get("parameters", None):
+                for param in p["parameters"]:
+                    if param.get("type", None):
+                        param["type"] = param["type"].upper()
+            return p
         else:
             raise TypeError("encoder must be 'dict' or 'graphql'")
 
@@ -556,7 +498,7 @@ class PipelineStatus:
 
 @strawberry.type
 class Pipeline:
-    id: Optional[uuid.UUID] = None
+    id: Optional[strawberry.ID] = None
     name: str
     data_catalog: Optional[List[DataSet]] = None
     describe: Optional[str] = None
@@ -565,7 +507,7 @@ class Pipeline:
     status: List[PipelineStatus] = strawberry.field(default_factory=list)
     tags: Optional[List[Tag]] = None
     created_at: Optional[datetime] = None
-    parent: Optional[uuid.UUID] = None
+    parent: Optional[strawberry.ID] = None
     project_version: Optional[str] = None
     pipeline_version: Optional[str] = None
     kedro_graphql_version: Optional[str] = None
@@ -585,7 +527,7 @@ class Pipeline:
                 data_catalog.update(s)
 
         return {
-            "id": self.id,
+            "id": str(self.id),
             "name": self.name,
             "data_catalog": data_catalog,
             "parameters": parameters,
@@ -602,23 +544,22 @@ class Pipeline:
             return encoded_pipeline
         elif encoder == "kedro":
             return self.serialize()
+        elif encoder == "input":
+            if self.parameters:
+                parameters = [ParameterInput(name=p.name, value=p.value, type=p.type.value)
+                              for p in self.parameters]
+            else:
+                parameters = None
+            return PipelineInput(
+                name=self.name,
+                data_catalog=[DataSetInput(name=d.name, config=d.config)
+                              for d in self.data_catalog],
+                parameters=parameters,
+                tags=[TagInput(key=t.key, value=t.value)
+                      for t in self.tags] if self.tags else None
+            )
         else:
-            raise TypeError("encoder must be 'dict' or 'kedro'")
-
-    @classmethod
-    def decode(cls, payload, decoder="dict"):
-        """Factory method to create a new Pipeline from a dictionary or graphql api response.
-        """
-        if decoder == "graphql":
-            payload = {to_snake_case(k): v for k, v in payload.items()}
-            if payload["status"]:
-                payload["status"] = [
-                    {to_snake_case(k): v for k, v in s.items()} for s in payload["status"]]
-
-            return cls.decode_dict(payload)
-
-        elif decoder == "dict":
-            return cls.decode_dict(payload)
+            raise TypeError("encoder must be 'dict', 'kedro', or 'input'")
 
     @classmethod
     def decode(cls, payload, decoder=None):

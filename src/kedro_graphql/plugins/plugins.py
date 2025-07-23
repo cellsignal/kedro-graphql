@@ -1,5 +1,4 @@
 import asyncio
-from abc import ABC, abstractmethod
 from typing import AsyncGenerator
 
 import strawberry
@@ -7,36 +6,8 @@ import strawberry
 from kedro_graphql.decorators import (
     gql_mutation,
     gql_query,
-    gql_resolver,
     gql_subscription,
 )
-from kedro_graphql.models import DataSetInput, ParameterInput
-
-
-class IOResolverPlugin(ABC):
-    """
-    Implement this class to define custom behavior for pipeline inputs and
-    outputs.  The methods of the class will called prior to pipeline 
-    execution.
-    """
-    @abstractmethod
-    def __input__(self, input: ParameterInput | DataSetInput) -> [ParameterInput | DataSetInput]:
-        pass
-
-    @abstractmethod
-    def __submit__(self, input: ParameterInput | DataSetInput) -> ParameterInput | DataSetInput:
-        pass
-
-
-@gql_resolver(name="text_in")
-class ExampleTextInPlugin(IOResolverPlugin):
-
-    def __input__(self, input: ParameterInput | DataSetInput) -> [ParameterInput | DataSetInput]:
-        print("plugin example", input)
-        return [input]
-
-    def __submit__(self, input: ParameterInput | DataSetInput) -> ParameterInput | DataSetInput:
-        return input
 
 
 @gql_query()
