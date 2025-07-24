@@ -3,69 +3,48 @@ import panel as pn
 import param
 import pandas as pd
 import json
+from kedro_graphql.models import Pipelines
 
 pn.extension('ace', 'jsoneditor')
 pn.extension('tabulator', css_files=[
              "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"])
 
-# TO DO: Implement a search bar that filters pipelines by name, status, and tags, use https://panel.holoviz.org/reference/widgets/MultiChoice.html
-# TO DO: Implement a button that allows the usser to search by datasets
 
+class PipelineSearchModel(param.Parameterized):
+    """Parameters for the PipelineSearch component."""
+    spec = param.Dict(default={},
+                      doc="The specification for the UI, including configuration and client.")
+    search = param.String(
+        default="", doc="Enter search terms to find relevant pipelines.")
+    results_per_page = param.Integer(default=10, bounds=(
+        1, 100), doc="Number of results per page.")
+    # show_lineage = param.Boolean(
+    #     default=False, doc="Whether to show lineage information.")
+    load_more = param.Action(lambda x: x.load_more_results(),
+                             label="Load More",
+                             doc="Action to load more results.")
+    load_prev = param.Action(lambda x: x.load_prev_results(),
+                             label="Load Previous",
+                             doc="Action to load previous results.")
+    filter = param.String(
+        default="", doc="Computed filter string for searching pipelines")
 
-class PipelineSearch(pn.viewable.Viewer):
-    """A component that allows users to search for pipelines in the Kedro GraphQL UI.
-    This component provides a search bar, results per page selection, and buttons to load more or previous results.
-    It displays the results in a table format with clickable rows to navigate to the pipeline details.
+    cursor = param.String(default=None, doc="Cursor for pagination.")
+    cursors = param.List(
+        default=[], doc="List of cursors for pagination.")
+    result = param.ClassSelector(
+        class_=Pipelines, default=None, doc="The result of the pipeline search.")
+    search_params = param.Dict(default={})
 
-    Attributes:
-        spec (dict): The specification for the UI, including configuration and client.
-        limit (int): The number of results to display per page.
-        cursor (str): The cursor for pagination.
-        filter (str): The filter string for searching pipelines.
-        prev_cursor (str): The cursor for the previous page.
-        next_cursor (str): The cursor for the next page.
-        more_clicks (int): The number of clicks on the "Load More" button.
-        prev_clicks (int): The number of clicks on the "Load Previous" button.
-        cursors (list): A list of cursors for pagination.
-        cursor_index (int): The index of the current cursor in the cursors list.
-        dashboard_page (str): The page to navigate to when a pipeline is clicked.
-    """
-    spec = param.Dict(default={})
-    limit = param.Integer(default=10)
-    cursor = param.String(default=None)
-    filter = param.String(default="")
-    prev_cursor = param.String(default=None)
-    next_cursor = param.String(default=None)
-    more_clicks = param.Integer(default=0)
-    prev_clicks = param.Integer(default=0)
-    cursors = param.List(default=[])
-    cursor_index = param.Integer(default=0)
-    dashboard_page = param.String(
-        default="dashboard", doc="The page to navigate to when a pipeline is clicked.")
-
-    def navigate(self, event, df):
-        """Navigate to the pipeline details page when a row is clicked.
-        Args:
-            event (pn.widgets.Tabulator.ClickEvent): The event triggered by clicking a row.
-            df (pd.DataFrame): The DataFrame containing pipeline data.
-        """
-        if event.column == "Open":
-            pn.state.location.pathname = "/" + self.dashboard_page.lower()
-            pn.state.location.search = "?pipeline=" + \
-                df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
-            pn.state.location.reload = True
-
-    def build_filter(self, raw):
-        """Build a filter string from  a raw string.
-
-        Args:
-            raw (str): Text input by user.
+    @param.depends('search', watch=True)
+    def compute_filter(self):
+        """Compute the filter string based on the search input.
 
         Returns:
             str: A filter string in JSON format e.g. "{\"tags.key\": \"unique\", \"tags.value\": \"unique\"}"
         """
         filter = {"$or": []}
-        parts = raw.split(",")
+        parts = self.search.split(",")
         names = [p for p in parts if "name" in p]
         status = [p for p in parts if "state" in p]
         tags = [p for p in parts if "tag" in p]
@@ -91,19 +70,111 @@ class PipelineSearch(pn.viewable.Viewer):
                      "tags.value": {"$regex": "^"+value}}
                 filter["$or"].append(t)
 
-        if len(filter["$or"]) == 0 and len(raw) > 0:
+        if len(filter["$or"]) == 0 and len(self.search) > 0:
             # default to searching all fields for the raw string
-            f = {"$or": [{"name": {"$regex": "^"+raw}},
-                         {"status.state": {"$regex": "^"+raw}},
-                         {"tags.key": {"$regex": "^"+raw}},
-                         {"tags.value": {"$regex": "^"+raw}}]}
-            return json.dumps(f)
-        elif len(raw) == 0:
-            return ""
+            f = {"$or": [{"name": {"$regex": "^"+self.search}},
+                         {"status.state": {"$regex": "^"+self.search}},
+                         {"tags.key": {"$regex": "^"+self.search}},
+                         {"tags.value": {"$regex": "^"+self.search}}]}
+            self.filter = json.dumps(f)
+        elif len(self.search) == 0:
+            self.filter = ""
         else:
-            return json.dumps(filter)
+            self.filter = json.dumps(filter)
 
-    async def build_table(self, limit, filter, load_more, load_prev, show_lineage):
+    @param.depends('search', watch=True)
+    async def reset_cursor_history(self):
+        """Reset the cursor history when the search input changes."""
+        self.cursors = []
+        self.cursor = ""
+
+    @param.depends('load_more', watch=True)
+    def load_more_results(self):
+        """Load more results based on the current cursor."""
+        if self.result.page_meta and self.result.page_meta.next_cursor:
+            if self.cursor:
+                if len(self.cursors) > 0 and self.cursors[-1] != self.cursor:
+                    self.cursors.append(self.cursor)
+                else:
+                    self.cursors = [self.cursor]
+                # print("CURSORS", self.cursors)
+            # print("NEXT CURSOR", self.result.page_meta.next_cursor)
+            self.cursor = self.result.page_meta.next_cursor
+
+    @param.depends('load_prev', watch=True)
+    def load_prev_results(self):
+        """Load previous results based on the cursor history."""
+        if len(self.cursors) > 0:
+            self.cursor = self.cursors.pop()
+            # print("CURSORS", self.cursors)
+        else:
+            self.cursor = ""
+
+    @param.depends('results_per_page', 'cursor', 'filter', watch=True)
+    async def build_search_params(self):
+        """Build the search parameters for the API request."""
+        if not self.cursor or len(self.cursor) == 0:
+            cursor = None
+        else:
+            cursor = self.cursor
+        self.search_params = {
+            "limit": self.results_per_page,
+            "cursor": cursor,
+            "filter": self.filter
+        }
+
+    @param.depends('load_more_results', 'load_prev_results', 'build_search_params', watch=True)
+    async def execute_search(self):
+        """Execute the search based on the current filter and pagination parameters."""
+        # print("Executing search with params:", self.search_params)
+        self.result = await self.spec["config"]["client"].read_pipelines(limit=self.search_params.get("limit", self.results_per_page),
+                                                                         cursor=self.search_params.get(
+                                                                             "cursor", self.cursor),
+                                                                         filter=self.search_params.get("filter", self.filter))
+
+
+class PipelineSearch(pn.viewable.Viewer):
+    """A component that allows users to search for pipelines in the Kedro GraphQL UI.
+    This component provides a search bar, results per page selection, and buttons to load more or previous results.
+    It displays the results in a table format with clickable rows to navigate to the pipeline details.
+
+    Attributes:
+        spec (dict): The specification for the UI, including configuration and client.
+        limit (int): The number of results to display per page.
+        cursor (str): The cursor for pagination.
+        filter (str): The filter string for searching pipelines.
+        prev_cursor (str): The cursor for the previous page.
+        next_cursor (str): The cursor for the next page.
+        more_clicks (int): The number of clicks on the "Load More" button.
+        prev_clicks (int): The number of clicks on the "Load Previous" button.
+        cursors (list): A list of cursors for pagination.
+        cursor_index (int): The index of the current cursor in the cursors list.
+        dashboard_page (str): The page to navigate to when a pipeline is clicked.
+    """
+    spec = param.Dict(default={})
+    search_model = param.ClassSelector(
+        class_=PipelineSearchModel, default=PipelineSearchModel())
+    dashboard_page = param.String(
+        default="dashboard", doc="The page to navigate to when a pipeline is clicked.")
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        self.search_model = PipelineSearchModel(spec=self.spec)
+
+    def navigate(self, event, df):
+        """Navigate to the pipeline details page when a row is clicked.
+        Args:
+            event (pn.widgets.Tabulator.ClickEvent): The event triggered by clicking a row.
+            df (pd.DataFrame): The DataFrame containing pipeline data.
+        """
+        if event.column == "Open":
+            pn.state.location.pathname = "/" + self.dashboard_page.lower()
+            pn.state.location.search = "?pipeline=" + \
+                df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
+            pn.state.location.reload = True
+
+    @param.depends('search_model.result')
+    async def build_table(self):
         """Builds a table of pipelines based on the provided filter and pagination parameters.
         Args:
             limit (int): The number of results to display per page.
@@ -114,55 +185,10 @@ class PipelineSearch(pn.viewable.Viewer):
         Yields:
             pn.widgets.Tabulator: A table displaying the pipelines with clickable rows.
         """
-        # TO DO enable switching to a searchable dataset view grouped by pipeline
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        f = self.build_filter(filter)
-        if load_more > self.more_clicks and "id=" not in filter:
-            result = await self.spec["config"]["client"].read_pipelines(limit=limit,
-                                                                        cursor=self.next_cursor,
-                                                                        filter=f)
-            pipelines = result.pipelines
-            if self.cursors[-1] != self.next_cursor:
-                self.cursors.append(self.next_cursor)
-            if result.page_meta.next_cursor:
-                self.next_cursor = result.page_meta.next_cursor
-            self.more_clicks = load_more
-
-        elif load_prev > self.prev_clicks and "id=" not in filter:
-            if len(self.cursors) > 1:
-                cursor = self.cursors[-2]
-                self.next_cursor = self.cursors[-1]
-                self.cursors = self.cursors[:-1]
-            else:
-                cursor = None
-                self.cursors = [None]
-
-            result = await self.spec["config"]["client"].read_pipelines(limit=limit,
-                                                                        cursor=cursor,
-                                                                        filter=f)
-            pipelines = result.pipelines
-            self.prev_clicks = load_prev
-
+        if not self.search_model.result or not self.search_model.result.pipelines:
+            yield pn.pane.Markdown("No pipelines found matching the search criteria.")
         else:
-            if "id=" in filter:
-                id = filter.split("id=")[1]
-                id = id.split(",")[0]
-                result = await self.spec["config"]["client"].read_pipeline(id=id)
-                pipelines = [result]
-                self.cursors = [None]
-            else:
-                cursor = None
-
-                result = await self.spec["config"]["client"].read_pipelines(limit=limit,
-                                                                            cursor=cursor,
-                                                                            filter=f)
-                pipelines = result.pipelines
-                self.cursors = [None]
-                self.next_cursor = result.page_meta.next_cursor
-
-        if len(pipelines) == 0:
-            yield pn.pane.Alert('No results found.')
-        else:
+            pipelines = self.search_model.result.pipelines
 
             df = pd.DataFrame.from_records(
                 [p.encode(encoder="dict") for p in pipelines])
@@ -190,16 +216,10 @@ class PipelineSearch(pn.viewable.Viewer):
             # visible columns
             cols_show = ["parent", "id", "name", "state"] + list(tags.columns)
 
-            if "Show Lineage" in show_lineage:
-                groupby = ["parent"]
-            else:
-                groupby = []
-
             df_widget = pn.widgets.Tabulator(df[cols_show],
                                              buttons={
                                                  'Open': "<i class='fa fa-folder-open'></i>"},
                                              theme='materialize',
-                                             groupby=groupby,
                                              hidden_columns=["parent"],
                                              disabled=True,
                                              sizing_mode="stretch_width",
@@ -211,20 +231,7 @@ class PipelineSearch(pn.viewable.Viewer):
             yield df_widget
 
     def __panel__(self):
-        search = pn.widgets.TextInput(
-            name='Search',
-            placeholder='Write something here')
-        results_per_page = pn.widgets.Select(name='Results per page', options={
-                                             '5': 5, '10': 10, '20': 20, '50': 50}, value=10)
-        show_lineage = pn.widgets.CheckButtonGroup(name='Check Button Group',
-                                                   button_style='solid',
-                                                   value=[],
-                                                   options=['Show Lineage'])
-        pn.state.location.sync(search, {"value_input": "filter"})
-
-        load_more = pn.widgets.Button(name="Load More")
-        load_prev = pn.widgets.Button(name="Load Previous")
-
+        pn.state.onload(self.search_model.execute_search)
         return pn.Card(
             pn.Row(
                 pn.pane.Markdown("""Search for pipelines with the following syntax:
@@ -236,20 +243,16 @@ class PipelineSearch(pn.viewable.Viewer):
 - Search by pipeline id: `id=67ca04f127d86d04151c90eb`
                                  """)
             ),
+            pn.Row(pn.Param(self.search_model, name="",
+                            parameters=["search", "results_per_page",
+                                        "load_more", "load_prev"],
+                   show_name=False, display_threshold=0, default_layout=pn.Row, widgets={
+                       "load_more_clicks": pn.widgets.Button,
+                       "load_prev_clicks": pn.widgets.Button,
+                            })),
             pn.Row(
-                search, results_per_page, show_lineage
+                self.build_table,
+                sizing_mode="stretch_width"
             ),
-            pn.Row(
-                pn.bind(self.build_table,
-                        limit=results_per_page,
-                        filter=search,
-                        load_more=load_more.param.clicks,
-                        load_prev=load_prev.param.clicks,
-                        show_lineage=show_lineage)
-            ),
-            pn.Row(
-                load_prev, load_more
-            ),
-            styles={"background": None},
             sizing_mode="stretch_width"
         )

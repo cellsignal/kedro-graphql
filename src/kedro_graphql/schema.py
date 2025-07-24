@@ -140,8 +140,8 @@ class Query:
 
         results = info.context["request"].app.backend.list(
             cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
-
         if len(results) > limit:
+
             # calculate the client's next cursor.
             last_pipe = results.pop(-1)
             next_cursor = encode_cursor(id=last_pipe.id)
@@ -149,8 +149,9 @@ class Query:
             # We have reached the last page, and
             # don't have the next cursor.
             next_cursor = None
+
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, sort={sort}, cursor={cursor}")
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, limit={limit}, sort={sort}, cursor={cursor}")
         return Pipelines(
             pipelines=results, page_meta=PageMeta(next_cursor=next_cursor)
         )
