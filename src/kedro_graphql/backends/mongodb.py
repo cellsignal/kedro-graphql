@@ -26,11 +26,12 @@ class MongoBackend(BaseBackend):
         self.client.close()
 
     def list(self, cursor: uuid.UUID = None, limit=10, filter="", sort=""):
+        query = {}
         if len(filter) > 0:
             filter = json.loads(filter)
             query = filter
-        else:
-            query = {'_id': {'$gte': ObjectId(cursor)}}
+        if cursor is not None:
+            query.update({'_id': {'$gte': ObjectId(cursor)}})
 
         if sort:
             try:
