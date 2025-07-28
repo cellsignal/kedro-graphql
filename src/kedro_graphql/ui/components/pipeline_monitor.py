@@ -6,84 +6,64 @@ from kedro_graphql.models import Pipeline
 
 pn.extension('tabulator', css_files=[
              "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"])
-pn.extension('terminal')
 
 
-class PipelineMonitor(pn.viewable.Viewer):
-    """A component that monitors the state of a Kedro pipeline and displays its status and logs.
-    This component allows users to view the current status of a pipeline and its logs in real-time.
-
-    Attributes:
-        pipeline (Pipeline): The Kedro pipeline to monitor.
-        client (KedroGraphqlClient): The client used to interact with the Kedro GraphQL API.
-    """
+class PipelineMonitor(param.Parameterized):
+    """Model for the PipelineMonitor component that handles the logic for fetching pipeline status and logs."""
     pipeline = param.ClassSelector(class_=Pipeline)
     client = param.ClassSelector(class_=KedroGraphqlClient)
+    status = param.String()
+    logs = param.String()
 
-    def __init__(self, **params):
+    def __init__(self, spec=None, pipeline=None, **params):
+        """Initializes the Kedro GraphQL client with the provided specification.
+
+        Kwargs:
+            spec (dict): The specification for the UI, including configuration and pages.
+            pipeline (Pipeline): The Kedro pipeline for which the monitor is built.
+            **params: Additional parameters for the PipelineMonitor component.
+
+        """
         super().__init__(**params)
 
-    @param.depends('pipeline', 'client')
-    async def build_table(self):
-        """Builds a table displaying the current status of the pipeline.
-        This method fetches the pipeline status from the client and updates the table in real-time as events occur.
+        if pn.state.cookies:
+            cookies = pn.state.cookies
+        else:
+            cookies = None
 
-        Yields:
-            pn.widgets.Tabulator: A table displaying the pipeline status.
-        """
-        # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        p = await self.client.read_pipeline(id=self.pipeline.id)
-        df = pd.DataFrame({
-            'name': [p.name],
-            'id': [p.id],
-            'status': str(p.status[-1].state),
-        }, index=[0])
+        self.client = KedroGraphqlClient(
+            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"], cookies=cookies)
+        self.pipeline = pipeline
 
-        df_widget = pn.widgets.Tabulator(df,
-                                         theme='materialize',
-                                         disabled=True,
-                                         show_index=False)
-        yield pn.Card(
-            df_widget,
-        )
+    @param.depends('pipeline', watch=True)
+    async def subscribe_to_pipeline_events(self):
+        """Fetches the current status of the pipeline."""
+
         # subscribe to pipeline events
         async for event in self.client.pipeline_events(id=self.pipeline.id):
-            df.loc[0, "status"] = event.status
-            df_widget.value = df
-            # yield df_widget
-            if event.status == "COMPLETED":
-                break
+            self.status = event.status
+        await self.client.close_sessions()
 
-    @param.depends('pipeline', 'client')
-    async def build_terminal(self):
+    @param.depends('pipeline', watch=True)
+    async def subscribe_to_logs(self):
         """Builds a terminal that displays the logs of the pipeline in real-time.
         This method connects to the pipeline logs and updates the terminal as new log messages are received.
 
         Yields:
-            pn.widgets.Terminal: A terminal displaying the pipeline logs.
+        pn.widgets.Terminal: A terminal displaying the pipeline logs.
         """
-        # yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
 
-        terminal = pn.widgets.Terminal(
-            "Welcome to the Panel Terminal!\nI'm based on xterm.js\n\n",
-            options={"cursorBlink": True},
-            sizing_mode='stretch_width'
-        )
-        terminal.clear()
-        yield terminal
         async for message in self.client.pipeline_logs(id=self.pipeline.id):
-            terminal.write(message.time + " " + message.message + "\n")
+            if not self.logs:
+                self.logs = ""
+            self.logs += f"{message.time} - {message.message}\n"
+        await self.client.close_sessions()
 
     def __panel__(self):
-
         return pn.Column(
-            pn.Row("# State"),
-            pn.Row(
-                self.build_table
-            ),
-            pn.Row("# Logs"),
-            pn.Row(
-                self.build_terminal,
-                sizing_mode='stretch_width'
-            ),
+            pn.Param(
+                self, name="", parameters=["status", "logs"],
+                widgets={"status": pn.widgets.StaticText,
+                         "logs": pn.widgets.TextAreaInput(name="Live Log Stream", sizing_mode='stretch_width', height=400)}),
+            sizing_mode='stretch_width'
         )

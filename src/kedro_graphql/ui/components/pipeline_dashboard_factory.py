@@ -39,14 +39,14 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         Returns:
             pn.Tabs: A panel containing tabs for monitoring, detail, and visualization of the pipeline.
         """
-        monitor = PipelineMonitor(client=self.spec["config"]["client"], pipeline=p)
+        monitor = PipelineMonitor(spec=self.spec, pipeline=p)
         detail = PipelineDetail(pipeline=p)
         viz = PipelineViz(pipeline=p.name, spec=self.spec)
         retry = PipelineRetry(client=self.spec["config"]["client"], pipeline=p)
         cloning = PipelineCloning(client=self.spec["config"]["client"], pipeline=p)
         explorer = DataCatalogExplorer(
             spec=self.spec, pipeline=p, dataset_map=self.dataset_map)
-        tabs = pn.Tabs(dynamic=True)
+        tabs = pn.Tabs(dynamic=False)
         tabs.append(("Explorer", explorer))
         tabs.append(("Monitor", monitor))
         tabs.append(("Detail", detail))
