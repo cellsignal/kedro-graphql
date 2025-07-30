@@ -1,8 +1,18 @@
 # Changelog
 
-## [1.1.0] - unreleased
+## [1.1.0] - 2025-07-30
 
 Added
+
+- create_datasets mutation, read_datasets query, both use signed URL to facilitate uploads/downloads
+
+- `kedro_graphql.permissions` module and classes
+
+- authentication configuration examples
+
+- support API and UI yaml specifications
+
+- mkdocs site
 
 - an experimental UI, see the [UI](./docs/ui.md) docs.
 
