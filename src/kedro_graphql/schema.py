@@ -8,7 +8,7 @@ from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
 from bson.objectid import ObjectId
-from celery.states import UNREADY_STATES
+from celery.states import UNREADY_STATES, READY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
 from strawberry.extensions import SchemaExtension
@@ -140,8 +140,8 @@ class Query:
 
         results = info.context["request"].app.backend.list(
             cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
-
         if len(results) > limit:
+
             # calculate the client's next cursor.
             last_pipe = results.pop(-1)
             next_cursor = encode_cursor(id=last_pipe.id)
@@ -149,8 +149,9 @@ class Query:
             # We have reached the last page, and
             # don't have the next cursor.
             next_cursor = None
+
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, sort={sort}, cursor={cursor}")
+            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, limit={limit}, sort={sort}, cursor={cursor}")
         return Pipelines(
             pipelines=results, page_meta=PageMeta(next_cursor=next_cursor)
         )
@@ -446,7 +447,7 @@ class Mutation:
 @strawberry.type
 class Subscription:
     @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_events")])])
-    async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent, None]:
+    async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent]:
         """Subscribe to pipeline events.
         """
         try:
@@ -462,10 +463,19 @@ class Subscription:
             await asyncio.sleep(0.1)
             p = info.context["request"].app.backend.read(id=id)
 
-        if p:
+        if p and p.status[-1].state.value not in READY_STATES:
             async for e in PipelineEventMonitor(app=info.context["request"].app.celery_app, task_id=p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
+        else:
+            yield PipelineEvent(
+                id=id,
+                task_id=p.status[-1].task_id,
+                timestamp=p.status[-1].finished_at,
+                status=p.status[-1].state.value,
+                result=p.status[-1].task_result,
+                traceback=p.status[-1].task_traceback
+            )
 
     @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_logs")])])
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:

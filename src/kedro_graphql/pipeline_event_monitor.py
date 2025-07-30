@@ -72,7 +72,8 @@ class PipelineEventMonitor:
             worker (threading.Thread): a python thread object.
 
         """
-        worker = Thread(target=self._task_event_receiver, args=(self.app, queue, self.task_id))
+        worker = Thread(target=self._task_event_receiver,
+                        args=(self.app, queue, self.task_id))
         worker.daemon = True
         worker.start()
         logger.info("started event reciever thread")
