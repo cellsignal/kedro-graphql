@@ -1,5 +1,10 @@
 # Changelog
 
+
+## [1.1.1] - 2025-08-01
+
+- fix schema plugin discovery
+
 ## [1.1.0] - 2025-07-30
 
 Added
