@@ -4,9 +4,9 @@ panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/
   title: Kedro GraphQL UI
   show: false
   admin: true
-  base_url: /
+  prefix: /
   port: 5006
-  allow_websocket_origin: 
+  websocket_origin: 
     - "localhost:5006"
     - "localhost:4180"
   warm: true
