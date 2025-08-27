@@ -11,7 +11,16 @@ TYPE_PLUGINS = {"query": [],
 
 def discover_plugins(config):
     # discover plugins e.g. decorated functions e.g @gql_query, etc...
-    imports = [i.strip() for i in config["KEDRO_GRAPHQL_IMPORTS"].split(",") if len(i.strip()) > 0]
+    kedro_imports = config["KEDRO_GRAPHQL_IMPORTS"]
+    
+    # Handle both string and list types
+    if isinstance(kedro_imports, str):
+        imports = [i.strip() for i in kedro_imports.split(",") if len(i.strip()) > 0]
+    elif isinstance(kedro_imports, list):
+        imports = [i.strip() for i in kedro_imports if len(i.strip()) > 0]
+    else:
+        imports = []
+    
     for i in imports:
         import_module(i)
 
