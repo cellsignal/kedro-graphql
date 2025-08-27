@@ -28,6 +28,7 @@ defaults = {
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations",
     "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
     "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
+    "KEDRO_GRAPHQL_ROOT_PATH": "",
     "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.signed_url.s3_provider.S3Provider",
     "KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC": 43200,
     "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL": "http://localhost:5000",
@@ -114,8 +115,8 @@ def load_config():
     config = {
         **copy.deepcopy(defaults),  # defaults
         **dotenv_values(".env"),  # .env file
-        **load_api_spec(),  # loaded API spec
         **os.environ,  # override loaded values with environment variables
+        **load_api_spec(),  # loaded API spec
     }
     config = env_var_parser(config)  # special parsing for any environment variables
     return config

@@ -19,6 +19,7 @@ The following table describes each configuration attribute available:
 | `deprecation_docs`                     | URL to documentation about deprecated features.                                                  |
 | `log_tmp_dir`                          | Directory path for temporary log files.                                                          |
 | `log_path_prefix`                      | Optional prefix for log file paths.                                                              |
+| `root_path`                            | Root path for all API endpoints (e.g., '/api/v1'). When set, all API routes will be prefixed with this path. |
 | `signed_url_max_expires_in_sec`    | Maximum allowed expiration time (in seconds) for presigned URLs. Default: `43200` (12 hours). |
 | `local_file_provider_server_url`       | Base URL for the local file server (e.g., `http://localhost:5000`).                             |
 | `local_file_provider_jwt_secret_key`   | Secret key for signing JWT tokens for local file access.                                        |
@@ -61,6 +62,7 @@ KEDRO_GRAPHQL_ENV=local
 KEDRO_GRAPHQL_CONF_SOURCE=None
 KEDRO_GRAPHQL_LOG_TMP_DIR=my_tmp_dir/
 KEDRO_GRAPHQL_LOG_PATH_PREFIX=s3://my-bucket/
+KEDRO_GRAPHQL_ROOT_PATH=/api/v1
 KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC=43200
 KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL=http://localhost:5000
 KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY=your_secret_key
@@ -91,6 +93,7 @@ for the remaining string.  For example:
 | conf_source                | --conf-source        | $HOME/myproject/conf                      |
 | log_tmp_dir                | --log-tmp-dir        | my_tmp_dir/                               |
 | log_path_prefix            | --log-path-prefix    | s3://my-bucket/                           |
+| root_path                  | --root-path          | /api/v1                                   |
 
 
 ## YAML API Specification
@@ -118,6 +121,7 @@ config:
   deprecation_docs: "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations"
   log_tmp_dir: "/tmp/"
   log_path_prefix: null
+  root_path: null
   events_config:
     event00:
       source: "example.com"

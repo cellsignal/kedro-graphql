@@ -51,28 +51,28 @@ def commands():
 )
 @click.option(
     "--backend",
-    default=defaults["KEDRO_GRAPHQL_BACKEND"],
+    default=None,
     help="The only supported value for this option is 'kedro_graphql.backends.mongodb.MongoBackend'"
 )
 @click.option(
     "--broker",
-    default=defaults["KEDRO_GRAPHQL_BROKER"],
+    default=None,
     help="URI to broker e.g. 'redis://localhost'"
 )
 @click.option(
     "--celery-result-backend",
-    default=defaults["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"],
+    default=None,
     help="URI to backend for celery results e.g. 'redis://localhost'"
 )
 @click.option(
     "--conf-source",
-    default=defaults["KEDRO_GRAPHQL_CONF_SOURCE"],
+    default=None,
     help="Path of a directory where project configuration is stored."
 )
 @click.option(
     "--env",
     "-e",
-    default=defaults["KEDRO_GRAPHQL_ENV"],
+    default=None,
     help="Kedro configuration environment name. Defaults to `local`."
 )
 @click.option(
@@ -83,28 +83,33 @@ def commands():
 )
 @click.option(
     "--mongo-uri",
-    default=defaults["KEDRO_GRAPHQL_MONGO_URI"],
+    default=None,
     help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'"
 )
 @click.option(
     "--mongo-db-name",
-    default=defaults["KEDRO_GRAPHQL_MONGO_DB_NAME"],
+    default=None,
     help="Name to use for collection in mongo e.g. 'pipelines'"
 )
 @click.option(
     "--runner",
-    default=defaults["KEDRO_GRAPHQL_RUNNER"],
+    default=None,
     help="Execution mechanism to run pipelines e.g. 'kedro.runner.SequentialRunner'"
 )
 @click.option(
     "--log-tmp-dir",
-    default=defaults["KEDRO_GRAPHQL_LOG_TMP_DIR"],
+    default=None,
     help="Temporary directory for logs"
 )
 @click.option(
     "--log-path-prefix",
-    default=defaults["KEDRO_GRAPHQL_LOG_PATH_PREFIX"],
+    default=None,
     help="Prefix of path to save logs"
+)
+@click.option(
+    "--root-path",
+    default=None,
+    help="Root path for API endpoints (e.g., '/api/v1')"
 )
 @click.option(
     "--reload",
@@ -146,7 +151,7 @@ def commands():
 )
 def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         env, imports, mongo_uri, mongo_db_name, runner, log_tmp_dir,
-        log_path_prefix, reload, reload_path, api_spec, ui, ui_spec,
+        log_path_prefix, root_path, reload, reload_path, api_spec, ui, ui_spec,
         worker):
     """Commands for working with kedro-graphql."""
 
@@ -176,6 +181,8 @@ def gql(metadata, app, backend, broker, celery_result_backend, conf_source,
         os.environ["KEDRO_GRAPHQL_LOG_TMP_DIR"] = log_tmp_dir
     if log_path_prefix:
         os.environ["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = log_path_prefix
+    if root_path:
+        os.environ["KEDRO_GRAPHQL_ROOT_PATH"] = root_path
 
     os.environ["KEDRO_GRAPHQL_PROJECT_VERSION"] = getattr(
         import_module(metadata.package_name), "__version__", None)
