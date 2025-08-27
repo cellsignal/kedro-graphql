@@ -61,7 +61,7 @@ class S3Provider(SignedUrlProvider):
                 s3_client = boto3.client('s3')
                 params = {
                     'Bucket': bucket_name,
-                    'Key': f"{key}/{filename}"
+                    'Key': f"{key}/{filename}" if key else filename
                 }
 
                 try:
