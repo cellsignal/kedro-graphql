@@ -12,18 +12,19 @@ config:
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
   celery_result_backend: "redis://localhost"
-  runner: kedro.runner.SequentialRunner"
+  runner: "kedro.runner.SequentialRunner"
   env: "local"
   conf_source: null
   deprecation_docs: "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations"
   log_tmp_dir: "/tmp/"
   log_path_prefix: null
+  root_path: null
   events_config:
     event00:
       source: "example.com"
       type: "com.example.event"
   permissions: "kedro_graphql.permissions.IsAuthenticatedAlways"
-  permissions_role_to_action_mapping:
+  permissions_role_to_action_map:
     admin:
       - "create_pipeline"
       - "read_pipeline"
@@ -37,9 +38,8 @@ config:
       - "subscribe_to_events"
       - "subscribe_to_logs"
       - "create_event"
-  permissions_group_to_role_mapping: 
-      EXTERNAL_GROUP_NAME: 
-          - admin
+  permissions_group_to_role_map: 
+    EXTERNAL_GROUP_NAME: admin
   local_file_provider_server_url: "http://localhost:5000"
 
 
