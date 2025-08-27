@@ -52,13 +52,13 @@ class PipelineSearchModel(param.Parameterized):
         for name in names:
             if len(name.split("=")) > 1:
                 n = name.split("=")[1]
-                f = {"name": {"$regex": "^"+n}}
+                f = {"name": {"$regex": "^" + n}}
                 filter["$or"].append(f)
 
         for s in status:
             if len(s.split("=")) > 1:
                 n = s.split("=")[1]
-                f = {"status.state": {"$regex": "^"+n}}
+                f = {"status.state": {"$regex": "^" + n}}
                 filter["$or"].append(f)
 
         for tag in tags:
@@ -66,16 +66,22 @@ class PipelineSearchModel(param.Parameterized):
                 key_value = tag.split(":")[1]
                 key = key_value.split("=")[0]
                 value = key_value.split("=")[1]
-                t = {"tags.key": {"$regex": "^"+key},
-                     "tags.value": {"$regex": "^"+value}}
+                t = {
+                    "tags.key": {"$regex": "^" + key},
+                    "tags.value": {"$regex": "^" + value}
+                }
                 filter["$or"].append(t)
 
         if len(filter["$or"]) == 0 and len(self.search) > 0:
             # default to searching all fields for the raw string
-            f = {"$or": [{"name": {"$regex": "^"+self.search}},
-                         {"status.state": {"$regex": "^"+self.search}},
-                         {"tags.key": {"$regex": "^"+self.search}},
-                         {"tags.value": {"$regex": "^"+self.search}}]}
+            f = {
+                "$or": [
+                    {"name": {"$regex": "^" + self.search}},
+                    {"status.state": {"$regex": "^" + self.search}},
+                    {"tags.key": {"$regex": "^" + self.search}},
+                    {"tags.value": {"$regex": "^" + self.search}}
+                ]
+            }
             self.filter = json.dumps(f)
         elif len(self.search) == 0:
             self.filter = ""
@@ -127,10 +133,11 @@ class PipelineSearchModel(param.Parameterized):
     async def execute_search(self):
         """Execute the search based on the current filter and pagination parameters."""
         # print("Executing search with params:", self.search_params)
-        self.result = await self.spec["config"]["client"].read_pipelines(limit=self.search_params.get("limit", self.results_per_page),
-                                                                         cursor=self.search_params.get(
-                                                                             "cursor", self.cursor),
-                                                                         filter=self.search_params.get("filter", self.filter))
+        self.result = await self.spec["config"]["client"].read_pipelines(
+            limit=self.search_params.get("limit", self.results_per_page),
+            cursor=self.search_params.get("cursor", self.cursor),
+            filter=self.search_params.get("filter", self.filter)
+        )
 
 
 class PipelineSearch(pn.viewable.Viewer):
@@ -168,9 +175,8 @@ class PipelineSearch(pn.viewable.Viewer):
             df (pd.DataFrame): The DataFrame containing pipeline data.
         """
         if event.column == "Open":
-            pn.state.location.pathname = "/" + self.dashboard_page.lower()
-            pn.state.location.search = "?pipeline=" + \
-                df.loc[event.row, "name"]+"&id=" + df.loc[event.row, "id"]
+            pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + self.dashboard_page.lower()
+            pn.state.location.search = "?pipeline=" + df.loc[event.row, "name"] + "&id=" + df.loc[event.row, "id"]
             pn.state.location.reload = True
 
     @param.depends('search_model.result')
@@ -190,8 +196,7 @@ class PipelineSearch(pn.viewable.Viewer):
         else:
             pipelines = self.search_model.result.pipelines
 
-            df = pd.DataFrame.from_records(
-                [p.encode(encoder="dict") for p in pipelines])
+            df = pd.DataFrame.from_records([p.encode(encoder="dict") for p in pipelines])
 
             # flatten tags into seperate columns
             tags = []
@@ -199,8 +204,9 @@ class PipelineSearch(pn.viewable.Viewer):
                 inner_tags = []
                 if row["tags"]:
                     for i in row["tags"]:
-                        inner_tags.append(pd.DataFrame(
-                            {"tag: " + i["key"]: i["value"]}, index=[index]))
+                        inner_tags.append(
+                            pd.DataFrame({"tag: " + i["key"]: i["value"]}, index=[index])
+                        )
 
                     tags.append(pd.concat(inner_tags, axis=1))
                 else:
@@ -216,18 +222,16 @@ class PipelineSearch(pn.viewable.Viewer):
             # visible columns
             cols_show = ["parent", "id", "name", "state"] + list(tags.columns)
 
-            df_widget = pn.widgets.Tabulator(df[cols_show],
-                                             buttons={
-                                                 'Open': "<i class='fa fa-folder-open'></i>"},
-                                             theme='materialize',
-                                             hidden_columns=["parent"],
-                                             disabled=True,
-                                             sizing_mode="stretch_width",
-                                             show_index=False
-                                             )
-            df_widget.on_click(
-                lambda e: self.navigate(e, df)
+            df_widget = pn.widgets.Tabulator(
+                df[cols_show],
+                buttons={'Open': "<i class='fa fa-folder-open'></i>"},
+                theme='materialize',
+                hidden_columns=["parent"],
+                disabled=True,
+                sizing_mode="stretch_width",
+                show_index=False
             )
+            df_widget.on_click(lambda e: self.navigate(e, df))
             yield df_widget
 
     def __panel__(self):
@@ -243,13 +247,20 @@ class PipelineSearch(pn.viewable.Viewer):
 - Search by pipeline id: `id=67ca04f127d86d04151c90eb`
                                  """)
             ),
-            pn.Row(pn.Param(self.search_model, name="",
-                            parameters=["search", "results_per_page",
-                                        "load_more", "load_prev"],
-                   show_name=False, display_threshold=0, default_layout=pn.Row, widgets={
-                       "load_more_clicks": pn.widgets.Button,
-                       "load_prev_clicks": pn.widgets.Button,
-                            })),
+            pn.Row(
+                pn.Param(
+                    self.search_model,
+                    name="",
+                    parameters=["search", "results_per_page", "load_more", "load_prev"],
+                    show_name=False,
+                    display_threshold=0,
+                    default_layout=pn.Row,
+                    widgets={
+                        "load_more_clicks": pn.widgets.Button,
+                        "load_prev_clicks": pn.widgets.Button,
+                    }
+                )
+            ),
             pn.Row(
                 self.build_table,
                 sizing_mode="stretch_width"

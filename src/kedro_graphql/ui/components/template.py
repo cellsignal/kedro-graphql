@@ -30,8 +30,8 @@ class NavigationSidebarButton(pn.viewable.Viewer):
 
     def navigate(self, event):
         """Navigate to the specified page."""
-        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["base_url"]
-        pn.state.location.search = "?page="+self.name.lower()
+        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"]
+        pn.state.location.search = "?page=" + self.name.lower()
 
     async def build_button(self):
         """Builds the navigation button for the sidebar.
@@ -48,7 +48,11 @@ class NavigationSidebarButton(pn.viewable.Viewer):
             b0_icon = None
 
         button = pn.widgets.Button(
-            name=self.name, button_type=b0_type, sizing_mode="stretch_width", icon=b0_icon)
+            name=self.name,
+            button_type=b0_type,
+            sizing_mode="stretch_width",
+            icon=b0_icon
+        )
         pn.bind(self.navigate, button, watch=True)
         return button
 
@@ -129,10 +133,12 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
         """
         # if hasattr(pn.state, "user_info") and pn.state.user_info:
         # user = pn.state.user_info.get("name", False) or pn.state.user or "Guest"
-        if pn.state.headers.get("X-Forwarded-User", None):
-            user = pn.state.headers.get("X-Forwarded-User", None)
-            email = pn.state.headers.get("X-Forwarded-Email", None)
-            groups = pn.state.headers.get("X-Forwarded-Groups", None)
+
+        user = pn.state.headers.get("X-Forwarded-User", None) or pn.state.headers.get("X-Auth-Request-User", None)
+
+        if user:
+            email = pn.state.headers.get("X-Forwarded-Email", None) or pn.state.headers.get("X-Auth-Request-Email", None)
+            groups = pn.state.headers.get("X-Forwarded-Groups", None) or pn.state.headers.get("X-Auth-Request-Groups", None)
             user_info = {"user": user, "email": email, "groups": groups}
         else:
             user = "Guest"
@@ -176,7 +182,10 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
             cookies = None
 
         client = KedroGraphqlClient(
-            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"], cookies=cookies)
+            uri_graphql=spec["config"]["client_uri_graphql"],
+            uri_ws=spec["config"]["client_uri_ws"],
+            cookies=cookies
+        )
 
         spec["config"]["client"] = client
         return spec
@@ -200,7 +209,7 @@ class KedroGraphqlMaterialTemplate(pn.template.MaterialTemplate):
             self.sidebar.append(next_button)
 
         self.main.append(pn.Column(TemplateMainFactory(spec=spec)))
-        # pn.state.location.pathname = spec["panel_get_server_kwargs"]["base_url"]
+        # pn.state.location.pathname = spec["panel_get_server_kwargs"]["prefix"]
         pn.state.location.sync(
             self, {"page": "page"})
 
@@ -221,7 +230,7 @@ class NavigationSidebarButtonV2(pn.viewable.Viewer):
 
     def navigate(self, event):
         """Navigate to the specified page."""
-        pn.state.location.pathname = "/" + self.name.lower()
+        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + self.name.lower()
         pn.state.location.search = ""
         pn.state.location.reload = True
 
@@ -240,7 +249,11 @@ class NavigationSidebarButtonV2(pn.viewable.Viewer):
             b0_icon = None
 
         button = pn.widgets.Button(
-            name=self.name, button_type=b0_type, sizing_mode="stretch_width", icon=b0_icon)
+            name=self.name,
+            button_type=b0_type,
+            sizing_mode="stretch_width",
+            icon=b0_icon
+        )
         pn.bind(self.navigate, button, watch=True)
         yield button
 
@@ -285,10 +298,12 @@ class KedroGraphqlMaterialTemplateV2(pn.template.MaterialTemplate):
         """Asynchronously retrieves the user context for the template.
         This method can be overridden to provide custom user context data.
         """
-        if pn.state.headers.get("X-Forwarded-User", None):
-            user = pn.state.headers.get("X-Forwarded-User", None)
-            email = pn.state.headers.get("X-Forwarded-Email", None)
-            groups = pn.state.headers.get("X-Forwarded-Groups", None)
+        
+        user = pn.state.headers.get("X-Forwarded-User", None) or pn.state.headers.get("X-Auth-Request-User", None)
+
+        if user:
+            email = pn.state.headers.get("X-Forwarded-Email", None) or pn.state.headers.get("X-Auth-Request-Email", None)
+            groups = pn.state.headers.get("X-Forwarded-Groups", None) or pn.state.headers.get("X-Auth-Request-Groups", None)
             user_info = {"user": user, "email": email, "groups": groups}
         else:
             user = "Guest"
@@ -332,7 +347,10 @@ class KedroGraphqlMaterialTemplateV2(pn.template.MaterialTemplate):
             cookies = None
 
         client = KedroGraphqlClient(
-            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"], cookies=cookies)
+            uri_graphql=spec["config"]["client_uri_graphql"],
+            uri_ws=spec["config"]["client_uri_ws"],
+            cookies=cookies
+        )
 
         spec["config"]["client"] = client
         return spec
@@ -345,6 +363,7 @@ class KedroGraphqlMaterialTemplateV2(pn.template.MaterialTemplate):
         """
         super().__init__(
             title=spec["panel_get_server_kwargs"]["title"],
+            base_url=spec["panel_get_server_kwargs"]["prefix"],
             sidebar_width=200)
 
         self.spec = self.init_client(spec)

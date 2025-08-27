@@ -111,8 +111,11 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
     @staticmethod
     def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        return {"email": request.headers.get("X-Forwarded-Email", None),
-                "user": request.headers.get("X-Forwarded-User", None)}
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+
+        return {"email": email, "user": user}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
@@ -130,18 +133,19 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
             bool: True if the user has permission, False otherwise.
         """
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        if request.headers.get("X-Forwarded-Email", None):
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+        if email:
             logger.info("permission granted - user={u}, action={a}, source={s}".format(
-                u=str(request.headers.get("X-Forwarded-Email",
-                      request.headers.get("X-Forwarded-User", None))),
+                u=str(email or user),
                 a=str(self.action),
                 s=str(source)))
 
             return True
         else:
             logger.info("permission denied - user={u}, action={a}, source={s}".format(
-                u=str(request.headers.get("X-Forwarded-Email",
-                      request.headers.get("X-Forwarded-User", None))),
+                u=str(user),
                 a=str(self.action),
                 s=str(source)))
 
@@ -157,9 +161,14 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
     @staticmethod
     def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        return {"email": request.headers.get("X-Forwarded-Email", None),
-                "groups": request.headers.get("X-Forwarded-Groups", None),
-                "user": request.headers.get("X-Forwarded-User", None)}
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+        groups = request.headers.get("X-Forwarded-Groups") or request.headers.get("x-auth-request-groups")
+
+        return {"email": email,
+                "groups": groups,
+                "user": user}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
@@ -191,12 +200,15 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                 "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP is not set in the config, all actions will be denied.")
             return False
 
-        user_groups = request.headers.get("X-Forwarded-Groups", None)
+        user_groups = request.headers.get("X-Forwarded-Groups", None) or request.headers.get("x-auth-request-groups", None)
 
         if not user_groups:
             logger.warning(
                 "X-Forwarded-Groups header is not set, all actions will be denied.")
             return False
+        
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
 
         for group in user_groups.split(","):
             if group_to_role.get(group, None):
@@ -204,16 +216,14 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                 if role_to_action.get(role, None):
                     if self.action in role_to_action[role]:
                         logger.info("permission granted - user={u}, role={r}, action={a}, source={s}".format(
-                            u=str(request.headers.get("X-Forwarded-Email",
-                                  request.headers.get("X-Forwarded-User", None))),
+                            u=str(email or user),
                             r=str(role),
                             a=str(self.action),
                             s=str(source)))
                         return True
 
         logger.info("permission denied - user:={u}, action={a}, source={s}".format(
-            u=str(request.headers.get("X-Forwarded-Email",
-                  request.headers.get("X-Forwarded-User", None))),
+            u=str(email or user),
             a=str(self.action),
             s=str(source)))
 

@@ -1,19 +1,27 @@
+import asyncio
 import panel as pn
 import param
-import asyncio
-from kedro.io import AbstractDataset
 import requests
+from kedro.io import AbstractDataset
 
 pn.extension("perspective")
 
-
 class DatasetPerspective(pn.viewable.Viewer):
-    """A Kedro Dataframe viewer that loads a dataset from a presigned URL and displays it using panel Perspective."""
+    """
+    A Panel component that loads a Kedro dataset from a presigned URL and displays it using pn.pane.Perspective.
 
+    Attributes:
+        spec (dict): Kedro GraphQL UI specification
+        presigned_url (str): The presigned URL to load data from.
+        ds_name (str): The name of the dataset.
+        ds_type (str): The type of the dataset.
+        file_size_limit_mb (int): Maximum file size limit in MB to prevent loading large datasets
+    """
+
+    spec = param.Dict(default={}, doc="Kedro GraphQL UI specification")
     presigned_url = param.String(doc="The presigned URL to load data from")
-    spec = param.Dict(default={})
-    ds_name = param.String(doc="The name of the dataset")
-    ds_type = param.String(doc="The type of the dataset")
+    ds_name = param.String(doc="The name of the Kedro dataset")
+    ds_type = param.String(doc="The type of the Kedro dataset")
     file_size_limit_mb = param.Integer(doc="Maximum file size limit in MB")
 
     def __init__(self, **params):
