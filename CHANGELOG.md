@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+Added:
+
+- command-line flags for all configuration options, including complex data types support using JSON strings
+- proper configuration loading order (YAML spec > CLI flags > Environment variables > .env file > Defaults)
+- support for comma-separated strings, JSON arrays, and single values for list-type configuration options
+- `test_config.py` with unit tests for configuration precedence and data type parsing scenarios
+- `root_path` configuration option to support API endpoint prefixing
+- support for both `X-Forwarded-*` and `x-auth-request-*` header formats for OAuth2 proxy compatibility
+
+Changed:
+
+- `configuration.md` with alphabetical ordering and detailed examples for different data types
+- alphabetically sorted all spec-*.yaml files
+- some panel UI components for better async handling and loading states using `pn.state.onload`
+
+Removed:
+
+- some outdated documentation
+
+Fixed:
+
+- proper error handling in load_api_spec() to prevent crashes on YAML parsing errors
+- race conditions in Panel components by ensuring proper loading order
+- S3 provider key handling for files without directory prefixes
+- panel server kwargs configuration in UI specs
 
 ## [1.1.1] - 2025-08-01
 
