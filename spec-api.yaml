@@ -1,29 +1,29 @@
 ## Kedro GraphQL YAML API configuration file.
 config:
-  mongo_uri: "mongodb://root:example@localhost:27017/"
-  mongo_db_name: "pipelines"
-  mongo_db_collection: "pipelines" 
-  imports:
-    - "kedro_graphql.plugins.plugins"
   app: "kedro_graphql.asgi.KedroGraphQL"
-  app_title: "Kedro GraphQL"
   app_description: "A tool for serving kedro projects as a GraphQL API"
-  project_version: "1.0.1"
+  app_title: "Kedro GraphQL"
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
   celery_result_backend: "redis://localhost"
-  runner: "kedro.runner.SequentialRunner"
-  env: "local"
   conf_source: null
-  deprecation_docs: "https://github.com/opensean/kedro-graphql/blob/main/README.md#deprecations"
-  log_tmp_dir: "/tmp/"
-  log_path_prefix: null
-  root_path: null
+  deprecation_docs: ""
+  env: "local"
   events_config:
     event00:
       source: "example.com"
       type: "com.example.event"
+  imports:
+    - "kedro_graphql.plugins.plugins"
+  local_file_provider_server_url: "http://localhost:5000"
+  log_path_prefix: null
+  log_tmp_dir: "/tmp/"
+  mongo_db_collection: "pipelines"
+  mongo_db_name: "pipelines"
+  mongo_uri: "mongodb://root:example@localhost:27017/"
   permissions: "kedro_graphql.permissions.IsAuthenticatedAlways"
+  permissions_group_to_role_map: 
+    EXTERNAL_GROUP_NAME: admin
   permissions_role_to_action_map:
     admin:
       - "create_pipeline"
@@ -38,8 +38,8 @@ config:
       - "subscribe_to_events"
       - "subscribe_to_logs"
       - "create_event"
-  permissions_group_to_role_map: 
-    EXTERNAL_GROUP_NAME: admin
-  local_file_provider_server_url: "http://localhost:5000"
+  project_version: "1.0.1"
+  root_path: null
+  runner: "kedro.runner.SequentialRunner"
 
 
