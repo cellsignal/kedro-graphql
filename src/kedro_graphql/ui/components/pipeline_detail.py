@@ -26,7 +26,13 @@ class PipelineDetail(pn.viewable.Viewer):
             pn.Row: A row containing the detail view of the pipeline.
         """
         if "json" in raw:
-            yield pn.Row(pn.widgets.JSONEditor(value=self.pipeline.encode(encoder="dict"), mode="view", width=600))
+            yield pn.Row(
+                pn.widgets.JSONEditor(
+                    value=self.pipeline.encode(encoder="dict"),
+                    mode="view",
+                    width=600
+                )
+            )
         else:
             if self.pipeline.parameters:
                 param_df = pd.DataFrame({
@@ -39,10 +45,12 @@ class PipelineDetail(pn.viewable.Viewer):
                     'value': [],
                 }, index=[])
 
-            param_widget = pn.widgets.Tabulator(param_df,
-                                                disabled=True,
-                                                theme='materialize',
-                                                show_index=False)
+            param_widget = pn.widgets.Tabulator(
+                param_df,
+                disabled=True,
+                theme='materialize',
+                show_index=False
+            )
 
             if self.pipeline.tags:
                 tags_df = pd.DataFrame({
@@ -52,48 +60,55 @@ class PipelineDetail(pn.viewable.Viewer):
             else:
                 tags_df = pd.DataFrame({'key': [], 'value': []})
 
-            tags_widget = pn.widgets.Tabulator(tags_df,
-                                               disabled=True,
-                                               theme='materialize',
-                                               show_index=False)
+            tags_widget = pn.widgets.Tabulator(
+                tags_df,
+                disabled=True,
+                theme='materialize',
+                show_index=False
+            )
 
             if self.pipeline.data_catalog:
-
                 ds_df = pd.DataFrame({
                     'name': [i.name for i in self.pipeline.data_catalog],
                     'type': [json.loads(i.config)["type"] for i in self.pipeline.data_catalog],
                 }, index=[i for i in range(len(self.pipeline.data_catalog))])
             else:
-                # backwards compoatibility, will be deprecated
+                # backwards compatibility, will be deprecated
                 ds_df = pd.DataFrame({
                     'name': [i.name for i in self.pipeline.inputs] + [i.name for i in self.pipeline.outputs],
                     'type': [i.type for i in self.pipeline.inputs] + [i.type for i in self.pipeline.outputs],
                 }, index=[i for i in range(len(self.pipeline.inputs) + len(self.pipeline.outputs))])
 
-            ds_widget = pn.widgets.Tabulator(ds_df,
-                                             disabled=True,
-                                             buttons={
-                                                 'Download': "<i class='fa fa-download'></i>"},
-                                             theme='materialize',
-                                             show_index=False)
+            ds_widget = pn.widgets.Tabulator(
+                ds_df,
+                disabled=True,
+                buttons={'Download': "<i class='fa fa-download'></i>"},
+                theme='materialize',
+                show_index=False
+            )
 
-            # in the future this be a list of PipelineStatus objects
+            # in the future this will be a list of PipelineStatus objects
             # for now we grab each attribute from Pipeline object
 
-            cols = ["state", "task_id", "task_name", "task_args", "task_kwargs", "task_request",
-                    "task_excpetion", "task_traceback", "task_einfo", "task_self.pipeline"]
+            cols = [
+                "state", "task_id", "task_name", "task_args", "task_kwargs",
+                "task_request", "task_excpetion", "task_traceback", "task_einfo", "task_self.pipeline"
+            ]
             values = self.pipeline.encode(encoder="dict")["status"]
 
             status_df = pd.DataFrame(
                 values,
                 columns=cols,
-                index=[i for i in range(len(values))])
+                index=[i for i in range(len(values))]
+            )
 
-            status_widget = pn.widgets.Tabulator(status_df,
-                                                 disabled=True,
-                                                 theme='materialize',
-                                                 layout='fit_columns',
-                                                 show_index=False)
+            status_widget = pn.widgets.Tabulator(
+                status_df,
+                disabled=True,
+                theme='materialize',
+                layout='fit_columns',
+                show_index=False
+            )
 
             yield pn.Column(
                 pn.Row(
@@ -130,11 +145,7 @@ class PipelineDetail(pn.viewable.Viewer):
         raw = pn.widgets.CheckButtonGroup(name='JSON', value=[], options=["json"])
         detail = pn.bind(self.build_detail, raw)
         return pn.Column(
-            pn.Row(
-                raw
-            ),
-            pn.Row(
-                detail
-            ),
+            pn.Row(raw),
+            pn.Row(detail),
             sizing_mode="stretch_width"
         )

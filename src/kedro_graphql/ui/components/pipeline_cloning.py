@@ -1,10 +1,10 @@
-import panel as pn
-import param
 import asyncio
+import param
+import panel as pn
 import json
+from copy import deepcopy
 from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.models import Pipeline, Tag, ParameterType, ParameterInput, DataSetInput, TagInput, PipelineInput, PipelineInputStatus
-from copy import deepcopy
 
 pn.extension('modal')
 pn.extension(notifications=True)
@@ -20,9 +20,9 @@ SECTION_ITEM_STYLES = {
     'word-break': 'break-all',
 }
 
-
 class PipelineCloning(pn.viewable.Viewer):
-    """A component that clones a Kedro pipeline
+    """
+    A Panel component that clones a Kedro pipeline.
 
     Attributes:
         pipeline (Pipeline): The Kedro pipeline to retry.
@@ -35,9 +35,28 @@ class PipelineCloning(pn.viewable.Viewer):
     def __init__(self, **params):
         super().__init__(**params)
 
-        self.state = deepcopy(self.pipeline)
         pn.state.notifications.position = 'top-center'
-
+        
+        if not self.pipeline or not self.client:
+            self._content = pn.Column(
+                pn.pane.Markdown("**Missing required parameters: `pipeline`, or `client`.**"),
+                sizing_mode="stretch_width"
+            )
+        else:
+            self.state = deepcopy(self.pipeline)
+            
+            # Show loading spinner until the dashboard is built
+            self._content = pn.Column(
+                pn.indicators.LoadingSpinner(value=True, width=50, height=50),
+                pn.pane.Markdown("Fetching Data..."),
+                sizing_mode='stretch_width'
+            )
+            
+            # Ensures build after panel server is fully loaded to avoid race conditions
+            pn.state.onload(lambda: asyncio.create_task(asyncio.to_thread(self.build_component)))
+    
+    def build_component(self):
+        """Builds the pipeline cloning component with datasets, parameters, and tags sections."""
         self.datasets_section = self._create_datasets_section()
         self.parameters_section = self._create_parameters_section()
         self.tags_section = self._create_tags_section()
@@ -52,7 +71,22 @@ class PipelineCloning(pn.viewable.Viewer):
             self.datasets_section,
             self.parameters_section,
             self.tags_section,
-            pn.Row(stage_button, run_button, styles={'margin-top': '25px'}), margin=(10, 10), scroll=True
+            pn.Row(
+                stage_button,
+                run_button,
+                styles={'margin-top': '25px'}
+            ),
+            margin=(10, 10),
+            scroll=True
+        )
+        
+        self._content[:] = pn.Column(
+            pn.Card(
+                self.view,
+                title=f"Clone Pipeline: {self.pipeline.name}",
+                sizing_mode="stretch_width"
+            ),
+            sizing_mode="stretch_width"
         )
 
     def _create_datasets_section(self):
@@ -66,25 +100,35 @@ class PipelineCloning(pn.viewable.Viewer):
                     name = dataset.name
                     filepath = config.get("filepath", "")
 
-                    edit_button = pn.widgets.Button(name="Edit", button_type="primary", width=100, styles={
-                                                    'margin-top': 'auto', 'margin-bottom': 'auto'})
+                    edit_button = pn.widgets.Button(
+                        name="Edit",
+                        button_type="primary",
+                        width=100,
+                        styles={'margin-top': 'auto', 'margin-bottom': 'auto'}
+                    )
                     modal = self._dataset_edit_modal(dataset, edit_button)
 
-                    dataset_block = pn.Row(edit_button, pn.Column(
-                        pn.pane.HTML(f"<b>Name</b>: {name}", styles={'font-size': '16px'}),
-                        pn.pane.HTML(f"<b>Filepath</b>: {filepath}", styles={'font-size': '16px'}),
-                        styles={'margin-top': 'auto', 'margin-bottom': 'auto'}),
-                        modal, styles=SECTION_ITEM_STYLES)
+                    dataset_block = pn.Row(
+                        edit_button,
+                        pn.Column(
+                            pn.pane.HTML(f"<b>Name</b>: {name}", styles={'font-size': '16px'}),
+                            pn.pane.HTML(f"<b>Filepath</b>: {filepath}", styles={'font-size': '16px'}),
+                            styles={'margin-top': 'auto', 'margin-bottom': 'auto'}
+                        ),
+                        modal,
+                        styles=SECTION_ITEM_STYLES
+                    )
                     widgets.append(dataset_block)
                 except json.JSONDecodeError as e:
                     pn.state.notifications.error(
-                        f"Failed to decode JSON for dataset {dataset.name}: {str(e)}", duration=10000)
+                        f"Failed to decode JSON for dataset {dataset.name}: {str(e)}",
+                        duration=10000
+                    )
                     continue
 
         return pn.Column(
             pn.pane.Markdown("## Datasets"),
-            pn.FlexBox(
-                *widgets) if widgets else pn.pane.Markdown("No datasets found."),
+            pn.FlexBox(*widgets) if widgets else pn.pane.Markdown("No datasets found."),
         )
 
     def _dataset_edit_modal(self, dataset, trigger):
@@ -449,10 +493,7 @@ class PipelineCloning(pn.viewable.Viewer):
         pn.state.notifications.success(
             f"Pipeline cloned and {'staged' if type == 'staged' else 'executed'} successfully.", duration=10000)
 
-    @param.depends("pipeline", "client")
-    async def build_view(self):
-        yield pn.indicators.LoadingSpinner(value=True, width=25, height=25)
-        yield pn.Card(self.view, title=f"Clone Pipeline: {self.pipeline.name}", sizing_mode="stretch_width")
+
 
     def __panel__(self):
-        return self.build_view
+        return self._content

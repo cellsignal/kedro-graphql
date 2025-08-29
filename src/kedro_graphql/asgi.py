@@ -31,6 +31,7 @@ class KedroGraphQL(FastAPI):
             description=config["KEDRO_GRAPHQL_APP_DESCRIPTION"],
             version=config["KEDRO_GRAPHQL_PROJECT_VERSION"],
             docs_url="/docs",  # Swagger UI URL
+            root_path=config["KEDRO_GRAPHQL_ROOT_PATH"],
         )
 
         self.kedro_session = kedro_session

@@ -32,7 +32,10 @@ class PipelineMonitor(param.Parameterized):
             cookies = None
 
         self.client = KedroGraphqlClient(
-            uri_graphql=spec["config"]["client_uri_graphql"], uri_ws=spec["config"]["client_uri_ws"], cookies=cookies)
+            uri_graphql=spec["config"]["client_uri_graphql"],
+            uri_ws=spec["config"]["client_uri_ws"],
+            cookies=cookies
+        )
         self.pipeline = pipeline
 
     @param.depends('pipeline', watch=True)
@@ -62,8 +65,17 @@ class PipelineMonitor(param.Parameterized):
     def __panel__(self):
         return pn.Column(
             pn.Param(
-                self, name="", parameters=["status", "logs"],
-                widgets={"status": pn.widgets.StaticText,
-                         "logs": pn.widgets.TextAreaInput(name="Live Log Stream", sizing_mode='stretch_width', height=400)}),
+                self,
+                name="",
+                parameters=["status", "logs"],
+                widgets={
+                    "status": pn.widgets.StaticText,
+                    "logs": pn.widgets.TextAreaInput(
+                        name="Live Log Stream",
+                        sizing_mode='stretch_width',
+                        height=400
+                    )
+                }
+            ),
             sizing_mode='stretch_width'
         )

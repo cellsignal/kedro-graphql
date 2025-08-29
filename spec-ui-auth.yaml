@@ -1,21 +1,31 @@
 ## Kedro GraphQL UI configuration file
 # This file defines the structure and components of the Kedro GraphQL UI.
-panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
-  title: Kedro GraphQL UI
-  show: false
-  admin: true
-  base_url: /
-  port: 5006
-  allow_websocket_origin: 
-    - "localhost:5006"
-    - "localhost:4180"
-  warm: true
 config:
   client_uri_graphql: "http://localhost:4180/graphql"
   client_uri_ws: "ws://localhost:4180/graphql"
   imports:
     - "kedro_graphql.ui.plugins"
+nav:
+  sidebar:
+    - name: Pipelines
+      page: pipelines
+    - name: Search 
+      page: search
 pages:
+  dashboard:
+    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
+    params:
+      dataset_map:
+        pandas.CSVDataset: dataset_perspective
+        pandas.ParquetDataset: dataset_perspective
+  dataset_perspective:
+    module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
+    params:
+      file_size_limit_mb: 10
+  explore:
+    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
+  form:
+    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
   pipelines:
     module: kedro_graphql.ui.components.pipeline_cards.PipelineCards
     params:
@@ -25,23 +35,13 @@ pages:
     module: kedro_graphql.ui.components.pipeline_search.PipelineSearch
     params:
       dashboard_page: dashboard
-  dashboard:
-    module: kedro_graphql.ui.components.pipeline_dashboard_factory.PipelineDashboardFactory
-    params:
-      dataset_map:
-        pandas.CSVDataset: dataset_perspective
-        pandas.ParquetDataset: dataset_perspective
-  form:
-    module: kedro_graphql.ui.components.pipeline_form_factory.PipelineFormFactory
-  explore:
-    module: kedro_graphql.ui.components.pipeline_viz.PipelineViz
-  dataset_perspective:
-    module: kedro_graphql.ui.components.dataset_perspective.DatasetPerspective
-    params:
-      file_size_limit_mb: 10
-nav:
-  sidebar:
-    - name: Pipelines
-      page: pipelines
-    - name: Search 
-      page: search
+panel_get_server_kwargs:  ## pass argument to the https://panel.holoviz.org/api/panel.io.server.html#panel.io.server.get_server function
+  admin: true
+  port: 5006
+  prefix: /
+  show: false
+  title: Kedro GraphQL UI
+  warm: true
+  websocket_origin: 
+    - "localhost:5006"
+    - "localhost:4180"

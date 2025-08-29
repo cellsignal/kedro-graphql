@@ -49,7 +49,7 @@ class BaseExample00Form(pn.viewable.Viewer):
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
-        pn.state.location.pathname = "/dashboard"
+        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + "dashboard"
         pn.state.location.search = "?pipeline=example00&id=" + pipeline_id
         pn.state.location.reload = True
 
@@ -73,11 +73,18 @@ class BaseExample00Form(pn.viewable.Viewer):
         return PipelineInput(**{
             "name": "example00",
             "state": "STAGED",
-            "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                             {"name": "text_out", "config": json.dumps(output_dict)}],
-            "parameters": [{"name": "example", "value": self.example},
-                           {"name": "duration", "value": str(self.duration), "type": "FLOAT"}],
-            "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
+            "data_catalog": [
+                {"name": "text_in", "config": json.dumps(input_dict)},
+                {"name": "text_out", "config": json.dumps(output_dict)}
+            ],
+            "parameters": [
+                {"name": "example", "value": self.example},
+                {"name": "duration", "value": str(self.duration), "type": "FLOAT"}
+            ],
+            "tags": [
+                {"key": "author", "value": "opensean"},
+                {"key": "package", "value": "kedro-graphql"}
+            ]
         })
 
     @param.depends('disabled')
@@ -311,7 +318,7 @@ class BaseExample01Form(pn.viewable.Viewer):
 
     def navigate(self, pipeline_id: str):
         """Navigate to the pipeline dashboard with the given ID."""
-        pn.state.location.pathname = "/dashboard"
+        pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + "dashboard"
         pn.state.location.search = "?pipeline=example00&id=" + pipeline_id
         pn.state.location.reload = True
 

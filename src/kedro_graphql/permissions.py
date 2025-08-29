@@ -103,23 +103,40 @@ class IsAuthenticatedAlways(IsAuthenticatedAction):
 
 
 class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
-    """Permission class that checks for X-Forwarded-Email header."""
+    """Permission class that checks for X-Forwarded-Email header.
+
+    Also supports X-Auth-Request-* headers as fallbacks.
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     @staticmethod
     def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        """Get user information from X-Forwarded-* or X-Auth-Request-* headers.
+
+        Checks for both X-Forwarded-Email/User headers and X-Auth-Request-Email/User headers.
+
+        Args:
+            info: Strawberry Info object containing the request context.
+
+        Returns:
+            Optional[Any]: Dictionary with 'email' and 'user' keys, or None if not available.
+        """
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        return {"email": request.headers.get("X-Forwarded-Email", None),
-                "user": request.headers.get("X-Forwarded-User", None)}
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+
+        return {"email": email, "user": user}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
         """Check if the user has permission based on X-Forwarded-Email header.
-        If the header is present, permission is granted.
-        If the header is not present, permission is denied.
+        Checks for both X-Forwarded-Email and X-Auth-Request-Email headers as fallbacks.
+        If either header is present, permission is granted.
+        If neither header is present, permission is denied.
 
         Kwargs:
             source: The source of the request, typically the fields of the GraphQL query.
@@ -130,18 +147,19 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
             bool: True if the user has permission, False otherwise.
         """
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        if request.headers.get("X-Forwarded-Email", None):
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+        if email:
             logger.info("permission granted - user={u}, action={a}, source={s}".format(
-                u=str(request.headers.get("X-Forwarded-Email",
-                      request.headers.get("X-Forwarded-User", None))),
+                u=str(email or user),
                 a=str(self.action),
                 s=str(source)))
 
             return True
         else:
             logger.info("permission denied - user={u}, action={a}, source={s}".format(
-                u=str(request.headers.get("X-Forwarded-Email",
-                      request.headers.get("X-Forwarded-User", None))),
+                u=str(user),
                 a=str(self.action),
                 s=str(source)))
 
@@ -149,22 +167,42 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
 
 
 class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
-    """Permission class that checks for X-Forwarded-Groups header and RBAC mapping."""
+    """Permission class that checks for X-Forwarded-Groups header and RBAC mapping.
+
+    Also supports X-Auth-Request-Groups headers as fallbacks.
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     @staticmethod
     def get_user_info(info: strawberry.Info) -> typing.Optional[typing.Any]:
+        """Get user information from X-Forwarded-* or X-Auth-Request-* headers.
+
+        Checks for both X-Forwarded-* headers and X-Auth-Request-* headers as fallbacks.
+
+        Args:
+            info: Strawberry Info object containing the request context.
+
+        Returns:
+            Optional[Any]: Dictionary with 'email', 'groups', and 'user' keys.
+        """
         request: typing.Union[Request, WebSocket] = info.context["request"]
-        return {"email": request.headers.get("X-Forwarded-Email", None),
-                "groups": request.headers.get("X-Forwarded-Groups", None),
-                "user": request.headers.get("X-Forwarded-User", None)}
+
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
+        groups = request.headers.get("X-Forwarded-Groups") or request.headers.get("x-auth-request-groups")
+
+        return {"email": email,
+                "groups": groups,
+                "user": user}
 
     def has_permission(
         self, source: typing.Any, info: strawberry.Info, **kwargs
     ) -> bool:
         """Check if the user has permission based on X-Forwarded-Groups header and RBAC mapping.
+
+        Checks for both X-Forwarded-Groups and X-Auth-Request-Groups headers as fallbacks.
         If the header is present and the user belongs to a group that has the required role for
         the specified action, permission is granted.
         If the header is not present or the user does not belong to a group with the required
@@ -191,12 +229,15 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                 "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP is not set in the config, all actions will be denied.")
             return False
 
-        user_groups = request.headers.get("X-Forwarded-Groups", None)
+        user_groups = request.headers.get("X-Forwarded-Groups", None) or request.headers.get("x-auth-request-groups", None)
 
         if not user_groups:
             logger.warning(
                 "X-Forwarded-Groups header is not set, all actions will be denied.")
             return False
+        
+        email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
+        user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
 
         for group in user_groups.split(","):
             if group_to_role.get(group, None):
@@ -204,16 +245,14 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
                 if role_to_action.get(role, None):
                     if self.action in role_to_action[role]:
                         logger.info("permission granted - user={u}, role={r}, action={a}, source={s}".format(
-                            u=str(request.headers.get("X-Forwarded-Email",
-                                  request.headers.get("X-Forwarded-User", None))),
+                            u=str(email or user),
                             r=str(role),
                             a=str(self.action),
                             s=str(source)))
                         return True
 
         logger.info("permission denied - user:={u}, action={a}, source={s}".format(
-            u=str(request.headers.get("X-Forwarded-Email",
-                  request.headers.get("X-Forwarded-User", None))),
+            u=str(email or user),
             a=str(self.action),
             s=str(source)))
 

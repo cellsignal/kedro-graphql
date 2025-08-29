@@ -33,11 +33,11 @@ class PipelineCards(pn.viewable.Viewer):
         """
 
         if event == "run":
-            pn.state.location.pathname = "/" + self.form_page
+            pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + self.form_page
             pn.state.location.search = "?pipeline=" + pipeline + "&form=" + form.__name__
             pn.state.location.reload = True
         elif event == "explore":
-            pn.state.location.pathname = "/" + self.explore_page
+            pn.state.location.pathname = self.spec["panel_get_server_kwargs"]["prefix"] + self.explore_page
             pn.state.location.search = "?pipeline=" + pipeline
             pn.state.location.reload = True
 
@@ -53,16 +53,28 @@ class PipelineCards(pn.viewable.Viewer):
             p_card = pn.Card(title=pipeline, sizing_mode='stretch_width')
             run_button = pn.widgets.Button(name='Run', button_type='success')
             explore_button = pn.widgets.Button(name='Explore', button_type='default')
-            p_card = pn.Card(pipeline, pn.Row(
-                run_button,
-                explore_button
-            ),
-                title=pipeline)
+            p_card = pn.Card(
+                pipeline,
+                pn.Row(run_button, explore_button),
+                title=pipeline
+            )
             p_cards.append(p_card)
-            pn.bind(self.navigate, run_button, event="run",
-                    pipeline=pipeline, form=forms[0], watch=True)
-            pn.bind(self.navigate, explore_button, event="explore",
-                    pipeline=pipeline, form=forms[0], watch=True)
+            pn.bind(
+                self.navigate,
+                run_button,
+                event="run",
+                pipeline=pipeline,
+                form=forms[0],
+                watch=True
+            )
+            pn.bind(
+                self.navigate,
+                explore_button,
+                event="explore",
+                pipeline=pipeline,
+                form=forms[0],
+                watch=True
+            )
 
         yield pn.FlexBox(*p_cards)
 

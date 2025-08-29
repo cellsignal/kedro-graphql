@@ -35,12 +35,16 @@ class PipelineViz(pn.viewable.Viewer):
             pn.pane.HTML: The HTML pane containing the iframe for the pipeline visualization.
         """
         iframe = """
-        <iframe frameBorder="0"  style="height:100%; width:100%" src="http://localhost:5006/pipeline/viz-build/index.html?pid={pipeline}"></iframe>
-        """.format(pipeline=self.pipeline)
+        <iframe frameBorder="0" style="height:100%; width:100%" src="{prefix}pipeline/viz-build/index.html?pid={pipeline}"></iframe>
+        """.format(pipeline=self.pipeline, prefix=self.spec["panel_get_server_kwargs"]["prefix"])
         if self.sid:
             iframe = """
-            <iframe frameBorder="0" style="height:100%; width:100%" src="http://localhost:5006/pipeline/viz-build/index.html?pid={pipeline}&sid={sid}"></iframe>
-            """.format(pipeline=self.pipeline, sid=self.sid)
+            <iframe frameBorder="0" style="height:100%; width:100%" src="{prefix}pipeline/viz-build/index.html?pid={pipeline}&sid={sid}"></iframe>
+            """.format(
+                pipeline=self.pipeline,
+                sid=self.sid,
+                prefix=self.spec["panel_get_server_kwargs"]["prefix"]
+            )
 
         yield pn.pane.HTML(iframe, height=self.height, sizing_mode="stretch_width")
 
