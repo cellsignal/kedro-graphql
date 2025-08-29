@@ -12,17 +12,7 @@ def discover_plugins(config):
     Args:
         config (dict): Configuration dictionary containing the imports.
     """
-    kedro_imports = config["KEDRO_GRAPHQL_IMPORTS"]
-    
-    # Handle both string and list types
-    if isinstance(kedro_imports, str):
-        imports = [i.strip() for i in kedro_imports.split(",") if len(i.strip()) > 0]
-    elif isinstance(kedro_imports, list):
-        imports = [i.strip() for i in kedro_imports if len(i.strip()) > 0]
-    else:
-        imports = []
-    
-    for i in imports:
+    for i in config["KEDRO_GRAPHQL_IMPORTS"]:
         import_module(i)
 
 

@@ -70,6 +70,7 @@ def load_api_spec():
                 conf = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 logger.error(str(exc))
+                return {}
 
         # import additinal modules to enable plugin discovery
         # e.g. @gql_form, @gql_data, etc...
@@ -153,6 +154,4 @@ def load_config(cli_config=None):
         **load_api_spec(),  # YAML API spec (highest precedence)
     }
     config = env_var_parser(config)  # special parsing for any environment variables
-
-    print(f"Kedro app description: {config.get('KEDRO_GRAPHQL_APP_DESCRIPTION', 'N/A')}")
     return config
