@@ -76,7 +76,7 @@ source venv/bin/activate
 Install dependencies.
 
 ```bash
-pip install -r src/requirements.txt
+pip install .
 ```
 
 Create a text file.
