@@ -127,7 +127,9 @@ class KedroGraphQL(FastAPI):
                 econf = self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"]
 
                 body = await request.body()
-                event: CloudEvent = from_http(request.headers, body) # will raise if not a valid cloudevent
+                event: CloudEvent = from_http(
+                    request.headers, body
+                )  # will raise if not a valid cloudevent
 
                 logger.info(f"Received event: {to_json(event)}")
 
@@ -141,40 +143,48 @@ class KedroGraphQL(FastAPI):
                 created_pipelines = []
 
                 for n in pipeline_names:
-                    
+
                     pipeline_input = PipelineInput.from_event(
                         name=n, event=event, state="READY"
                     )
 
-                    q_create = build_graphql_query("createPipelineReturnFull", fragments=["FullPipeline"])
+                    q_create = build_graphql_query(
+                        "createPipelineReturnFull", fragments=["FullPipeline"]
+                    )
 
                     # Need to STAGE to get a pipeline id to pass as parameter
                     resp = await self.schema.execute(
-                            q_create,
-                            variable_values={
-                                "pipeline": pipeline_input.encode(encoder="graphql")
-                            }
-                        )
-                    
-                    staged = Pipeline.decode(resp.data["createPipeline"], decoder="graphql")
-                    
+                        q_create,
+                        variable_values={
+                            "pipeline": pipeline_input.encode(encoder="graphql")
+                        },
+                    )
+
+                    staged = Pipeline.decode(
+                        resp.data["createPipeline"], decoder="graphql"
+                    )
+
                     pipeline_input.state = "READY"
-                    
+
                     pipeline_input.parameters.append(
                         ParameterInput(name="id", value=str(staged.id), type="STRING")
                     )
 
-                    q_update = build_graphql_query("updatePipelineReturnFull", fragments=["FullPipeline"])
+                    q_update = build_graphql_query(
+                        "updatePipelineReturnFull", fragments=["FullPipeline"]
+                    )
 
                     resp = await self.schema.execute(
-                            q_update,
-                            variable_values={
-                                "id": staged.id,
-                                "pipeline": pipeline_input.encode(encoder="graphql"),
-                            },
-                        )
-                    
-                    created = Pipeline.decode(resp.data["updatePipeline"], decoder="graphql")
+                        q_update,
+                        variable_values={
+                            "id": staged.id,
+                            "pipeline": pipeline_input.encode(encoder="graphql"),
+                        },
+                    )
+
+                    created = Pipeline.decode(
+                        resp.data["updatePipeline"], decoder="graphql"
+                    )
                     created_pipelines.append(created.encode(encoder="dict"))
 
                     logger.info(f"event " f"{event.id} triggered pipeline {created.id}")
