@@ -210,7 +210,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")])])
-    def create_pipeline(self, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
+    def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
@@ -294,7 +294,7 @@ class Mutation:
             return p
 
     @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")])])
-    def update_pipeline(self, id: str, pipeline: PipelineInput, unique_paths: Optional[List[str]], info: Info) -> Pipeline:
+    def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
 
         try:
             p = info.context["request"].app.backend.read(id=id)

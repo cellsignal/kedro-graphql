@@ -27,6 +27,7 @@ Fixed:
 - race conditions in Panel components by ensuring proper loading order
 - S3 provider key handling for files without directory prefixes
 - panel server kwargs configuration in UI specs
+- made `unique_paths` parameter optional with default `None` in `create_pipeline` and `update_pipeline` mutations to fix issue where passing empty string `""` was converted to `['']` (a truthy list) causing unexpected calls to `generate_unique_paths`
 
 ## [1.1.1] - 2025-08-01
 
