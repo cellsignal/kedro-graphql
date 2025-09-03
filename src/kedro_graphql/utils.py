@@ -1,6 +1,7 @@
 import gql
 import json
 from functools import reduce
+from graphql.language import print_ast
 from importlib_resources import files
 from typing import Any, Optional
 from .models import Pipeline
@@ -28,7 +29,7 @@ def build_graphql_query(
     # # Iterate through definitions and extract named operations
     for definition in document.definitions:
         if hasattr(definition, "name") and definition.name.value == query_name:
-            outstr += str(definition) + "\n"
+            outstr += print_ast(definition) + "\n"
 
     if not outstr:
         raise ValueError(f"Query {query_name} not found in {query_file}")
@@ -37,7 +38,7 @@ def build_graphql_query(
         count = 0
         for definition in document.definitions:
             if hasattr(definition, "name") and definition.name.value in fragments:
-                outstr += str(definition) + "\n"
+                outstr += print_ast(definition) + "\n"
                 count += 1
         if count != len(fragments):
             raise ValueError(f"Not all fragments {fragments} found in {query_file}")

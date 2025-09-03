@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from strawberry.fastapi import GraphQLRouter
 from cloudevents.http import from_http, to_json
-from cloudevents.pydantic import CloudEvent
+from cloudevents.pydantic.v1 import CloudEvent
 
 from .logs.logger import logger
 from .backends import init_backend
@@ -13,7 +13,6 @@ from .celeryapp import celery_app
 from .decorators import RESOLVER_PLUGINS, TYPE_PLUGINS, discover_plugins
 from .models import PipelineTemplates
 from .schema import build_schema
-from .tasks import handle_event
 from .config import load_config
 from .permissions import get_permissions
 from starlette.requests import Request
@@ -134,10 +133,13 @@ class KedroGraphQL(FastAPI):
                 logger.info(f"Received event: {to_json(event)}")
 
                 # match event details to corresponding pipelines
+                source = event.get_attributes().get("source", None)
+                type = event.get_attributes().get("type", None)
+                
                 pipeline_names = [
                     k
                     for k, v in econf.items()
-                    if v["source"] == event.source and v["type"] == event.type
+                    if v["source"] == source and v["type"] == type
                 ]
 
                 created_pipelines = []
@@ -158,6 +160,7 @@ class KedroGraphQL(FastAPI):
                         variable_values={
                             "pipeline": pipeline_input.encode(encoder="graphql")
                         },
+                        context_value={"request": request},
                     )
 
                     staged = Pipeline.decode(
@@ -180,6 +183,7 @@ class KedroGraphQL(FastAPI):
                             "id": staged.id,
                             "pipeline": pipeline_input.encode(encoder="graphql"),
                         },
+                        context_value={"request": request},
                     )
 
                     created = Pipeline.decode(

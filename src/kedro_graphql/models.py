@@ -471,15 +471,25 @@ class PipelineInput:
         Tags will be added for event metadata and the entire event will be added 
         as a single parameter (json-serialized).
         """
+        event_bytes = to_json(event)
+        event = json.loads(event_bytes.decode())
+
+        id = event.get("id")
+        source = event.get("source")
+        type = event.get("type")
+
+        if not id or not source or not type:
+            raise ValueError("CloudEvent must have 'id', 'source', and 'type' attributes")
+        
         return cls(
             name=name,
             state=state,
             parameters=[ParameterInput(
-                name="event", value=to_json(event), type="STRING")],
+                name="event", value=event_bytes, type="STRING")],
             tags=[
-                {"key": "event_id", "value": event.id},
-                {"key": "event_source", "value": event.source},
-                {"key": "event_type", "value": event.type}
+                {"key": "event_id", "value": id},
+                {"key": "event_source", "value": source},
+                {"key": "event_type", "value": type}
             ]
         )
 
