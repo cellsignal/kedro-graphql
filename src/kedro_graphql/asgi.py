@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from strawberry.fastapi import GraphQLRouter
 from cloudevents.http import from_http, to_json
+from cloudevents.pydantic import CloudEvent
 
 from .logs.logger import logger
 from .backends import init_backend
@@ -16,6 +17,8 @@ from .tasks import handle_event
 from .config import load_config
 from .permissions import get_permissions
 from starlette.requests import Request
+from kedro_graphql.utils import build_graphql_query
+from kedro_graphql.models import PipelineInput, Pipeline, ParameterInput
 
 CONFIG = load_config()
 logger.debug("configuration loaded by {s}".format(s=__name__))
@@ -106,9 +109,12 @@ class KedroGraphQL(FastAPI):
                     return access
             return authenticate
 
-        if self.config.get("KEDRO_GRAPHQL_EVENTS_CONFIG", None) and isinstance(self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"], dict):
+        if isinstance(self.config.get("KEDRO_GRAPHQL_EVENTS_CONFIG", None), dict):
 
-            @self.post("/event/", dependencies=[Depends(authenticate_factory(action="create_event"))])
+            @self.post(
+                "/event/",
+                dependencies=[Depends(authenticate_factory(action="create_event"))],
+            )
             async def event(request: Request):
                 """
                 Endpoint to handle cloudevents.
@@ -118,12 +124,63 @@ class KedroGraphQL(FastAPI):
                 Returns:
                 dict: Result id of the event handling.
                 """
+                econf = self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"]
+
                 body = await request.body()
-                event = from_http(request.headers, body)
-                logger.info(f"Received event: {event}")
-                result = handle_event.delay(
-                    to_json(event), self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"])
-                return {"id": result.task_id}
+                event: CloudEvent = from_http(request.headers, body) # will raise if not a valid cloudevent
+
+                logger.info(f"Received event: {to_json(event)}")
+
+                # match event details to corresponding pipelines
+                pipeline_names = [
+                    k
+                    for k, v in econf.items()
+                    if v["source"] == event.source and v["type"] == event.type
+                ]
+
+                created_pipelines = []
+
+                for n in pipeline_names:
+                    
+                    pipeline_input = PipelineInput.from_event(
+                        name=n, event=event, state="READY"
+                    )
+
+                    q_create = build_graphql_query("createPipelineReturnFull", fragments=["FullPipeline"])
+
+                    # Need to STAGE to get a pipeline id to pass as parameter
+                    resp = await self.schema.execute(
+                            q_create,
+                            variable_values={
+                                "pipeline": pipeline_input.encode(encoder="graphql")
+                            }
+                        )
+                    
+                    staged = Pipeline.decode(resp.data["createPipeline"], decoder="graphql")
+                    
+                    pipeline_input.state = "READY"
+                    
+                    pipeline_input.parameters.append(
+                        ParameterInput(name="id", value=str(staged.id), type="STRING")
+                    )
+
+                    q_update = build_graphql_query("updatePipelineReturnFull", fragments=["FullPipeline"])
+
+                    resp = await self.schema.execute(
+                            q_update,
+                            variable_values={
+                                "id": staged.id,
+                                "pipeline": pipeline_input.encode(encoder="graphql"),
+                            },
+                        )
+                    
+                    created = Pipeline.decode(resp.data["updatePipeline"], decoder="graphql")
+                    created_pipelines.append(created.encode(encoder="dict"))
+
+                    logger.info(f"event " f"{event.id} triggered pipeline {created.id}")
+
+                return created_pipelines
+
         else:
             logger.warning(
                 "KEDRO_GRAPHQL_EVENTS_CONFIG is not set or not a dictionary. "

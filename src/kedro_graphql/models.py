@@ -1,4 +1,3 @@
-from cloudevents.pydantic import CloudEvent
 import json
 from copy import deepcopy
 from datetime import datetime
@@ -13,6 +12,8 @@ from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
+from cloudevents.conversion import to_json
+from cloudevents.pydantic.v1 import CloudEvent
 # from strawberry.permission import PermissionExtension
 
 from .config import load_config
@@ -462,7 +463,25 @@ class PipelineInput:
             return p
         else:
             raise TypeError("encoder must be 'dict' or 'graphql'")
-
+        
+    @classmethod
+    def from_event(cls, name: str, state: PipelineInputStatus, event: CloudEvent) -> "PipelineInput":
+        """
+        Factory method to create a new PipelineInput from a CloudEvent. 
+        Tags will be added for event metadata and the entire event will be added 
+        as a single parameter (json-serialized).
+        """
+        return cls(
+            name=name,
+            state=state,
+            parameters=[ParameterInput(
+                name="event", value=to_json(event), type="STRING")],
+            tags=[
+                {"key": "event_id", "value": event.id},
+                {"key": "event_source", "value": event.source},
+                {"key": "event_type", "value": event.type}
+            ]
+        )
 
 @strawberry.enum
 class State(Enum):
