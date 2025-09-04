@@ -28,6 +28,7 @@ Fixed:
 - S3 provider key handling for files without directory prefixes
 - panel server kwargs configuration in UI specs
 - made `unique_paths` parameter optional with default `None` in `create_pipeline` and `update_pipeline` mutations to fix issue where passing empty string `""` was converted to `['']` (a truthy list) causing unexpected calls to `generate_unique_paths`
+- configuration loading where CLI defaults for `conf_source` and `env` were being passed directly to `start_app` and `start_worker` instead of using the values from the merged configuration that includes the YAML spec file.
 
 ## [1.1.1] - 2025-08-01
 
