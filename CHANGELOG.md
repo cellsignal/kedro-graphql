@@ -10,6 +10,7 @@ Added:
 - `test_config.py` with unit tests for configuration precedence and data type parsing scenarios
 - `root_path` configuration option to support API endpoint prefixing
 - support for both `X-Forwarded-*` and `x-auth-request-*` header formats for OAuth2 proxy compatibility
+- client URI configuration options for GraphQL client (`client_uri_graphql` and `client_uri_ws`) with defaults and full CLI/environment variable support
 
 Changed:
 

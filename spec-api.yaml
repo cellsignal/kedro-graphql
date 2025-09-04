@@ -6,6 +6,8 @@ config:
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
   celery_result_backend: "redis://localhost"
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
   conf_source: null
   deprecation_docs: ""
   env: "local"

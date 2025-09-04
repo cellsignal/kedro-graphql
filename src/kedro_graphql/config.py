@@ -16,6 +16,8 @@ defaults = {
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
     "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
+    "KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL": "http://localhost:5000/graphql",
+    "KEDRO_GRAPHQL_CLIENT_URI_WS": "ws://localhost:5000/graphql",
     "KEDRO_GRAPHQL_CONF_SOURCE": None,
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": None,
     "KEDRO_GRAPHQL_ENV": "local",
