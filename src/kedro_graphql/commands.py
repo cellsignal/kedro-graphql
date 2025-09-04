@@ -180,15 +180,15 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
     elif worker:
         if reload:
             run_process(str(reload_path), target=start_worker, args=(
-                config["KEDRO_GRAPHQL_APP"], config, conf_source, env, metadata.package_name, metadata.project_path))
+                config["KEDRO_GRAPHQL_APP"], config, config["KEDRO_GRAPHQL_CONF_SOURCE"], config["KEDRO_GRAPHQL_ENV"], metadata.package_name, metadata.project_path))
         else:
-            start_worker(config["KEDRO_GRAPHQL_APP"], config, conf_source, env,
+            start_worker(config["KEDRO_GRAPHQL_APP"], config, config["KEDRO_GRAPHQL_CONF_SOURCE"], config["KEDRO_GRAPHQL_ENV"],
                          metadata.package_name, metadata.project_path)
 
     else:
         if reload:
-            run_process(reload_path, target=start_app, args=(config["KEDRO_GRAPHQL_APP"], config, conf_source,
-                        env, metadata.package_name, metadata.project_path))
+            run_process(reload_path, target=start_app, args=(config["KEDRO_GRAPHQL_APP"], config, config["KEDRO_GRAPHQL_CONF_SOURCE"],
+                        config["KEDRO_GRAPHQL_ENV"], metadata.package_name, metadata.project_path))
         else:
-            start_app(config["KEDRO_GRAPHQL_APP"], config, conf_source, env,
+            start_app(config["KEDRO_GRAPHQL_APP"], config, config["KEDRO_GRAPHQL_CONF_SOURCE"], config["KEDRO_GRAPHQL_ENV"],
                       metadata.package_name, metadata.project_path)
