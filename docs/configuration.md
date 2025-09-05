@@ -8,6 +8,8 @@ The following table describes each configuration attribute available:
 | `backend`                              | string | `kedro_graphql.backends.mongodb.MongoBackend` | Python path to the backend class for data storage and retrieval.                                 |
 | `broker`                               | string | `redis://localhost` | URI for the message broker (e.g., Redis) used for task queueing.                                |
 | `celery_result_backend`                 | string | `redis://localhost` | URI for the Celery result backend (e.g., Redis).                                                 |
+| `client_uri_graphql`                   | string | `http://localhost:5000/graphql` | URI for GraphQL API endpoint used by the GraphQL client.                                         |
+| `client_uri_ws`                        | string | `ws://localhost:5000/graphql` | URI for WebSocket endpoint used by the GraphQL client for subscriptions.                         |
 | `conf_source`                          | string | `None` | Optional path to an alternative configuration source.                                             |
 | `deprecations_docs`                     | string | `""` | Optional URL to documentation about deprecated features.                                          |
 | `env`                                  | string | `local` | Environment name (e.g., "local").                                                                |
@@ -128,6 +130,8 @@ config:
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
   celery_result_backend: "redis://localhost"
+  client_uri_graphql: "http://localhost:5000/graphql"
+  client_uri_ws: "ws://localhost:5000/graphql"
   conf_source: null
   deprecations_docs: ""
   env: "local"
@@ -210,6 +214,8 @@ provide them as JSON strings.
 | backend                                            | --backend                                        | kedro_graphql.backends.mongodb.MongoBackend         |
 | broker                                             | --broker                                         | redis://localhost                                    |
 | celery_result_backend                              | --celery-result-backend                          | redis://localhost                                    |
+| client_uri_graphql                                 | --client-uri-graphql                             | http://localhost:5000/graphql                        |
+| client_uri_ws                                      | --client-uri-ws                                  | ws://localhost:5000/graphql                          |
 | conf_source                                        | --conf-source                                    | $HOME/myproject/conf                                 |
 | deprecations_docs                                  | --deprecations-docs                              | `https://github.com/myrepo/docs` (optional)         |
 | env                                                | --env                                            | local                                                |
@@ -290,6 +296,8 @@ Environment variables will take precedence over values defined in a `.env` file.
 
 ```bash
 KEDRO_GRAPHQL_MONGO_URI=mongodb://root:example@localhost:27017/
+KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL=http://localhost:5000/graphql
+KEDRO_GRAPHQL_CLIENT_URI_WS=ws://localhost:5000/graphql
 KEDRO_GRAPHQL_APP_TITLE="My Custom Kedro GraphQL"
 KEDRO_GRAPHQL_BACKEND=kedro_graphql.backends.mongodb.MongoBackend
 ```
