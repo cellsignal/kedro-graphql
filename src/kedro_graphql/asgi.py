@@ -191,7 +191,7 @@ class KedroGraphQL(FastAPI):
                     )
                     created_pipelines.append(created.encode(encoder="dict"))
 
-                    logger.info(f"event " f"{event.id} triggered pipeline {created.id}")
+                    logger.info(f"event " f"{event.get('id')} triggered pipeline {created.id}")
 
                 return created_pipelines
 
