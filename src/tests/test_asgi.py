@@ -45,4 +45,8 @@ class TestASGI:
         assert resp.status_code == 200
         resp = resp.json()
         # print("RESPONSE JSON:", resp)
-        assert resp.keys() == {"id"}
+        assert len(resp) == 1
+        pipe = resp[0]
+        assert "name" in pipe
+        assert pipe["name"] == "event00"
+        assert pipe["status"][-1]['state'] == "STARTED"

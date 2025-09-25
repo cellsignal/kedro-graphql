@@ -1,0 +1,73 @@
+fragment FullPipeline on Pipeline {
+  id
+  parent
+  name
+  describe
+  dataCatalog {
+    name
+    config
+    tags {
+      key
+      value
+    }
+  }
+  nodes {
+    name
+    inputs
+    outputs
+    tags
+  }
+  parameters {
+    name
+    value
+    type
+  }
+  status {
+    session
+    state
+    runner
+    startedAt
+    finishedAt
+    taskId
+    taskName
+    taskArgs
+    taskKwargs
+    taskRequest
+    taskException
+    taskTraceback
+    taskEinfo
+    taskResult
+  }
+  tags {
+    key
+    value
+  }
+}
+
+
+mutation updatePipelineReturnFull($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!] = null) {
+  updatePipeline(pipeline: $pipeline, id: $id, uniquePaths: $uniquePaths) {
+    ...FullPipeline
+  }
+}
+
+mutation createPipelineReturnFull($pipeline: PipelineInput!, $uniquePaths: [String!] = null) {
+  createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) {
+    ...FullPipeline
+  }
+}
+
+query readPipelinesReturnFull($filter: String!, $limit: Int!) {
+  readPipelines(filter: $filter, limit: $limit, cursor: null) {
+    pipelines {
+      ...FullPipeline
+    }
+  }
+}
+
+query readPipelineReturnFull($id: String!) {
+  readPipeline(id: $id) {
+    ...FullPipeline
+  }
+}
+
