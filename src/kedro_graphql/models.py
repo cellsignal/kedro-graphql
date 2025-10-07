@@ -1,3 +1,5 @@
+from strawberry.extensions import FieldExtension
+from typing import Any, Callable
 from cloudevents.pydantic import CloudEvent
 import json
 from copy import deepcopy
@@ -172,6 +174,7 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
+    # credentials: Optional[List[CredentialInput]]
     tags: Optional[List[Tag]] = None
 
     @strawberry.field

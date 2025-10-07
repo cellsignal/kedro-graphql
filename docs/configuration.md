@@ -34,6 +34,8 @@ The following table describes each configuration attribute available:
 | `runner`                               | string | `kedro.runner.SequentialRunner` | Python path to the Kedro runner class.                                                           |
 | `signed_url_max_expires_in_sec`    | integer | `43200` | Maximum allowed expiration time (in seconds) for presigned URLs. Default: 12 hours. |
 | `signed_url_provider`                  | string | `kedro_graphql.signed_url.s3_provider.S3Provider` | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
+| `dataset_filepath_masks`                  | list(dict) | [] | Masks to apply to Dataset filepaths before returning responses to client to hide true location of datasets (e.g. [{"prefix": "/tmp/", "mask": "/REDACTED/"}]) |
+| `dataset_filepath_allowed_roots`                  | list | [] | Allow root prefixes for Dataset filepaths (e.g. ["/tmp/"]) |
 
 
 
@@ -240,6 +242,8 @@ provide them as JSON strings.
 | runner                                             | --runner                                         | kedro.runner.SequentialRunner                       |
 | signed_url_max_expires_in_sec                      | --signed-url-max-expires-in-sec                  | 43200                                                |
 | signed_url_provider                                | --signed-url-provider                            | kedro_graphql.signed_url.s3_provider.S3Provider     |
+| dataset_filepath_masks                             | --dataset-filepath-masks                         | `[{"prefix": "/tmp/", "mask": "/REDACTED/"}]`     |
+| dataset_filepath_allowed_roots                     | --dataset-allowed-roots                          | `["/tmp/"]`     |
 
 **Note:** For complex data types (lists, dictionaries), provide values as JSON strings. The system will automatically parse these JSON strings into the appropriate data structures.
 

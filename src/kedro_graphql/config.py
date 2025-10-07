@@ -36,7 +36,7 @@ defaults = {
     "KEDRO_GRAPHQL_MONGO_URI": "mongodb://root:example@localhost:27017/",
     "KEDRO_GRAPHQL_PERMISSIONS": "kedro_graphql.permissions.IsAuthenticatedAlways",
     "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP": {
-    # "KEDRO_GRAPHQL_PERMISSIONS": "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail",
+        # "KEDRO_GRAPHQL_PERMISSIONS": "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail",
         "EXTERNAL_GROUP_NAME": "admin"
     },
     "KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP": {
@@ -59,6 +59,8 @@ defaults = {
     # "KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
     "KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC": 43200,
     "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.signed_url.s3_provider.S3Provider",
+    "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [],
+    "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [],
 }
 
 
@@ -83,7 +85,7 @@ def load_api_spec():
         elif isinstance(imports, list):
             # Already a list, just ensure strings are stripped
             imports = [i.strip() for i in imports if i.strip()]
-        
+
         for i in imports:
             import_module(i)
 
@@ -95,22 +97,27 @@ def load_api_spec():
         logger.debug("No API spec file found. Using default configuration.")
         return {}
 
-# special parsing
+
+cli_config = {}  # placeholder for CLI config
+
+
 def env_var_parser(config):
     # Parse JSON strings for complex data types
     json_fields = [
         "KEDRO_GRAPHQL_EVENTS_CONFIG",
-        "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP", 
+        "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP",
         "KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP",
+        "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS",
+        "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS",
     ]
-    
+
     # Fields that can be either JSON arrays, comma-separated strings, or lists
     list_fields = [
         "KEDRO_GRAPHQL_IMPORTS",
         "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS",
-        "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"
+        "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS",
     ]
-    
+
     for field in json_fields:
         if config.get(field, None) and isinstance(config[field], str):
             try:
@@ -129,15 +136,17 @@ def env_var_parser(config):
                         config[field] = json.loads(value)
                     except json.JSONDecodeError:
                         # If not JSON, treat as comma-separated string
-                        config[field] = [i.strip() for i in value.split(',') if i.strip()]
+                        config[field] = [i.strip()
+                                         for i in value.split(',') if i.strip()]
                 else:
                     # Empty string should become empty list
                     config[field] = []
     return config
 
-def load_config(cli_config=None):
+
+def load_config(cli_config=cli_config):
     """Load configuration from the environment variables and API spec.
-    
+
     Configuration precedence (highest to lowest):
     1. YAML API spec
     2. CLI flags
@@ -145,9 +154,7 @@ def load_config(cli_config=None):
     4. Environment variables
     5. Defaults
     """
-    if cli_config is None:
-        cli_config = {}
-    
+
     config = {
         **copy.deepcopy(defaults),  # defaults (lowest precedence)
         **dotenv_values(".env"),  # .env file
@@ -156,4 +163,5 @@ def load_config(cli_config=None):
         **load_api_spec(),  # YAML API spec (highest precedence)
     }
     config = env_var_parser(config)  # special parsing for any environment variables
+
     return config
