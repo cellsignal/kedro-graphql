@@ -10,7 +10,7 @@ from kedro_graphql.models import (
     State,
     Tag,
 )
-from kedro_graphql.tasks import run_pipeline, handle_event
+from kedro_graphql.tasks import run_pipeline
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -59,35 +59,3 @@ async def test_run_pipeline(mock_app,
     )
     result = result.wait(timeout=None, interval=0.5)
 
-
-class TestHandleEvent:
-
-    @pytest.fixture
-    def event_data(self):
-        return to_json(CloudEvent(
-            id="1234",
-            type="com.example.event",
-            source="example.com",
-            data={"key": "value"}
-        ))
-
-    @pytest.fixture
-    def config(self):
-        return {"event00": {
-            "source": "example.com", "type": "com.example.event"}}
-
-    def test_handle_event(self,
-                          mock_server,
-                          mock_celery_session_app,
-                          celery_session_worker,
-                          mock_app,
-                          mock_info_context,
-                          event_data,
-                          config):
-
-        task = handle_event.delay(event_data, config)
-        pipelines = task.wait(timeout=None, interval=0.5)
-        pipelines = [Pipeline.decode(p, decoder="dict") for p in pipelines]
-        pipeline = mock_app.backend.read(id=pipelines[0].id)
-        assert pipeline.name == "event00"
-        assert pipeline.status[-1].state == State.READY
