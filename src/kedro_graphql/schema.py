@@ -114,12 +114,12 @@ class PipelineExtension(FieldExtension):
 
         if isinstance(pipeline, Pipeline):
             # mask filepaths before returning
-            return PipelineSantitizer.mask_filepaths(
+            return PipelineSanitizer.mask_filepaths(
                 pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
         elif isinstance(pipeline, Pipelines):
             pipelines = []
             for p in pipeline.pipelines:
-                pipelines.append(PipelineSantitizer.mask_filepaths(
+                pipelines.append(PipelineSanitizer.mask_filepaths(
                     p, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"]))
             pipeline.pipelines = pipelines
             return pipeline
@@ -156,20 +156,20 @@ class PipelineInputExtension(FieldExtension):
         # intercept PipelineInput and sanitize filepaths
         pipeline_input = kwargs["pipeline"]
 
-        kwargs["pipeline"] = PipelineSantitizer.unmask_filepaths(
+        kwargs["pipeline"] = PipelineSanitizer.unmask_filepaths(
             pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
 
-        PipelineSantitizer.sanitize_filepaths(
+        PipelineSanitizer.sanitize_filepaths(
             pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS"])
 
         # call original resolver
         pipeline = next_(source, info, **kwargs)
         # mask filepaths again before returning
-        return PipelineSantitizer.mask_filepaths(
+        return PipelineSanitizer.mask_filepaths(
             pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
 
 
-class PipelineSantitizer:
+class PipelineSanitizer:
 
     @staticmethod
     def sanitize_filepaths(pipeline: Pipeline | PipelineInput, allowed_roots: list[str]) -> None:

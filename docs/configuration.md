@@ -243,7 +243,7 @@ provide them as JSON strings.
 | signed_url_max_expires_in_sec                      | --signed-url-max-expires-in-sec                  | 43200                                                |
 | signed_url_provider                                | --signed-url-provider                            | kedro_graphql.signed_url.s3_provider.S3Provider     |
 | dataset_filepath_masks                             | --dataset-filepath-masks                         | `[{"prefix": "/tmp/", "mask": "/REDACTED/"}]`     |
-| dataset_filepath_allowed_roots                     | --dataset-allowed-roots                          | `["/tmp/"]`     |
+| dataset_filepath_allowed_roots                     | --dataset-filepath-allowed-roots                          | `["/tmp/"]`     |
 
 **Note:** For complex data types (lists, dictionaries), provide values as JSON strings. The system will automatically parse these JSON strings into the appropriate data structures.
 

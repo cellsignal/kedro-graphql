@@ -1,5 +1,5 @@
 import pytest
-from kedro_graphql.schema import PipelineSantitizer, DataSetConfigException
+from kedro_graphql.schema import PipelineSanitizer, DataSetConfigException
 from kedro_graphql.models import PipelineInput
 import json
 
@@ -15,7 +15,7 @@ class TestSchemaExtensions:
         assert isinstance(result, PipelineInput)
 
         masks = [{"prefix": "./data/", "mask": "./REDACTED/"}]
-        masked = PipelineSantitizer.mask_filepaths(result, masks)
+        masked = PipelineSanitizer.mask_filepaths(result, masks)
         for d in masked.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):
@@ -31,8 +31,8 @@ class TestSchemaExtensions:
         assert isinstance(result, PipelineInput)
 
         masks = [{"prefix": "./data/", "mask": "./REDACTED/"}]
-        masked = PipelineSantitizer.mask_filepaths(result, masks)
-        unmasked = PipelineSantitizer.unmask_filepaths(masked, masks)
+        masked = PipelineSanitizer.mask_filepaths(result, masks)
+        unmasked = PipelineSanitizer.unmask_filepaths(masked, masks)
         for d in unmasked.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):
@@ -47,10 +47,10 @@ class TestSchemaExtensions:
         result = mock_pipeline_staged.encode(encoder="input")
         assert isinstance(result, PipelineInput)
         allowed_roots = ["./data/"]
-        sanitized = PipelineSantitizer.sanitize_filepaths(result, allowed_roots)
+        sanitized = PipelineSanitizer.sanitize_filepaths(result, allowed_roots)
 
         allowed_roots = ["./tmp/"]
         try:
-            sanitized = PipelineSantitizer.sanitize_filepaths(result, allowed_roots)
+            sanitized = PipelineSanitizer.sanitize_filepaths(result, allowed_roots)
         except DataSetConfigException as e:
             assert "filepath ./data/01_raw/text_in.csv not allowed" in str(e)
