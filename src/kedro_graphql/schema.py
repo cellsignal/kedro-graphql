@@ -91,7 +91,7 @@ class PipelineExtension(FieldExtension):
     """
     Intercepts Pipeline arguments to mask filepaths before returning.
     This extension should be added to any Query or Mutation that returns a Pipeline or Pipelines object.
-    This extention requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS config to be set to have any affect.
+    This extension requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS config to be set to have any effect.
     """
 
     def resolve(
@@ -130,8 +130,8 @@ class PipelineInputExtension(FieldExtension):
     Intercepts PipelineInput arguments to unmask and validate filepaths before
     passing to the resolver, then masks filepaths again before returning the Pipeline result.
     This extension should be added to any Mutation that takes a PipelineInput argument.
-    This extention requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS and/or KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS
-    config to be set to have any affect.
+    This extension requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS and/or KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS
+    config to be set to have any effect.
     """
 
     def resolve(

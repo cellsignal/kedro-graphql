@@ -9,7 +9,7 @@ class TestSchemaExtensions:
     @pytest.mark.asyncio
     async def test_pipeline_sanitizer_mask_filepaths(self, mock_pipeline_staged):
         """
-         Test that the kedro_graphql.schema.PipelineSantitizer correctly masks filepaths in a PipelineInput's data catalog.
+         Test that the kedro_graphql.schema.PipelineSanitizer correctly masks filepaths in a PipelineInput's data catalog.
         """
         result = mock_pipeline_staged.encode(encoder="input")
         assert isinstance(result, PipelineInput)
@@ -25,7 +25,7 @@ class TestSchemaExtensions:
     @pytest.mark.asyncio
     async def test_pipeline_sanitizer_unmask_filepaths(self, mock_pipeline_staged):
         """
-         Test that the kedro_graphql.schema.PipelineSantitizer correctly unmasks filepaths in a PipelineInput's data catalog.
+         Test that the kedro_graphql.schema.PipelineSanitizer correctly unmasks filepaths in a PipelineInput's data catalog.
         """
         result = mock_pipeline_staged.encode(encoder="input")
         assert isinstance(result, PipelineInput)
@@ -42,7 +42,7 @@ class TestSchemaExtensions:
     @pytest.mark.asyncio
     async def test_pipeline_sanitizer_sanitize_filepaths(self, mock_pipeline_staged):
         """
-         Test that the kedro_graphql.schema.PipelineSantitizer correctly validates filepaths in a PipelineInput's data catalog against allowed prefixes.
+         Test that the kedro_graphql.schema.PipelineSanitizer correctly validates filepaths in a PipelineInput's data catalog against allowed prefixes.
         """
         result = mock_pipeline_staged.encode(encoder="input")
         assert isinstance(result, PipelineInput)

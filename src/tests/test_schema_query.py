@@ -79,7 +79,6 @@ class TestSchemaQuery:
         }
         """
         resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id), "names": ["text_in", "text_out"], "expires_in_sec": 3600})
-        print(resp)
         assert resp.data["readDatasets"] is not None
         assert len(resp.data["readDatasets"]) == 2
         assert isinstance(resp.data["readDatasets"][0], str)
