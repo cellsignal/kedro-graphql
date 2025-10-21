@@ -101,7 +101,7 @@ class S3Provider(SignedUrlProvider):
             protocol, path = dataset.parse_path()
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.read(info, dataset, expires_in_sec, partitions)
 
@@ -186,7 +186,7 @@ class S3Provider(SignedUrlProvider):
             protocol, path = dataset.parse_path()
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.read(info, dataset, expires_in_sec, partitions)
 
