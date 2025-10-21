@@ -37,6 +37,7 @@ from .models import (
     PipelineTemplate,
     PipelineTemplates,
     State,
+    DataSetInput
 )
 from .tasks import run_pipeline
 from .permissions import get_permissions
@@ -390,18 +391,18 @@ class Mutation:
         return p
 
     @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
-    def create_datasets(self, id: str, info: Info, names: List[str], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[JSON | None]:
+    def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[JSON | None]:
         """
         Get a signed URL for uploading a dataset.
 
         Args:
             id (str): The ID of the pipeline.
             info (Info): The GraphQL execution context.
-            names (List[str]): The names of the datasets.
+            datasets (List[DataSetInput]): List of datasets for which to create signed URLs. In order to create specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
 
         Returns:
-            JSON | None: A signed URL for uploading the dataset or None if not applicable.
+            List[JSON | None]: A signed URL for uploading the dataset or None if not applicable.
 
         Raises:
             ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
@@ -418,13 +419,12 @@ class Mutation:
 
         # create dict from pipeline data catalog
         catalog = {d.name: d for d in p.data_catalog}
-
-        for n in names:
-            dataset = catalog.get(n, None)
+        for dataset_input in datasets:
+            dataset = catalog.get(dataset_input.name, None)
             if dataset is None:
                 logger.warning(
-                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
-                urls.append({"name": n, "filepath": None,
+                    f"Dataset '{dataset_input.name}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                urls.append({"name": dataset_input.name, "filepath": None,
                             "url": None, "fields": {}})
                 continue
             else:
@@ -438,7 +438,8 @@ class Mutation:
                         f"{class_name} must inherit from SignedUrlProvider")
                 logger.info(
                     f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, expires_in_sec={expires_in_sec}")
-                url = cls.create(info, dataset, expires_in_sec)
+                url = cls.create(info, dataset, expires_in_sec,
+                                 dataset_input.partitions)
                 urls.append(url)
                 continue
         return urls
@@ -511,6 +512,8 @@ def build_schema(
             dict[object, Union[type, ScalarWrapper, ScalarDefinition]]
         ] = None,
         schema_directives: Iterable[object] = ()
+
+
 ):
 
     ComboQuery = merge_types("Query", tuple([Query] + type_plugins["query"]))
