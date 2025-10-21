@@ -153,7 +153,7 @@ class TestKedroGraphqlClient:
     async def test_read_datasets(self, mock_create_pipeline_staged, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged
-        r = await mock_client.read_datasets(id=pipeline.id, names=["text_in", "text_out"], expires_in_sec=3600)
+        r = await mock_client.read_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")], expires_in_sec=3600)
         assert isinstance(r, list)
         assert len(r) == 2
         assert isinstance(r[0], str)

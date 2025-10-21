@@ -158,14 +158,14 @@ class Query:
         )
 
     @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    def read_datasets(self, id: str, info: Info, names: List[str], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[str | None]:
+    def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[str | None]:
         """
         Get a signed URL for downloading a dataset.
 
         Args:
             id (str): The ID of the pipeline.
             info (Info): The GraphQL execution context.
-            names (List[str]): The names of the datasets.
+            datasets (List[DataSetInput]): The datasets to get signed URLs for. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
         Returns:
             [str | None]: An array of signed URLs for downloading the dataset or None if not applicable.
@@ -183,11 +183,11 @@ class Query:
 
         catalog = {d.name: d for d in p.data_catalog}
 
-        for n in names:
-            dataset = catalog.get(n, None)
+        for d in datasets:
+            dataset = catalog.get(d.name, None)
             if dataset is None:
                 logger.warning(
-                    f"Dataset '{n}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
+                    f"Dataset '{d.name}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
                 urls.append(None)
                 continue
 
@@ -202,7 +202,7 @@ class Query:
 
             logger.info(
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
-            urls.append(cls.read(info, dataset, expires_in_sec))
+            urls.append(cls.read(info, dataset, expires_in_sec, d.partitions))
             continue
 
         return urls
