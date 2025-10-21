@@ -188,7 +188,7 @@ class S3Provider(SignedUrlProvider):
                 logger.info(
                     f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
 
-                return LocalFileProvider.read(info, dataset, expires_in_sec, partitions)
+                return LocalFileProvider.create(info, dataset, expires_in_sec, partitions)
 
             elif protocol != "s3":
 

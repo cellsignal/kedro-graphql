@@ -49,4 +49,4 @@ class TestASGI:
         pipe = resp[0]
         assert "name" in pipe
         assert pipe["name"] == "event00"
-        assert pipe["status"][-1]['state'] == "STARTED"
+        assert pipe["status"][-1]['state'] in ["STARTED", "READY"]

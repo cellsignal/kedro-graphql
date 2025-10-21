@@ -123,10 +123,10 @@ class LocalFileProvider(SignedUrlProvider):
             dict | List[dict]: A signed URL for creating the dataset.
         """
         c = dataset.parse_config()
-        if c["type"] in ["partitions.PartitionedDataset", "partitions.IncrementalDataset"]:
+        if c["type"] in ["partitions.PartitionedDataset"]:
             if not partitions or len(partitions) == 0:
                 raise ValueError(
-                    "Partitions must be provided for PartitionedDataset or IncrementalDataset")
+                    "Partitions must be provided for PartitionedDataset")
 
             signed_urls = []
             protocol, path = dataset.parse_path()
@@ -140,6 +140,9 @@ class LocalFileProvider(SignedUrlProvider):
                     filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/upload"))
 
             return signed_urls
+        elif c["type"] in ["partitions.IncrementalDataset"]:
+            raise DataSetError(
+                "Signed URLs for reading IncrementalDatasets are not supported.")
         else:
             protocol, filepath = dataset.parse_filepath()
             filepath = Path(filepath)

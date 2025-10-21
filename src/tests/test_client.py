@@ -54,7 +54,7 @@ async def mock_create_pipeline_staged_with_partitions(mock_client):
 
     config_str = json.dumps(
         {"type": "partitions.PartitionedDataset",
-         "path": "s3://my-bucket/path/to/partitioned_dataset",
+         "path": "/tmp/my-bucket/path/to/partitioned_dataset",
          "filename_suffix": ".txt",
          "dataset": {"type": "text.TextDataset"}}
     )
