@@ -25,7 +25,7 @@ class TestLocalFileProvider:
         """Fixture for a PartitionedDataset pointing to test data files"""
         return DataSet(name="test_partitioned_dataset", config=json.dumps(
             {"type": "partitions.PartitionedDataset",
-             "path": str(Path("src/tests/test_signed_url/data/").resolve()),
+             "path": str(Path("src/tests/data/partitioned_dataset/").resolve()),
              "filename_suffix": ".txt",
              "dataset": {"type": "text.TextDataset"}}
         ))

@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 # from kedro.io.core import _parse_filepath
 # from .signed_url.local_file_provider import LocalFileProvider
 # from .signed_url.base import PreSignedUrlProvider
@@ -185,6 +185,20 @@ class DataSet:
             return AbstractDataset.from_config(self.name, json.loads(self.config)).exists()
         else:
             return False
+
+    @strawberry.field
+    def partitions(self) -> Optional[List[str]]:
+        config = self.parse_config()
+        if not config.get("type", None):
+            raise DataSetConfigError(
+                "Invalid dataset configuration. Must have 'type' key")
+        elif config["type"] != "partitions.PartitionedDataset":
+            raise DataSetConfigError(
+                "Dataset is not a PartitionedDataset. 'partitions' field is only available for PartitionedDatasets."
+            )
+        else:
+            partitions = AbstractDataset.from_config(self.name, config).load()
+            return list(partitions.keys())
 
     def serialize(self) -> dict:
         """

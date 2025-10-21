@@ -5,6 +5,7 @@ from omegaconf import OmegaConf
 
 from kedro_graphql.models import DataSet, DataSetInput, Parameter, ParameterInput, PipelineInput, TagInput
 from .utilities import kedro_graphql_config
+from pathlib import Path
 
 
 class TestDataSet:
@@ -53,6 +54,16 @@ class TestDataSet:
 
         d = DataSet(**params)
         assert d.exists() == False
+
+    def test_partitions(self):
+        d = DataSet(name="test_partitioned_dataset", config=json.dumps(
+            {"type": "partitions.PartitionedDataset",
+             "path": str(Path("src/tests/data/partitioned_dataset/").resolve()),
+             "filename_suffix": ".txt",
+             "dataset": {"type": "text.TextDataset"}}
+        ))
+
+        assert d.partitions() == ["part-0001", "part-0002"]
 
 
 class TestParameterInput:
