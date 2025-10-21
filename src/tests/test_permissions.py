@@ -78,7 +78,6 @@ class TestIsAuthenticatedXForwarded:
             "X-Forwarded-Email": "admin@example.com"}
 
         resp = self.event_post(port=5001, headers=headers)
-        print("RESPONSE:", resp.status_code, resp.text)
         assert resp.status_code == 200
 
     @pytest.mark.asyncio

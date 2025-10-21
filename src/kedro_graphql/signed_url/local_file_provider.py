@@ -118,7 +118,8 @@ class LocalFileProvider(SignedUrlProvider):
             info (Info): Strawberry GraphQL Info object.
             dataset (DataSet): The dataset to create a signed URL for.
             expires_in_sec (int): The expiration time in seconds.
-            partitions (list | None): Optional list of partitions ina PartitionedDataset.
+            partitions (list | None): Optional list of partitions in a PartitionedDataset.
+
         Returns:
             dict | List[dict]: A signed URL for creating the dataset.
         """

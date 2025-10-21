@@ -76,7 +76,7 @@ class S3Provider(SignedUrlProvider):
                                                      Conditions=None,
                                                      ExpiresIn=expires_in_sec)
         except ClientError as e:
-            logger.error(f"Failed to generate /signed URL: {e}")
+            logger.error(f"Failed to generate signed URL: {e}")
             return None
 
     @staticmethod
@@ -162,7 +162,7 @@ class S3Provider(SignedUrlProvider):
             info (Info): Strawberry GraphQL Info object.
             dataset (DataSet): The dataset to create a signed URL for.
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
-            partitions (list | None): Optional list of partitions ina PartitionedDataset.
+            partitions (list | None): Optional list of partitions in a PartitionedDataset.
 
         Returns:
             Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
