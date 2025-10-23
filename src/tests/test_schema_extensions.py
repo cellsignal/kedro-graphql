@@ -2,6 +2,7 @@ import json
 import pytest
 from kedro_graphql.client import PIPELINE_GQL
 from kedro_graphql.models import Pipeline
+from pathlib import Path
 
 
 class TestSchemaExtensions:
@@ -15,9 +16,12 @@ class TestSchemaExtensions:
         """
         Test that the kedro_graphql.schema.PipelineExtension correctly masks filepaths in the pipeline's data catalog.
         """
+        # parse filepath prefix from mock_pipeline datasets
+        c = json.loads(mock_pipeline.data_catalog[0].config)
+        prefix = "/" + c["filepath"].split("/", 2)[1] + "/"
 
         mocker.patch.dict("kedro_graphql.schema.CONFIG", {"KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [
-            {"prefix": "/tmp/", "mask": "/REDACTED/"}]})
+            {"prefix": prefix, "mask": "/REDACTED/"}]})
 
         query = """
                     query readPipeline($id: String!) {
@@ -31,7 +35,7 @@ class TestSchemaExtensions:
         for d in p.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):
-                assert not c["filepath"].startswith("/tmp/")
+                assert not c["filepath"].startswith(prefix)
                 assert c["filepath"].startswith("/REDACTED/")
 
     @pytest.mark.asyncio
@@ -82,12 +86,12 @@ class TestSchemaExtensions:
         pipeline's data catalog and validates against allowed roots.  Check to make sure pipeline is created in the 
         backend with unmasked filepaths.
         """
-
+        prefix = "/" + str(mock_text_in).split("/", 2)[1] + "/"
         mocker.patch.dict("kedro_graphql.schema.CONFIG", {
-                          "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": ["/tmp/"], })
+                          "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [prefix], })
 
         mocker.patch.dict("kedro_graphql.schema.CONFIG", {"KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [
-            {"prefix": "/tmp/", "mask": "/REDACTED/"}]})
+            {"prefix": prefix, "mask": "/REDACTED/"}]})
 
         query = """
             mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
@@ -115,12 +119,12 @@ class TestSchemaExtensions:
             c = json.loads(d.config)
             if c.get("filepath"):
                 assert c["filepath"].startswith("/REDACTED/")
-                assert not c["filepath"].startswith("/tmp/")
+                assert not c["filepath"].startswith(prefix)
 
         # check backend to make sure filepaths are unmasked
         pipeline = mock_app.backend.read(id=p.id)
         for d in pipeline.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):
-                assert c["filepath"].startswith("/tmp/")
+                assert c["filepath"].startswith(prefix)
                 assert not c["filepath"].startswith("/REDACTED/")

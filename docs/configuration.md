@@ -11,6 +11,8 @@ The following table describes each configuration attribute available:
 | `client_uri_graphql`                   | string | `http://localhost:5000/graphql` | URI for GraphQL API endpoint used by the GraphQL client.                                         |
 | `client_uri_ws`                        | string | `ws://localhost:5000/graphql` | URI for WebSocket endpoint used by the GraphQL client for subscriptions.                         |
 | `conf_source`                          | string | `None` | Optional path to an alternative configuration source.                                             |
+| `dataset_filepath_masks`                  | list(dict) | [] | Masks to apply to Dataset filepaths before returning responses to client to hide true location of datasets (e.g. [{"prefix": "/tmp/", "mask": "/REDACTED/"}]) |
+| `dataset_filepath_allowed_roots`                  | list | [] | Allow root prefixes for Dataset filepaths (e.g. ["/tmp/"]) |
 | `deprecations_docs`                     | string | `""` | Optional URL to documentation about deprecated features.                                          |
 | `env`                                  | string | `local` | Environment name (e.g., "local").                                                                |
 | `events_config`                        | dict | `None` | Dictionary for event configuration. Specify as JSON string when using CLI/environment variables. |
@@ -34,9 +36,6 @@ The following table describes each configuration attribute available:
 | `runner`                               | string | `kedro.runner.SequentialRunner` | Python path to the Kedro runner class.                                                           |
 | `signed_url_max_expires_in_sec`    | integer | `43200` | Maximum allowed expiration time (in seconds) for presigned URLs. Default: 12 hours. |
 | `signed_url_provider`                  | string | `kedro_graphql.signed_url.s3_provider.S3Provider` | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
-| `dataset_filepath_masks`                  | list(dict) | [] | Masks to apply to Dataset filepaths before returning responses to client to hide true location of datasets (e.g. [{"prefix": "/tmp/", "mask": "/REDACTED/"}]) |
-| `dataset_filepath_allowed_roots`                  | list | [] | Allow root prefixes for Dataset filepaths (e.g. ["/tmp/"]) |
-
 
 
 Configuration can be supplied through one or more of the following methods:
@@ -213,6 +212,8 @@ provide them as JSON strings.
 | app                                                | --app                                            | kedro_graphql.asgi.KedroGraphQL                      |
 | app_title                                          | --app-title                                      | "My Custom Kedro GraphQL"                           |
 | app_description                                    | --app-description                                | "Custom description"                                 |
+| dataset_filepath_masks                             | --dataset-filepath-masks                         | `[{"prefix": "/tmp/", "mask": "/REDACTED/"}]`     |
+| dataset_filepath_allowed_roots                     | --dataset-filepath-allowed-roots                          | `["/tmp/"]`     |
 | backend                                            | --backend                                        | kedro_graphql.backends.mongodb.MongoBackend         |
 | broker                                             | --broker                                         | redis://localhost                                    |
 | celery_result_backend                              | --celery-result-backend                          | redis://localhost                                    |
@@ -242,8 +243,6 @@ provide them as JSON strings.
 | runner                                             | --runner                                         | kedro.runner.SequentialRunner                       |
 | signed_url_max_expires_in_sec                      | --signed-url-max-expires-in-sec                  | 43200                                                |
 | signed_url_provider                                | --signed-url-provider                            | kedro_graphql.signed_url.s3_provider.S3Provider     |
-| dataset_filepath_masks                             | --dataset-filepath-masks                         | `[{"prefix": "/tmp/", "mask": "/REDACTED/"}]`     |
-| dataset_filepath_allowed_roots                     | --dataset-filepath-allowed-roots                          | `["/tmp/"]`     |
 
 **Note:** For complex data types (lists, dictionaries), provide values as JSON strings. The system will automatically parse these JSON strings into the appropriate data structures.
 

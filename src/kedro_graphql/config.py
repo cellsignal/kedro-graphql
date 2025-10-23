@@ -19,6 +19,8 @@ defaults = {
     "KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL": "http://localhost:5000/graphql",
     "KEDRO_GRAPHQL_CLIENT_URI_WS": "ws://localhost:5000/graphql",
     "KEDRO_GRAPHQL_CONF_SOURCE": None,
+    "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [],
+    "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [],
     "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": None,
     "KEDRO_GRAPHQL_ENV": "local",
     "KEDRO_GRAPHQL_EVENTS_CONFIG": None,
@@ -59,8 +61,6 @@ defaults = {
     # "KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
     "KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC": 43200,
     "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.signed_url.s3_provider.S3Provider",
-    "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [],
-    "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [],
 }
 
 
@@ -150,8 +150,8 @@ def load_config(cli_config=cli_config):
     Configuration precedence (highest to lowest):
     1. YAML API spec
     2. CLI flags
-    3. .env file
-    4. Environment variables
+    3. Environment variables
+    4. .env file
     5. Defaults
     """
 
