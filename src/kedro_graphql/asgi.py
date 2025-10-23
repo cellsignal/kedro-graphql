@@ -6,6 +6,7 @@ from pathlib import Path
 from strawberry.fastapi import GraphQLRouter
 from cloudevents.http import from_http, to_json
 from cloudevents.pydantic.v1 import CloudEvent
+from contextlib import asynccontextmanager
 
 from .logs.logger import logger
 from .backends import init_backend
@@ -25,6 +26,13 @@ logger.debug("configuration loaded by {s}".format(s=__name__))
 PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.backend.startup()
+    yield
+    app.backend.shutdown()
+
+
 class KedroGraphQL(FastAPI):
 
     def __init__(self, kedro_session=None, config=CONFIG):
@@ -34,6 +42,7 @@ class KedroGraphQL(FastAPI):
             version=config["KEDRO_GRAPHQL_PROJECT_VERSION"],
             docs_url="/docs",  # Swagger UI URL
             root_path=config["KEDRO_GRAPHQL_ROOT_PATH"],
+            lifespan=lifespan
         )
 
         self.kedro_session = kedro_session
@@ -58,14 +67,6 @@ class KedroGraphQL(FastAPI):
         self.add_websocket_route("/graphql", self.graphql_app)
 
         self.celery_app = celery_app(self.config, self.backend, self.schema)
-
-        @self.on_event("startup")
-        def startup_backend():
-            self.backend.startup()
-
-        @self.on_event("shutdown")
-        def shutdown_backend():
-            self.backend.shutdown()
 
         class Info:
             """A simple class to hold the request context for permissions."""
@@ -135,7 +136,7 @@ class KedroGraphQL(FastAPI):
                 # match event details to corresponding pipelines
                 source = event.get_attributes().get("source", None)
                 type = event.get_attributes().get("type", None)
-                
+
                 pipeline_names = [
                     k
                     for k, v in econf.items()
@@ -191,7 +192,8 @@ class KedroGraphQL(FastAPI):
                     )
                     created_pipelines.append(created.encode(encoder="dict"))
 
-                    logger.info(f"event " f"{event.get('id')} triggered pipeline {created.id}")
+                    logger.info(
+                        f"event " f"{event.get('id')} triggered pipeline {created.id}")
 
                 return created_pipelines
 

@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 # from kedro.io.core import _parse_filepath
 # from .signed_url.local_file_provider import LocalFileProvider
 # from .signed_url.base import PreSignedUrlProvider
@@ -11,9 +11,13 @@ import strawberry
 from bson.objectid import ObjectId
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
+from kedro.io.core import _parse_filepath
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 from cloudevents.conversion import to_json
 from cloudevents.pydantic.v1 import CloudEvent
+from pathlib import Path
+
+from kedro_graphql.exceptions import DataSetConfigError
 # from strawberry.permission import PermissionExtension
 
 from .config import load_config
@@ -179,9 +183,23 @@ class DataSet:
     @strawberry.field
     def exists(self) -> bool:
         if self.config:
-            return AbstractDataset.from_config(self.name, json.loads(self.config)).exists()
+            return AbstractDataset.from_config(self.name, self.parse_config()).exists()
         else:
             return False
+
+    @strawberry.field
+    def partitions(self) -> Optional[List[str]]:
+        config = self.parse_config()
+        if not config.get("type", None):
+            raise DataSetConfigError(
+                "Invalid dataset configuration. Must have 'type' key")
+        elif config["type"] != "partitions.PartitionedDataset":
+            raise DataSetConfigError(
+                "Dataset is not a PartitionedDataset. 'partitions' field is only available for PartitionedDatasets."
+            )
+        else:
+            partitions = AbstractDataset.from_config(self.name, config).load()
+            return list(partitions.keys())
 
     def serialize(self) -> dict:
         """
@@ -217,12 +235,83 @@ class DataSet:
             tags=tags
         )
 
+    def parse_config(self) -> dict:
+        """
+        Return the config as a dictionary.
+
+        Example usage:
+
+            from kedro_graphql.models import DataSet
+
+            d = DataSet(name="text_in", config='{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}')
+
+            print(d.parse_config())
+
+            {'filepath': './data/01_raw/text_in.txt',
+             'type': 'text.TextDataSet',
+             'save_args': [{'name': 'say', 'value': 'hello'}],
+             'load_args': [{'name': 'say', 'value': 'hello'}]}
+
+        """
+        try:
+            return json.loads(self.config)
+        except json.JSONDecodeError as e:
+            raise DataSetConfigError(f"Unable to parse JSON in config: {e}")
+        except Exception as e:
+            raise DataSetConfigError(f"Invalid dataset configuration: {e}")
+
+    def parse_filepath(self) -> tuple[str, str]:
+        """
+        Parse the filepath from the dataset configuration.
+
+        Args:
+            config (dict): The dataset configuration.
+
+        Returns:
+            tuple[str, str]: (protocol, the file path).
+        """
+        config = self.parse_config()
+        filepath = config.get("filepath", None)
+        if not filepath:
+            raise DataSetConfigError(
+                "Invalid dataset configuration. Must have 'filepath' key")
+
+        return _parse_filepath(filepath)["protocol"], filepath
+
+    def parse_path(self) -> tuple[str, str]:
+        """
+        Parse the path from the dataset configuration.
+
+        Args:
+            config (dict): The dataset configuration.
+
+        Returns:
+            tuple[str, str]: (protocol, the file path).
+        """
+        path = self.parse_config().get("path", None)
+        if not path:
+            raise DataSetConfigError(
+                "Invalid dataset configuration. Must have 'path' key")
+
+        return _parse_filepath(path)["protocol"], path
+
 
 @strawberry.input
 class DataSetInput:
     name: str
     config: Optional[str] = None
     tags: Optional[List[TagInput]] = None
+    partitions: Optional[List[str]] = None
+
+    def encode(self, encoder="graphql"):
+        if encoder == "dict":
+            return jsonable_encoder(self)
+        elif encoder == "graphql":
+            p = jsonable_encoder(self)
+            p = {to_camel_case(k): v for k, v in p.items()}
+            return p
+        else:
+            raise TypeError("encoder must be 'dict' or 'graphql'")
 
 
 class DataCatalog:
@@ -464,7 +553,7 @@ class PipelineInput:
             return p
         else:
             raise TypeError("encoder must be 'dict' or 'graphql'")
-        
+
     @classmethod
     def from_event(cls, name: str, state: PipelineInputStatus, event: CloudEvent) -> "PipelineInput":
         """
@@ -480,8 +569,9 @@ class PipelineInput:
         type = event.get("type")
 
         if not id or not source or not type:
-            raise ValueError("CloudEvent must have 'id', 'source', and 'type' attributes")
-        
+            raise ValueError(
+                "CloudEvent must have 'id', 'source', and 'type' attributes")
+
         return cls(
             name=name,
             state=state,
@@ -493,6 +583,7 @@ class PipelineInput:
                 {"key": "event_type", "value": type}
             ]
         )
+
 
 @strawberry.enum
 class State(Enum):

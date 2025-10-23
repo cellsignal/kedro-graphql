@@ -1,7 +1,7 @@
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.websockets import WebsocketsTransport
-from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage
+from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage, DataSetInput
 from kedro_graphql.config import load_config
 import backoff
 from gql.transport.exceptions import TransportQueryError
@@ -221,42 +221,42 @@ class KedroGraphqlClient():
         result = await self.execute_query(query, variable_values={"id": str(id)})
         return Pipeline.decode(result["deletePipeline"], decoder="graphql")
 
-    async def read_datasets(self, id: str = None, names: list[str] = None, expires_in_sec: int = 43200):
+    async def read_datasets(self, id: str = None, datasets: list[DataSetInput] = None, expires_in_sec: int = 43200):
         """Read a dataset.
         Kwargs:
             id (str): pipeline id
-            names (list[str]): dataset names
+            datasets (list[DataSetInput]): dataset inputs for which to get signed URLs. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): number of seconds the signed URL should be valid for
 
         Returns:
             str: signed URL for reading the dataset
         """
         query = """
-            query readDatasets($id: String!, $names: [String!]!, $expires_in_sec: Int!) {
-              readDatasets(id: $id, names: $names, expiresInSec: $expires_in_sec) 
+            query readDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
+              readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec) 
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "names": names, "expires_in_sec": expires_in_sec})
+        result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
         return result["readDatasets"]
 
-    async def create_datasets(self, id: str = None, names: list[str] = None, expires_in_sec: int = 43200):
+    async def create_datasets(self, id: str = None, datasets: list[DataSetInput] = None, expires_in_sec: int = 43200):
         """create a dataset.
         Kwargs:
             id (str): pipeline id
-            names (list[str]): dataset names
+            datasets (list[DataSetInput]): List of datasets for which to create signed URLs. In order to create specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): number of seconds the signed URL should be valid for
 
         Returns:
             [str]: array of signed URLs for creating the datasets
         """
         query = """
-            mutation createDatasets($id: String!, $names: [String!]!, $expires_in_sec: Int!) {
-              createDatasets(id: $id, names: $names, expiresInSec: $expires_in_sec)
+            mutation createDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
+              createDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec)
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "names": names, "expires_in_sec": expires_in_sec})
+        result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
         return result["createDatasets"]
 
     @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))

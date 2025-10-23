@@ -152,8 +152,8 @@ class TestSchemaMutations:
         """
 
     create_datasets_mutation = """
-        mutation CreateDatasets($id: String!, $names: [String!]!, $expiresInSec: Int!) {
-          createDatasets(id: $id, names: $names, expiresInSec: $expiresInSec)
+        mutation CreateDatasets($id: String!, $datasets: [DataSetInput!]!, $expiresInSec: Int!) {
+          createDatasets(id: $id, datasets: $datasets, expiresInSec: $expiresInSec)
         }
         """
 
@@ -188,44 +188,6 @@ class TestSchemaMutations:
         # making sure the uniquePaths parameter is working
         assert str(resp.data["createPipeline"]["id"]
                    ) == datasets["text_in"]["filepath"].rsplit("/", 2)[1]
-
-    # @pytest.mark.skipif(IN_DEV, reason="credential support in development")
-    # @pytest.mark.asyncio
-    # async def test_pipeline_creds(self,
-    # mock_app,
-    # mock_celery_worker_app,
-    # celery_session_worker,
-    # mock_info_context,
-    # mock_text_in,
-    # mock_text_out):
-
-    # resp = await mock_app.schema.execute(self.create_pipeline_mutation,
-    # variable_values={"pipeline": {
-    # "name": "example00",
-    # "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in), "credentials": "my_creds"})},
-    # {"name": "text_out", "config": json.dumps(
-    # {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
-    # ],
-    # "parameters": [{"name": "example", "value": "hello"}],
-    # "tags": [{"key": "author", "value": "opensean"},
-    # {"key": "package", "value": "kedro-graphql"}],
-    # "credentials": [{"name": "my_creds",
-    # "value": [
-    # {"name": "key",
-    # "value": "admin"},
-    # {"name": "secret",
-    # "value": "password"}
-    # ]}],
-    # "credentialsNested": [{"name": "my_creds",
-    # "value": [{"name": "client_kwargs",
-    # "value": [{"name": "endpoint_url",
-    # "value": "http://localhost:9000"
-    # }]
-    # }]
-    # }]
-    # }})
-
-    # assert resp.errors is None
 
     @pytest.mark.asyncio
     async def test_create_pipeline_01(self,
@@ -561,7 +523,7 @@ class TestSchemaMutations:
 
         create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
                                                              variable_values={"id": str(response.data["createPipeline"]["id"]),
-                                                                              "names": ["text_in", "text_out"],
+                                                                              "datasets": [{"name": "text_in"}, {"name": "text_out"}],
                                                                               "expiresInSec": 3600})
 
         assert create_datasets_resp.errors is None
@@ -578,7 +540,7 @@ class TestSchemaMutations:
 
         create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
                                                              variable_values={"id": str(mock_pipeline.id),
-                                                                              "names": ["text_in", "text_out"],
+                                                                              "datasets": [{"name": "text_in"}, {"name": "text_out"}],
                                                                               "expiresInSec": 3600})
         assert create_datasets_resp.errors is not None
         assert create_datasets_resp.data is None

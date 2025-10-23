@@ -3,8 +3,9 @@ import json
 import pytest
 from omegaconf import OmegaConf
 
-from kedro_graphql.models import DataSet, Parameter, ParameterInput, PipelineInput, TagInput
+from kedro_graphql.models import DataSet, DataSetInput, Parameter, ParameterInput, PipelineInput, TagInput
 from .utilities import kedro_graphql_config
+from pathlib import Path
 
 
 class TestDataSet:
@@ -53,6 +54,16 @@ class TestDataSet:
 
         d = DataSet(**params)
         assert d.exists() == False
+
+    def test_partitions(self):
+        d = DataSet(name="test_partitioned_dataset", config=json.dumps(
+            {"type": "partitions.PartitionedDataset",
+             "path": str(Path("src/tests/data/partitioned_dataset/").resolve()),
+             "filename_suffix": ".txt",
+             "dataset": {"type": "text.TextDataset"}}
+        ))
+
+        assert d.partitions() == ["part-0001", "part-0002"]
 
 
 class TestParameterInput:
@@ -295,3 +306,25 @@ class TestParameter:
         assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
         assert len(result.parameters) == len(mock_pipeline_staged.parameters)
         assert len(result.tags) == len(mock_pipeline_staged.tags)
+
+
+class TestDataSetInput:
+
+    def test_encode(self):
+        """
+        Tests the DataSet.encode() method returns a DataSetInput object
+        """
+        dataset = DataSetInput(
+            name="text_in",
+            config=json.dumps({
+                "type": "text.TextDataset",
+                "filepath": "/tmp/test_in.csv",
+                "load_args": {"delimiter": "\t"},
+                "save_args": {"delimiter": "\t"}
+            })
+        )
+
+        result = dataset.encode(encoder="graphql")
+        assert isinstance(result, dict)
+        assert result["name"] == dataset.name
+        assert result["config"] == dataset.config
