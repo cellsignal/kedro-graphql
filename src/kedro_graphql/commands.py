@@ -1,6 +1,5 @@
 import os
 import pathlib
-import json
 from importlib import import_module
 
 import click
@@ -9,7 +8,7 @@ from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 from watchfiles import run_process
 
-from .config import defaults, load_config
+from .config import load_config, cli_config
 from .logs.logger import logger
 
 
@@ -53,6 +52,8 @@ def commands():
 @click.option("--client-uri-graphql", default=None, help="URI for GraphQL API endpoint used by the GraphQL client")
 @click.option("--client-uri-ws", default=None, help="URI for WebSocket endpoint used by the GraphQL client for subscriptions")
 @click.option("--conf-source", default=None, help="Path of a directory where project configuration is stored.")
+@click.option("--dataset-filepath-masks", default=None, help="List of masks to apply to Dataset filepaths before returning responses to client to hide true location of datasets (JSON string)")
+@click.option("--dataset-filepath-allowed-roots", default=None, help="List of allowed root directories for Dataset filepaths (JSON string)")
 @click.option("--deprecations-docs", default=None, help="URL to documentation about deprecated features")
 @click.option("--env", "-e", default=None, help="Kedro configuration environment name. Defaults to `local`.")
 @click.option("--events-config", default=None, help="Event configuration as JSON string")
@@ -83,17 +84,17 @@ def commands():
 @click.option("--ui-spec", default="", help="UI YAML specification file")
 @click.option("--worker", "-w", is_flag=True, default=False, help="Start a celery worker.")
 def gql(metadata, app, app_title, app_description, backend, broker, celery_result_backend, client_uri_graphql, client_uri_ws, conf_source,
-        deprecations_docs, env, events_config, imports, local_file_provider_download_allowed_roots,
+        dataset_filepath_masks, dataset_filepath_allowed_roots, deprecations_docs, env, events_config, imports,
+        local_file_provider_download_allowed_roots,
         local_file_provider_jwt_algorithm, local_file_provider_jwt_secret_key, local_file_provider_server_url,
         local_file_provider_upload_allowed_roots, local_file_provider_upload_max_file_size_mb,
         log_path_prefix, log_tmp_dir, mongo_db_collection, mongo_db_name, mongo_uri, permissions,
         permissions_group_to_role_map, permissions_role_to_action_map, project_version, root_path, runner,
-        signed_url_max_expires_in_sec, signed_url_provider, reload, reload_path, api_spec, ui, ui_spec, worker):
+        signed_url_max_expires_in_sec, signed_url_provider,
+        reload, reload_path, api_spec, ui, ui_spec, worker):
     """Commands for working with kedro-graphql."""
 
-    # Collect CLI configuration instead of setting as environment variables
-    cli_config = {}
-    
+    # inject CLI options into config before calling load_config() to ensure all modules get same config
     if api_spec:
         os.environ["KEDRO_GRAPHQL_API_SPEC"] = str(api_spec)
     if app:
@@ -114,6 +115,10 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         cli_config["KEDRO_GRAPHQL_CLIENT_URI_WS"] = client_uri_ws
     if conf_source:
         cli_config["KEDRO_GRAPHQL_CONF_SOURCE"] = conf_source
+    if dataset_filepath_masks:
+        cli_config["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"] = dataset_filepath_masks
+    if dataset_filepath_allowed_roots:
+        cli_config["KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS"] = dataset_filepath_allowed_roots
     if deprecations_docs:
         cli_config["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"] = deprecations_docs
     if env:
@@ -165,7 +170,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         import_module(metadata.package_name), "__version__", None)
     os.environ["KEDRO_PROJECT_NAME"] = metadata.package_name
 
-    config = load_config(cli_config=cli_config)
+    config = load_config()
     logger.debug("configuration loaded by {s}".format(s=__name__))
 
     if not reload_path:

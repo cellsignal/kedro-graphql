@@ -2,7 +2,8 @@ import asyncio
 from base64 import b64decode, b64encode
 from datetime import datetime
 from importlib import import_module
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Callable, Any
+import json
 from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
@@ -20,6 +21,7 @@ from strawberry.types.base import StrawberryType
 from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
 from strawberry.schema.config import StrawberryConfig
 from strawberry.scalars import JSON
+from strawberry.extensions import FieldExtension
 
 from . import __version__ as kedro_graphql_version
 from .config import load_config
@@ -27,6 +29,7 @@ from .pipeline_event_monitor import PipelineEventMonitor
 from .hooks import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (
+    DataSetInput,
     PageMeta,
     Pipeline,
     PipelineEvent,
@@ -73,12 +76,183 @@ def decode_cursor(cursor: str) -> int:
     return cursor_data.split(":")[1]
 
 
+class DataSetConfigException(Exception):
+    """``DataSetConfigException`` raised by ``DataSetConfigExtension`` implementations
+    in case of failure.
+
+    ``DataSetConfigExtensions`` implementations should provide instructive
+    information in case of failure.
+    """
+
+    pass
+
+
+class PipelineExtension(FieldExtension):
+    """
+    Intercepts Pipeline arguments to mask filepaths before returning.
+    This extension should be added to any Query or Mutation that returns a Pipeline or Pipelines object.
+    This extension requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS config to be set to have any effect.
+    """
+
+    def resolve(
+        self, next_: Callable[..., Any], source: Any, info: strawberry.Info, **kwargs
+    ):
+        """
+        Intercepts Pipeline and Pipelines return values to mask filepaths before returning.
+
+        Args:
+            next_ (Callable[..., Any]): The next resolver in the chain.
+            source (Any): The source object.
+            info (strawberry.Info): The GraphQL execution context.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Union[Pipeline, Pipelines]: The Pipeline or Pipelines object with masked filepaths.
+        """
+        # call original resolver
+        pipeline = next_(source, info, **kwargs)
+
+        if isinstance(pipeline, Pipeline):
+            # mask filepaths before returning
+            return PipelineSanitizer.mask_filepaths(
+                pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+        elif isinstance(pipeline, Pipelines):
+            pipelines = []
+            for p in pipeline.pipelines:
+                pipelines.append(PipelineSanitizer.mask_filepaths(
+                    p, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"]))
+            pipeline.pipelines = pipelines
+            return pipeline
+
+
+class PipelineInputExtension(FieldExtension):
+    """
+    Intercepts PipelineInput arguments to unmask and validate filepaths before
+    passing to the resolver, then masks filepaths again before returning the Pipeline result.
+    This extension should be added to any Mutation that takes a PipelineInput argument.
+    This extension requires the KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS and/or KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS
+    config to be set to have any effect.
+    """
+
+    def resolve(
+        self, next_: Callable[..., Any], source: Any, info: strawberry.Info, **kwargs
+    ):
+        """
+        Intercepts PipelineInput argument to unmask and validate filepaths before
+        passing to the resolver, then masks filepaths again before returning the Pipeline result.
+
+        Args:
+            next_ (Callable[..., Any]): The next resolver in the chain.
+            source (Any): The source object.
+            info (strawberry.Info): The GraphQL execution context.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Pipeline: The Pipeline object with masked filepaths.
+
+        Raises:
+            DataSetConfigException: If any dataset filepath does not start with allowed prefixes.
+        """
+        # intercept PipelineInput and sanitize filepaths
+        pipeline_input = kwargs["pipeline"]
+
+        kwargs["pipeline"] = PipelineSanitizer.unmask_filepaths(
+            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+
+        PipelineSanitizer.sanitize_filepaths(
+            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS"])
+
+        # call original resolver
+        pipeline = next_(source, info, **kwargs)
+        # mask filepaths again before returning
+        return PipelineSanitizer.mask_filepaths(
+            pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+
+
+class PipelineSanitizer:
+
+    @staticmethod
+    def sanitize_filepaths(pipeline: Pipeline | PipelineInput, allowed_roots: list[str]) -> None:
+        """Raises DataSetConfigException if any dataset filepath does not start with any of the allowed roots.
+
+        Args:
+            pipeline (Pipeline | PipelineInput): The pipeline to sanitize.
+            allowed_roots (list[str]): The list of allowed roots.
+        Returns:
+            None
+
+        Raises:
+            DataSetConfigException: If any dataset filepath does not start with allowed prefixes.
+        """
+        if pipeline.data_catalog:
+            for d in pipeline.data_catalog:
+                c = json.loads(d.config)
+                if c.get("filepath"):
+                    if len(allowed_roots) > 0 and not any(c["filepath"].startswith(root) for root in allowed_roots):
+                        raise DataSetConfigException(
+                            "filepath " + c["filepath"] + " not allowed")
+
+    @classmethod
+    def mask_filepaths(cls, pipeline: Pipeline | PipelineInput, masks: list[dict]) -> Pipeline | PipelineInput:
+        """
+        Masks filepaths in the pipeline's data catalog according to the given masks.
+
+        Args:
+            pipeline (Pipeline | PipelineInput): The pipeline to mask.
+            masks (list[dict]): The list of masks.
+
+        Returns:
+            Pipeline | PipelineInput: The pipeline with masked filepaths.
+        """
+        if pipeline.data_catalog:
+            for d in pipeline.data_catalog:
+                try:
+                    c = json.loads(d.config)
+                    if c.get("filepath"):
+                        for mask in masks:
+                            if c["filepath"].startswith(mask["prefix"]):
+                                c["filepath"] = c["filepath"].replace(
+                                    mask["prefix"], mask["mask"])
+                        d.config = json.dumps(c)
+
+                except Exception as e:
+                    logger.warning(
+                        f"Could not parse config for dataset {d.name}: {e}")
+        return pipeline
+
+    @classmethod
+    def unmask_filepaths(cls, pipeline: Pipeline | PipelineInput, masks: list[dict]) -> Pipeline | PipelineInput:
+        """
+        Unmasks filepaths in the pipeline's data catalog according to the given masks.
+
+        Args:
+            pipeline (Pipeline | PipelineInput): The pipeline to unmask.
+            masks (list[dict]): The list of masks.
+
+        Returns:
+            Pipeline | PipelineInput: The pipeline with unmasked filepaths.
+        """
+        if pipeline.data_catalog:
+            for d in pipeline.data_catalog:
+                try:
+                    c = json.loads(d.config)
+                    if c.get("filepath"):
+                        for mask in masks:
+                            if c["filepath"].startswith(mask["mask"]):
+                                c["filepath"] = c["filepath"].replace(
+                                    mask["mask"], mask["prefix"])
+                        d.config = json.dumps(c)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not parse config for dataset {d.name}: {e}")
+        return pipeline
+
+
 @strawberry.type
 class Query:
     @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
-            print(p.id, type(p.id))
             if p.id == id:
                 logger.info(
                     f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
@@ -116,7 +290,7 @@ class Query:
                 next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")])])
+    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")]), PipelineExtension()])
     def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
             p = info.context["request"].app.backend.read(id=id)
@@ -129,7 +303,7 @@ class Query:
             f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline, id={id}")
         return p
 
-    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipelines")])])
+    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipelines")]), PipelineExtension()])
     def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
@@ -209,7 +383,7 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")])])
+    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")]), PipelineInputExtension()])
     def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
@@ -293,7 +467,7 @@ class Mutation:
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
             return p
 
-    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")])])
+    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")]), PipelineInputExtension()])
     def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
 
         try:
@@ -375,7 +549,7 @@ class Mutation:
 
         return p
 
-    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")])])
+    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")]), PipelineExtension()])
     def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
             p = info.context["request"].app.backend.read(id=id)

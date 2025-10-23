@@ -173,6 +173,7 @@ class CredentialNestedInput:
 class DataSet:
     name: str
     config: Optional[str] = None
+    # credentials: Optional[List[CredentialInput]]
     tags: Optional[List[Tag]] = None
 
     @strawberry.field
