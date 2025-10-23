@@ -7,6 +7,7 @@ from typing import Any, Optional
 from .models import Pipeline
 from urllib.parse import urlparse
 from .logs.logger import logger
+from .exceptions import DataSetConfigError
 
 
 def build_graphql_query(
@@ -128,6 +129,8 @@ def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
 
     Returns:
         Pipeline: The same pipeline with a modified data catalog containing unique filepaths for specified datasets.
+    Raises:
+        DataSetConfigError: If a dataset does not have a 'filepath' or 'path' key in its configuration.
     """
     for d in pipeline.data_catalog:
         if d.name in datasets:
@@ -140,9 +143,17 @@ def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
                 logger.info(
                     f"Modifying dataset {d.name} filepath to {new_path} to ensure uniqueness.")
                 d.config = json.dumps(c)
+            elif c.get("path", None):
+                path = c["path"]
+                parts = path.rsplit("/", 1)
+                new_path = parts[0] + "/" + pipeline.id + "/" + parts[1]
+                c["path"] = new_path
+                logger.info(
+                    f"Modifying dataset {d.name} path to {new_path} to ensure uniqueness.")
+                d.config = json.dumps(c)
             else:
-                raise ValueError(
-                    f"Dataset {d.name} does not have a 'filepath' key in its configuration.")
+                raise DataSetConfigError(
+                    f"Dataset {d.name} does not have a 'filepath' or 'path' key in its configuration.")
         else:
             logger.info(
                 f"Dataset {d.name} not in specified datasets list, skipping filepath modification.")
