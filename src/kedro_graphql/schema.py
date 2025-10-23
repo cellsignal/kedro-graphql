@@ -168,10 +168,12 @@ class Query:
             datasets (List[DataSetInput]): The datasets to get signed URLs for. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
         Returns:
-            [str | None]: An array of signed URLs for downloading the dataset or None if not applicable.
+            List[str | None]: An array of signed URLs for downloading the dataset or None if not applicable.
 
         Raises:
-            ValueError: If the dataset configuration is invalid, cannot be parsed or greater than max expires_in_sec
+            ValueError: If expires_in_sec is greater than max expires_in_sec
+            DataSetConfigError: If the dataset configuration is invalid or cannot be parsed.
+            TypeError: If the signed URL provider does not inherit from SignedUrlProvider.
         """
 
         if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
@@ -203,7 +205,6 @@ class Query:
             logger.info(
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
             urls.append(cls.read(info, dataset, expires_in_sec, d.partitions))
-            continue
 
         return urls
 
@@ -405,7 +406,9 @@ class Mutation:
             List[JSON | None]: A signed URL for uploading the dataset or None if not applicable.
 
         Raises:
-            ValueError: If the dataset configuration is invalid, cannot be parsed, or greater than max expires_in_sec
+            ValueError: If expires_in_sec is greater than max expires_in_sec
+            DataSetConfigError: If the dataset configuration is invalid or cannot be parsed.
+            TypeError: If the signed URL provider does not inherit from SignedUrlProvider.
         """
         if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
             raise ValueError(
@@ -441,7 +444,6 @@ class Mutation:
                 url = cls.create(info, dataset, expires_in_sec,
                                  dataset_input.partitions)
                 urls.append(url)
-                continue
         return urls
 
 

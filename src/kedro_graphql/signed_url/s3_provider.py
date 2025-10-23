@@ -1,4 +1,4 @@
-from kedro.io.core import _parse_filepath
+from typing import List
 from kedro.io import AbstractDataset
 from strawberry.types import Info
 from .base import SignedUrlProvider
@@ -80,7 +80,7 @@ class S3Provider(SignedUrlProvider):
             return None
 
     @staticmethod
-    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | None:
+    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | List[str]:
         """
         Generate a signed URL S3 to download a file.
 
@@ -90,7 +90,7 @@ class S3Provider(SignedUrlProvider):
             partitions (list | None): Optional list of partitions in a PartitionedDataset.
 
         Returns:
-            Optional[str]: download url with query parameters
+            str | List[str]: download url with query parameters
 
             Example: https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time
         """
@@ -154,7 +154,7 @@ class S3Provider(SignedUrlProvider):
                     filepath, expires_in_sec)
 
     @staticmethod
-    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | None:
+    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | List[dict]:
         """
         Generate a signed URL S3 to upload a file.
 
@@ -165,7 +165,7 @@ class S3Provider(SignedUrlProvider):
             partitions (list | None): Optional list of partitions in a PartitionedDataset.
 
         Returns:
-            Optional[JSON]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
+            dict | List[dict]: Dictionary with the URL to post to and form fields and values to submit with the POST. If an error occurs, returns None.
 
             Example:
                 {

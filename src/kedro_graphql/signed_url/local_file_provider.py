@@ -27,7 +27,7 @@ class LocalFileProvider(SignedUrlProvider):
     """
 
     @staticmethod
-    def sign_url(filepath: str | Path, expires_in_sec: int, url: str) -> str | List[str]:
+    def sign_url(filepath: str | Path, expires_in_sec: int, url: str) -> dict:
         """
         Generate a signed URL for a local file.
 
@@ -55,7 +55,8 @@ class LocalFileProvider(SignedUrlProvider):
 
         return {"url": url, "fields": {"token": token}}
 
-    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | None:
+    @staticmethod
+    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | List[str]:
         """
         Get a signed URL for reading a dataset.
 
@@ -67,6 +68,9 @@ class LocalFileProvider(SignedUrlProvider):
 
         Returns:
             str | List[str]: A signed URL for reading the dataset.
+
+        Raises:
+            DataSetError: If signed URLs for the dataset type are not supported.
         """
         c = dataset.parse_config()
 
@@ -110,6 +114,7 @@ class LocalFileProvider(SignedUrlProvider):
             query = urlencode({"token": signed["fields"]["token"]})
             return f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
 
+    @staticmethod
     def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | None | List[dict]:
         """
         Get a signed URL for creating a dataset.
@@ -122,6 +127,10 @@ class LocalFileProvider(SignedUrlProvider):
 
         Returns:
             dict | List[dict]: A signed URL for creating the dataset.
+
+        Raises:
+            ValueError: If partitions are not provided for a PartitionedDataset.
+            DataSetError: If signed URLs for the dataset type are not supported.
         """
         c = dataset.parse_config()
         if c["type"] in ["partitions.PartitionedDataset"]:
@@ -143,7 +152,7 @@ class LocalFileProvider(SignedUrlProvider):
             return signed_urls
         elif c["type"] in ["partitions.IncrementalDataset"]:
             raise DataSetError(
-                "Signed URLs for reading IncrementalDatasets are not supported.")
+                "Signed URLs for creating IncrementalDatasets are not supported.")
         else:
             protocol, filepath = dataset.parse_filepath()
             filepath = Path(filepath)

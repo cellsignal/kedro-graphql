@@ -182,7 +182,7 @@ class DataSet:
     @strawberry.field
     def exists(self) -> bool:
         if self.config:
-            return AbstractDataset.from_config(self.name, json.loads(self.config)).exists()
+            return AbstractDataset.from_config(self.name, self.parse_config()).exists()
         else:
             return False
 
