@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.3.0] - 2025-10-23
+
+Added:
+
+- Support for partitioned datasets in signed URL providers
+- `DataSetInput` model with optional `partitions` field for specifying which partitions to work with
+- New exception classes `DataSetConfigError` and `DataSetError` for better error handling
+- Enhanced dataset parsing utility methods: `parse_config()`, `parse_filepath()`, and `parse_path()` in DataSet model
+- Comprehensive test coverage for partitioned datasets including read/create operations for specific partitions
+- Mock S3 testing with proper fixtures for partitioned dataset operations
+
+Changed:
+
+- **Breaking change**: `create_datasets` method signature changed from `names: list[str]` to `datasets: list[DataSetInput]` for enhanced flexibility with partitioned datasets
+- Migrated from deprecated FastAPI event handlers (`@app.on_event`) to modern lifespan pattern using `@asynccontextmanager`
+- Enhanced LocalFileProvider and S3Provider with refactored URL signing logic and better partition support
+- Restructured test files with dedicated package for signed URL tests
+- Updated GraphQL schema mutations to support new dataset input format
+- Improved logging for partition operations
+
+Fixed:
+
+- Application lifecycle management using proper async context management for backend startup/shutdown
+- Code formatting and whitespace issues
+- Enhanced error handling for dataset configuration parsing
+
+
 ## [1.2.0]
 
 Added:
