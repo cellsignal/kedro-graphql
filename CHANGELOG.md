@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1] - 2025-10-23
+
+Fixed:
+
+- support generating unique file paths for partitioned datasets when the create_pipeline and update_pipeline mutations are called
+
 ## [1.3.0] - 2025-10-23
 
 Added:
