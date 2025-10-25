@@ -18,3 +18,10 @@ def reverse(text: str) -> str:
 def append_timestamp(text: str) -> str:
     """Appends a timestamp to the text."""
     return f"{text} - {time.time()}"
+
+
+def timestamped_partitions(text: str) -> dict:
+    """Returns a dict with the text and a timestamp for partitioned dataset example."""
+    return {"part_00": f"{text} - {time.time()}",
+            "part_01": f"{text} - {time.time()}",
+            "part_02": f"{text} - {time.time()}"}

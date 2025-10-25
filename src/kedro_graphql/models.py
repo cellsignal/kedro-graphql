@@ -823,3 +823,41 @@ class PipelineLogMessage:
                                       time=result.get("time", ""))
         else:
             raise TypeError("decoder must be 'graphql'")
+
+
+@strawberry.type
+class SignedUrlFields:
+    token: Optional[str] = None
+
+
+@strawberry.type
+class SignedUrl:
+    url: str
+    file: str
+    fields: Optional[SignedUrlFields] = None
+
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new SignedUrl from a graphql api response.
+        """
+        if decoder == "graphql":
+            result = {to_snake_case(k): v for k, v in payload.items()}
+            return SignedUrl(**result)
+        else:
+            raise TypeError("decoder must be 'graphql'")
+
+
+@strawberry.type
+class SignedUrls:
+    urls: List[SignedUrl]
+
+    @classmethod
+    def decode(cls, payload, decoder=None):
+        """Factory method to create a new SignedUrls from a graphql api response.
+        """
+        if decoder == "graphql":
+            result = {to_snake_case(k): v for k, v in payload.items()}
+            urls = [SignedUrl(**u) for u in result["urls"]]
+            return SignedUrls(urls=urls)
+        else:
+            raise TypeError("decoder must be 'graphql'")

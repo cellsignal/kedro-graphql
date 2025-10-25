@@ -38,7 +38,8 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
 
         if not self.id or not self.pipeline or not self.spec:
             self._content = pn.Column(
-                pn.pane.Markdown("**Missing required parameters: `id`, `pipeline`, or `spec`.**"),
+                pn.pane.Markdown(
+                    "**Missing required parameters: `id`, `pipeline`, or `spec`.**"),
                 sizing_mode="stretch_width"
             )
         else:
@@ -48,7 +49,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
                 pn.pane.Markdown("Fetching Data..."),
                 sizing_mode='stretch_width'
             )
-            
+
             # Ensures build after panel server is fully loaded to avoid race conditions
             pn.state.onload(self.build_dashboard)
 
@@ -75,7 +76,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
             dataset_map=self.dataset_map
         )
         tabs = pn.Tabs(dynamic=False)
-        tabs.append(("Explorer", explorer))
+        tabs.append(("Catalog", explorer))
         tabs.append(("Monitor", monitor))
         tabs.append(("Detail", detail))
         tabs.append(("Viz", viz))
@@ -111,7 +112,7 @@ class PipelineDashboardFactory(pn.viewable.Viewer):
         This method checks if a custom dashboard is registered for the pipeline and builds it accordingly.
         If no custom dashboard is registered, it builds the default dashboard with monitoring, detail, and visualization components.
         """
-        
+
         p = await self.spec["config"]["client"].read_pipeline(id=self.id)
 
         if UI_PLUGINS["DASHBOARD"].get(self.pipeline, None):

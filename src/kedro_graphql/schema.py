@@ -39,6 +39,8 @@ from .models import (
     PipelineStatus,
     PipelineTemplate,
     PipelineTemplates,
+    SignedUrl,
+    SignedUrls,
     State,
     DataSetInput
 )
@@ -332,7 +334,7 @@ class Query:
         )
 
     @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[str | None]:
+    def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | None]:
         """
         Get a signed URL for downloading a dataset.
 
@@ -566,7 +568,7 @@ class Mutation:
         return p
 
     @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
-    def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[JSON | None]:
+    def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | None]:
         """
         Get a signed URL for uploading a dataset.
 
@@ -601,8 +603,9 @@ class Mutation:
             if dataset is None:
                 logger.warning(
                     f"Dataset '{dataset_input.name}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
-                urls.append({"name": dataset_input.name, "filepath": None,
-                            "url": None, "fields": {}})
+                # urls.append({"name": dataset_input.name, "filepath": None,
+                # "url": None, "fields": {}})
+                urls.append(None)
                 continue
             else:
                 module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(

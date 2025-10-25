@@ -1,7 +1,7 @@
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.websockets import WebsocketsTransport
-from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage, DataSetInput
+from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage, DataSetInput, SignedUrl, SignedUrls
 from kedro_graphql.config import load_config
 import backoff
 from gql.transport.exceptions import TransportQueryError
@@ -233,12 +233,42 @@ class KedroGraphqlClient():
         """
         query = """
             query readDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
-              readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec) 
+              readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec){
+                __typename
+                ... on SignedUrl {
+                  url
+                  file
+                  fields {
+                    token
+                  }
+                }
+                ... on SignedUrls {
+                  urls {
+                    url
+                    file
+                    fields {
+                      token
+                    }
+                  }
+                }
+              }
             }
         """
 
         result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
-        return result["readDatasets"]
+        urls = []
+        for d in result["readDatasets"]:
+            if d["__typename"] == "SignedUrl":
+                d.pop("__typename")
+                urls.append(SignedUrl.decode(d, decoder="graphql"))
+            elif d["__typename"] == "SignedUrls":
+                d.pop("__typename")
+                urls.append(SignedUrls.decode(d, decoder="graphql"))
+            else:
+                raise TypeError(
+                    f"Unexpected type {d['__typename']} returned from readDatasets")
+
+        return urls
 
     async def create_datasets(self, id: str = None, datasets: list[DataSetInput] = None, expires_in_sec: int = 43200):
         """create a dataset.
@@ -252,7 +282,25 @@ class KedroGraphqlClient():
         """
         query = """
             mutation createDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
-              createDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec)
+              createDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec){
+                __typename
+                ... on SignedUrl {
+                  url
+                  file
+                  fields {
+                    token
+                  }
+                }
+                ... on SignedUrls {
+                  urls {
+                    url
+                    file
+                    fields {
+                      token
+                    }
+                  }
+                }
+              }
             }
         """
 
