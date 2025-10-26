@@ -1,5 +1,37 @@
 # Changelog
 
+# Changelog
+
+## [1.4.0] - 2025-10-26
+
+Added:
+
+- **Enhanced Signed URL Support**: New `SignedUrl`, `SignedUrls`, and `SignedUrlField` models for structured signed URL responses
+- **Partitioned Dataset Example**: Added `timestamped_partitions` node and `timestamped_partitioned` dataset to example01 pipeline for demonstrating partitioned dataset functionality
+- **Enhanced UI for Partitioned Datasets**: 
+  - Modal viewer for exploring individual partitions within PartitionedDatasets
+  - Bulk download functionality for selected partitions
+  - Improved data catalog explorer with better partition handling
+- **Utility Methods**: Added `get_field_value()` method to `SignedUrl` for easy field extraction
+
+Changed:
+
+- **Breaking Change - GraphQL Schema**: `read_datasets` and `create_datasets` now return `List[SignedUrl | SignedUrls | None]` instead of raw strings/dicts
+- **Breaking Change - Client API**: Both `read_datasets()` and `create_datasets()` methods now return structured `SignedUrl`/`SignedUrls` objects instead of raw responses
+- **Enhanced Signed URL Providers**: Both `LocalFileProvider` and `S3Provider` now return structured `SignedUrl`/`SignedUrls` objects
+- **UI Improvements**:
+  - Data Catalog Explorer renamed from "Explorer" to "Catalog" tab
+  - Better error handling and user notifications for unsupported dataset operations
+  - Enhanced dataset configuration parsing using `parse_config()` method
+- **Updated Test Suite**: Comprehensive test updates to work with new structured signed URL responses
+
+Fixed:
+
+- **GraphQL Union Types**: Proper implementation of union types for signed URL responses with `__typename` support
+- **S3Provider Logging**: Corrected log messages to show `create_dataset` instead of `read_dataset` for upload operations
+- **Dataset Configuration Handling**: Better support for both `filepath` and `path` dataset configurations
+- **Partition File Handling**: Improved file naming and path construction for partitioned datasets
+
 ## [1.3.1] - 2025-10-23
 
 Fixed:
