@@ -75,11 +75,33 @@ class TestSchemaQuery:
 
         query = """
         query TestQuery($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
-          readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec) 
+          readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec){
+            __typename
+            ... on SignedUrl {
+              url
+              file
+              fields {
+                name
+                value
+              }
+            }
+            ... on SignedUrls {
+              urls {
+                url
+                file
+                fields {
+                  name
+                  value
+                }
+              }
+            }
+          }
         }
         """
         resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id), "datasets": [{"name": "text_in"}, {"name": "text_out"}], "expires_in_sec": 3600})
         assert resp.data["readDatasets"] is not None
         assert len(resp.data["readDatasets"]) == 2
-        assert isinstance(resp.data["readDatasets"][0], str)
+        assert resp.data["readDatasets"][0].get("url", False)
+        assert resp.data["readDatasets"][0].get("fields", False)
+        assert resp.data["readDatasets"][0].get("file", False)
         assert resp.errors is None

@@ -7,7 +7,7 @@ import tempfile
 from tempfile import _TemporaryFileWrapper
 import param
 import panel as pn
-from kedro_graphql.models import Pipeline
+from kedro_graphql.models import Pipeline, DataSetInput
 from kedro_graphql.ui.decorators import ui_data, ui_form, ui_dashboard
 from kedro_graphql.ui.components.pipeline_monitor import PipelineMonitor
 from kedro_graphql.models import PipelineInput
@@ -100,15 +100,16 @@ class BaseExample00Form(pn.viewable.Viewer):
         # Stage the pipeline
         p = await self.spec["config"]["client"].create_pipeline(pipeline_input=p_input, unique_paths=["text_in", "text_out"])
         # Create the datasets
-        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, datasets=[DataSetInput(name="text_in")], expires_in_sec=120)
 
         filename, content = list(self.upload.items())[0]
         files = {
-            "token": (None, signed_urls[0]["fields"]["token"]),
             "file": (filename, content),
         }
+        for f in signed_urls[0].fields:
+            files.update({f.name: (None, f.value)})
         # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=files)
+        r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
         p_input = p.encode(encoder="input")
@@ -341,6 +342,10 @@ class BaseExample01Form(pn.viewable.Viewer):
                          "filepath": "./data/02_intermediate/reversed.txt"}
         timestamped_dict = {"type": "text.TextDataset",
                             "filepath": "./data/02_intermediate/timestamped.txt"}
+        timestamped_partitioned_dict = {"type": "partitions.PartitionedDataset",
+                                        "path": "./data/02_intermediate/timestamped_partitioned",
+                                        "filename_suffix": ".txt",
+                                        "dataset": {"type": "text.TextDataset"}}
 
         # PipelineInput object
         return PipelineInput(**{
@@ -350,7 +355,11 @@ class BaseExample01Form(pn.viewable.Viewer):
                              {"name": "uppercased",
                                  "config": json.dumps(uppercase_dict)},
                              {"name": "reversed", "config": json.dumps(reversed_dict)},
-                             {"name": "timestamped", "config": json.dumps(timestamped_dict)}],
+                             {"name": "timestamped",
+                                 "config": json.dumps(timestamped_dict)},
+                             {"name": "timestamped_partitioned",
+                                 "config": json.dumps(timestamped_partitioned_dict)}
+                             ],
             "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]
         })
 
@@ -365,17 +374,18 @@ class BaseExample01Form(pn.viewable.Viewer):
         """Stages the pipeline, creates the datasets, then updates the pipeline to READY state."""
         p_input = await self.pipeline_input()
         # Stage the pipeline
-        p = await self.spec["config"]["client"].create_pipeline(pipeline_input=p_input, unique_paths=["text_in", "uppercased", "reversed", "timestamped"])
+        p = await self.spec["config"]["client"].create_pipeline(pipeline_input=p_input, unique_paths=["text_in", "uppercased", "reversed", "timestamped", "timestamped_partitioned"])
         # Create the datasets
-        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, names=["text_in"], expires_in_sec=120)
+        signed_urls = await self.spec["config"]["client"].create_datasets(id=p.id, datasets=[DataSetInput(name="text_in")], expires_in_sec=120)
 
         filename, content = list(self.upload.items())[0]
         files = {
-            "token": (None, signed_urls[0]["fields"]["token"]),
             "file": (filename, content),
         }
+        for f in signed_urls[0].fields:
+            files.update({f.name: (None, f.value)})
         # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=files)
+        r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
         p_input = p.encode(encoder="input")

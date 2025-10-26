@@ -21,3 +21,10 @@ reversed:
 timestamped:
   type: text.TextDataset
   filepath: ./data/02_intermediate/timestamped.txt
+
+timestamped_partitioned:
+  type: partitions.PartitionedDataset
+  path: ./data/02_intermediate/timestamped_partitioned
+  filename_suffix: .txt
+  dataset:
+    type: text.TextDataset

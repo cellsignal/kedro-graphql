@@ -1,10 +1,9 @@
 import json
 from typing import List
 import jwt
-from kedro.io.core import _parse_filepath
 from kedro.io import AbstractDataset
 from strawberry.types import Info
-from ..models import DataSet
+from ..models import DataSet, SignedUrl, SignedUrls, SignedUrlField
 from .base import SignedUrlProvider
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -12,7 +11,7 @@ from pathlib import Path
 from ..permissions import get_permissions
 from ..logs.logger import logger
 from ..config import load_config
-from ..exceptions import DataSetError, DataSetConfigError
+from ..exceptions import DataSetError
 
 CONFIG = load_config()
 logger.debug("configuration loaded by {s}".format(s=__name__))
@@ -53,10 +52,10 @@ class LocalFileProvider(SignedUrlProvider):
         token = jwt.encode(payload, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                            algorithm=CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"])
 
-        return {"url": url, "fields": {"token": token}}
+        return SignedUrl(url=url, file=path.name, fields=[SignedUrlField(name="token", value=token)])
 
     @staticmethod
-    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | List[str]:
+    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Get a signed URL for reading a dataset.
 
@@ -94,10 +93,10 @@ class LocalFileProvider(SignedUrlProvider):
                 signed = LocalFileProvider.sign_url(
                     file, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
 
-                query = urlencode({"token": signed["fields"]["token"]})
-                signed_urls.append(
-                    f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}")
-            return signed_urls
+                query = urlencode({"token": signed.get_field_value("token")})
+                signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
+                signed_urls.append(signed)
+            return SignedUrls(urls=signed_urls)
 
         elif c["type"] in ["partitions.IncrementalDataset"]:
             raise DataSetError(
@@ -111,11 +110,12 @@ class LocalFileProvider(SignedUrlProvider):
             signed = LocalFileProvider.sign_url(
                 filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
 
-            query = urlencode({"token": signed["fields"]["token"]})
-            return f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
+            query = urlencode({"token": signed.get_field_value("token")})
+            signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
+            return signed
 
     @staticmethod
-    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | None | List[dict]:
+    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Get a signed URL for creating a dataset.
 
@@ -149,7 +149,7 @@ class LocalFileProvider(SignedUrlProvider):
                 signed_urls.append(LocalFileProvider.sign_url(
                     filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/upload"))
 
-            return signed_urls
+            return SignedUrls(urls=signed_urls)
         elif c["type"] in ["partitions.IncrementalDataset"]:
             raise DataSetError(
                 "Signed URLs for creating IncrementalDatasets are not supported.")

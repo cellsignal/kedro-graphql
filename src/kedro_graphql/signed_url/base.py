@@ -1,5 +1,5 @@
 import abc
-from ..models import DataSet
+from ..models import DataSet, SignedUrl, SignedUrls
 from strawberry.types import Info
 
 
@@ -9,7 +9,7 @@ class SignedUrlProvider(metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | None:
+    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Abstract method to get a signed URL for downloading a dataset.
 
@@ -25,7 +25,7 @@ class SignedUrlProvider(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | None:
+    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Abstract method to get a signed URL for uploading a dataset.
 

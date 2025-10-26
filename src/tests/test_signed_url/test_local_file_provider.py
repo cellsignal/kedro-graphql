@@ -6,7 +6,7 @@ from urllib.parse import urlparse, parse_qs
 import jwt
 from ..utilities import kedro_graphql_config
 from kedro_graphql.signed_url.local_file_provider import LocalFileProvider
-from kedro_graphql.models import DataSet
+from kedro_graphql.models import DataSet, SignedUrls, SignedUrl
 
 
 class TestLocalFileProvider:
@@ -35,7 +35,7 @@ class TestLocalFileProvider:
 
         output = LocalFileProvider.create(
             mock_info_context, mock_dataset, expires_in_sec=10)
-        token = output["fields"].get("token", None)
+        token = output.get_field_value("token")
 
         payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                              algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
@@ -48,15 +48,14 @@ class TestLocalFileProvider:
         partitions = ["part-0001", "part-0002"]
         output = LocalFileProvider.create(
             mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=partitions)
-        assert isinstance(output, list)
+        assert isinstance(output, SignedUrls)
 
         expected_files = [mock_partitioned_dataset.parse_config()["path"] + "/" + f + ".txt" for f in
                           partitions]
 
-        for item in output:
-            assert item.keys() == {"url", "fields"}
-            assert "token" in item["fields"]
-            token = item["fields"].get("token", None)
+        for item in output.urls:
+            assert isinstance(item, SignedUrl)
+            token = item.get_field_value("token")
 
             payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                                  algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
@@ -72,7 +71,7 @@ class TestLocalFileProvider:
 
         output = LocalFileProvider.read(
             mock_info_context, mock_dataset, expires_in_sec=10)
-        parsed_url = urlparse(output)
+        parsed_url = urlparse(output.url)
         query_params = parse_qs(parsed_url.query)
         token = query_params.get("token", [None])[0]
 
@@ -89,13 +88,13 @@ class TestLocalFileProvider:
 
         output = LocalFileProvider.read(
             mock_info_context, mock_partitioned_dataset, expires_in_sec=10)
-        assert isinstance(output, list)
+        assert isinstance(output, SignedUrls)
 
         expected_files = [mock_partitioned_dataset.parse_config()["path"] + "/" + f for f in
                           ["part-0001.txt", "part-0002.txt"]]
 
-        for url in output:
-            token = urlparse(url).query.split("token=")[1]
+        for url in output.urls:
+            token = urlparse(url.url).query.split("token=")[1]
 
             payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                                  algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
@@ -112,13 +111,13 @@ class TestLocalFileProvider:
         output = LocalFileProvider.read(
             mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001"])
 
-        assert isinstance(output, list)
+        assert isinstance(output, SignedUrls)
 
         expected_files = [mock_partitioned_dataset.parse_config()["path"] + "/" + f for f in
                           ["part-0001.txt"]]
 
-        for url in output:
-            token = urlparse(url).query.split("token=")[1]
+        for url in output.urls:
+            token = urlparse(url.url).query.split("token=")[1]
 
             payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                                  algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])

@@ -6,7 +6,7 @@ from ..config import load_config
 from .. permissions import get_permissions
 from .local_file_provider import LocalFileProvider
 from ..utils import parse_s3_filepath
-from ..models import DataSet
+from ..models import DataSet, SignedUrl, SignedUrls, SignedUrlField
 from ..exceptions import DataSetConfigError, DataSetError
 import boto3
 from botocore.exceptions import ClientError
@@ -26,7 +26,7 @@ class S3Provider(SignedUrlProvider):
     """
 
     @staticmethod
-    def presigned_url(filepath: str, expires_in_sec: int) -> str | None:
+    def presigned_url(filepath: str, expires_in_sec: int) -> SignedUrl | None:
         """
         Generate a signed URL for an S3 file.
         Args:
@@ -46,17 +46,18 @@ class S3Provider(SignedUrlProvider):
         }
 
         try:
-            return s3_client.generate_presigned_url(
+            return SignedUrl(url=s3_client.generate_presigned_url(
                 'get_object',
                 Params=params,
                 ExpiresIn=expires_in_sec
-            )
+            ),
+                file=filename)
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")
             return None
 
     @staticmethod
-    def presigned_post(filepath: str, expires_in_sec: int) -> dict | None:
+    def presigned_post(filepath: str, expires_in_sec: int) -> SignedUrl | None:
         """
         Generate a presigned POST URL for uploading to S3.
         Args:
@@ -70,17 +71,18 @@ class S3Provider(SignedUrlProvider):
 
         s3_client = boto3.client('s3')
         try:
-            return s3_client.generate_presigned_post(bucket_name,
+            resp = s3_client.generate_presigned_post(bucket_name,
                                                      f"{key}/{filename}",
                                                      Fields=None,
                                                      Conditions=None,
                                                      ExpiresIn=expires_in_sec)
+            return SignedUrl(url=resp["url"], file=filename, fields=[SignedUrlField(name=k, value=v) for k, v in resp["fields"].items()])
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")
             return None
 
     @staticmethod
-    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> str | List[str]:
+    def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Generate a signed URL S3 to download a file.
 
@@ -128,7 +130,7 @@ class S3Provider(SignedUrlProvider):
                         file, expires_in_sec)
 
                     signed_urls.append(signed)
-                return signed_urls
+                return SignedUrls(urls=signed_urls)
 
         elif c["type"] in ["partitions.IncrementalDataset"]:
             raise DataSetError(
@@ -154,7 +156,7 @@ class S3Provider(SignedUrlProvider):
                     filepath, expires_in_sec)
 
     @staticmethod
-    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> dict | List[dict]:
+    def create(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
         """
         Generate a signed URL S3 to upload a file.
 
@@ -213,7 +215,7 @@ class S3Provider(SignedUrlProvider):
                         file, expires_in_sec)
 
                     signed_urls.append(signed)
-                return signed_urls
+                return SignedUrls(urls=signed_urls)
 
         elif c["type"] in ["partitions.IncrementalDataset"]:
             raise DataSetError(
