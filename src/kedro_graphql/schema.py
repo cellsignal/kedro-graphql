@@ -603,8 +603,6 @@ class Mutation:
             if dataset is None:
                 logger.warning(
                     f"Dataset '{dataset_input.name}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
-                # urls.append({"name": dataset_input.name, "filepath": None,
-                # "url": None, "fields": {}})
                 urls.append(None)
                 continue
             else:

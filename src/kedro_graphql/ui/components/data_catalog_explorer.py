@@ -200,8 +200,6 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         """
         Handle download button click events in the partitions table.
         """
-        print("PARTITIONS DOWNLOAD CLICKED:", event)
-        print("DATAFRAME:", df)
         selected_rows = self.partitions_widget.selection
         for row in selected_rows:
             dataset_name = df.iloc[row]['Name']
@@ -215,8 +213,6 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         """
         Handle row click events in the partitions table.
         """
-        print("PARTITION ROW CLICKED:", event)
-        print("DATAFRAME:", df)
         row = event.row
         dataset_name = df.iloc[row]['Name']
         dataset_filepath = df.iloc[row]['Filepath']

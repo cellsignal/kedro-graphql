@@ -96,8 +96,6 @@ class LocalFileProvider(SignedUrlProvider):
                 query = urlencode({"token": signed.get_field_value("token")})
                 signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
                 signed_urls.append(signed)
-                # signed_urls.append(
-                #    f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}")
             return SignedUrls(urls=signed_urls)
 
         elif c["type"] in ["partitions.IncrementalDataset"]:
