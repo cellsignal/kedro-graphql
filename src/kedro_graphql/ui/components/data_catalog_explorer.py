@@ -262,56 +262,59 @@ class DataCatalogExplorer(pn.viewable.Viewer):
         """
         Handle row click events in the dataset table and triggers appropriate actions for 'Download' or 'Popout' column clicks.
         """
+        try:
+            if event.column != 'Download' and event.column != 'Popout':
+                return
 
-        if event.column != 'Download' and event.column != 'Popout':
-            return
+            row = event.row
+            dataset_name = ds_df.iloc[row]['Name']
+            dataset_filepath = ds_df.iloc[row]['Filepath']
+            dataset_type = ds_df.iloc[row]['Type']
 
-        row = event.row
-        dataset_name = ds_df.iloc[row]['Name']
-        dataset_filepath = ds_df.iloc[row]['Filepath']
-        dataset_type = ds_df.iloc[row]['Type']
+            for ds in self.pipeline.data_catalog:
+                if ds.name == dataset_name:
 
-        for ds in self.pipeline.data_catalog:
-            if ds.name == dataset_name:
-
-                if dataset_type == "partitions.IncrementalDataset":
-                    pn.state.notifications.warning(
-                        f"Actions for IncrementalDatasets are not supported yet: {dataset_name}", duration=10000)
-                    return
-
-                else:
-                    presigned_urls = await self.spec["config"]["client"].read_datasets(
-                        id=self.pipeline.id, datasets=[DataSetInput(name=ds.name)], expires_in_sec=3600)
-
-                    presigned_url = presigned_urls[0]
-
-                    if event.column == 'Download':
-                        if dataset_type == "partitions.PartitionedDataset":
-                            self.open_partition_viewer(ds, presigned_url)
-                        elif isinstance(presigned_url, SignedUrl):
-                            self.trigger_download(
-                                presigned_url.url, dataset_filepath)
-                        else:
-                            pn.state.notifications.warning(
-                                f"Download not available for {dataset_name}", duration=10000)
+                    if dataset_type == "partitions.IncrementalDataset":
+                        pn.state.notifications.warning(
+                            f"Actions for IncrementalDatasets are not supported yet: {dataset_name}", duration=10000)
                         return
 
-                    elif event.column == 'Popout':
-                        if dataset_type == "partitions.PartitionedDataset":
-                            self.open_partition_viewer(ds, presigned_url)
-                        elif presigned_url:
-                            # Check dataset_map for custom viewer
-                            for dataset_type, panel_page in self.dataset_map.items():
-                                if ds.parse_config()["type"] == dataset_type:
-                                    self.open_dataset_viewer(
-                                        panel_page, presigned_url.url, dataset_name, dataset_type)
-                                    return
-                            # Default to raw data viewer
-                            self.trigger_popout(presigned_url.url)
-                        else:
-                            pn.state.notifications.warning(
-                                f"No signed URL available for {dataset_name}", duration=10000)
-                        return
+                    else:
+                        presigned_urls = await self.spec["config"]["client"].read_datasets(
+                            id=self.pipeline.id, datasets=[DataSetInput(name=ds.name)], expires_in_sec=3600)
+
+                        presigned_url = presigned_urls[0]
+
+                        if event.column == 'Download':
+                            if dataset_type == "partitions.PartitionedDataset":
+                                self.open_partition_viewer(ds, presigned_url)
+                            elif isinstance(presigned_url, SignedUrl):
+                                self.trigger_download(
+                                    presigned_url.url, dataset_filepath)
+                            else:
+                                pn.state.notifications.warning(
+                                    f"Download not available for {dataset_name}", duration=10000)
+                            return
+
+                        elif event.column == 'Popout':
+                            if dataset_type == "partitions.PartitionedDataset":
+                                self.open_partition_viewer(ds, presigned_url)
+                            elif presigned_url:
+                                # Check dataset_map for custom viewer
+                                for dataset_type, panel_page in self.dataset_map.items():
+                                    if ds.parse_config()["type"] == dataset_type:
+                                        self.open_dataset_viewer(
+                                            panel_page, presigned_url.url, dataset_name, dataset_type)
+                                        return
+                                # Default to raw data viewer
+                                self.trigger_popout(presigned_url.url)
+                            else:
+                                pn.state.notifications.warning(
+                                    f"No signed URL available for {dataset_name}", duration=10000)
+                            return
+        except Exception as e:
+            pn.state.notifications.error(
+                f"Error processing action for dataset {dataset_name}: {str(e)}", duration=10000)
 
     def __panel__(self):
         return self._content

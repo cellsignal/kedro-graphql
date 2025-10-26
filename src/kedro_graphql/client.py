@@ -239,7 +239,8 @@ class KedroGraphqlClient():
                   url
                   file
                   fields {
-                    token
+                    name
+                    value
                   }
                 }
                 ... on SignedUrls {
@@ -247,7 +248,8 @@ class KedroGraphqlClient():
                     url
                     file
                     fields {
-                      token
+                      name
+                      value
                     }
                   }
                 }
@@ -288,7 +290,8 @@ class KedroGraphqlClient():
                   url
                   file
                   fields {
-                    token
+                    name
+                    value
                   }
                 }
                 ... on SignedUrls {
@@ -296,7 +299,8 @@ class KedroGraphqlClient():
                     url
                     file
                     fields {
-                      token
+                      name
+                      value
                     }
                   }
                 }
@@ -305,7 +309,19 @@ class KedroGraphqlClient():
         """
 
         result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
-        return result["createDatasets"]
+        urls = []
+        for d in result["createDatasets"]:
+            if d["__typename"] == "SignedUrl":
+                d.pop("__typename")
+                urls.append(SignedUrl.decode(d, decoder="graphql"))
+            elif d["__typename"] == "SignedUrls":
+                d.pop("__typename")
+                urls.append(SignedUrls.decode(d, decoder="graphql"))
+            else:
+                raise TypeError(
+                    f"Unexpected type {d['__typename']} returned from createDatasets")
+
+        return urls
 
     @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))
     async def pipeline_events(self, id: str = None):

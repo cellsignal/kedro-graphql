@@ -1,5 +1,5 @@
 import pytest
-from kedro_graphql.models import DataSetInput, PipelineInput, Pipeline, TagInput
+from kedro_graphql.models import DataSetInput, PipelineInput, Pipeline, TagInput, SignedUrl, SignedUrls
 import json
 from celery.states import ALL_STATES
 from kedro_graphql.schema import encode_cursor
@@ -156,7 +156,7 @@ class TestKedroGraphqlClient:
         r = await mock_client.read_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")], expires_in_sec=3600)
         assert isinstance(r, list)
         assert len(r) == 2
-        assert isinstance(r[0], str)
+        assert isinstance(r[0], SignedUrl)
 
     @pytest.mark.asyncio
     async def test_create_datasets(self, mock_create_pipeline_staged, mock_client):
@@ -165,7 +165,7 @@ class TestKedroGraphqlClient:
         r = await mock_client.create_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")], expires_in_sec=3600)
         assert isinstance(r, list)
         assert len(r) == 2
-        assert isinstance(r[0], dict)
+        assert isinstance(r[0], SignedUrl)
 
     @pytest.mark.asyncio
     async def test_create_datasets_with_partitions(self, mock_create_pipeline_staged_with_partitions, mock_client):
@@ -174,8 +174,8 @@ class TestKedroGraphqlClient:
         r = await mock_client.create_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in", partitions=["partition1", "partition2"])], expires_in_sec=3600)
         assert isinstance(r, list)
         assert len(r) == 1
-        assert isinstance(r[0], list)
-        assert isinstance(r[0][0], dict)
+        assert isinstance(r[0], SignedUrls)
+        assert isinstance(r[0].urls[0], SignedUrl)
 
     @pytest.mark.asyncio
     async def test_pipeline_events(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):

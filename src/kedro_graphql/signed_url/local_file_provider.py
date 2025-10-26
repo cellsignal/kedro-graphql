@@ -3,7 +3,7 @@ from typing import List
 import jwt
 from kedro.io import AbstractDataset
 from strawberry.types import Info
-from ..models import DataSet, SignedUrl, SignedUrls, SignedUrlFields
+from ..models import DataSet, SignedUrl, SignedUrls, SignedUrlField
 from .base import SignedUrlProvider
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -52,7 +52,7 @@ class LocalFileProvider(SignedUrlProvider):
         token = jwt.encode(payload, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
                            algorithm=CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"])
 
-        return SignedUrl(url=url, file=path.name, fields=SignedUrlFields(token=token))
+        return SignedUrl(url=url, file=path.name, fields=[SignedUrlField(name="token", value=token)])
 
     @staticmethod
     def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:
@@ -92,7 +92,8 @@ class LocalFileProvider(SignedUrlProvider):
 
                 signed = LocalFileProvider.sign_url(
                     file, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
-                query = urlencode({"token": signed.fields.token})
+
+                query = urlencode({"token": signed.get_field_value("token")})
                 signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
                 signed_urls.append(signed)
                 # signed_urls.append(
@@ -111,7 +112,7 @@ class LocalFileProvider(SignedUrlProvider):
             signed = LocalFileProvider.sign_url(
                 filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
 
-            query = urlencode({"token": signed.fields.token})
+            query = urlencode({"token": signed.get_field_value("token")})
             signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
             return signed
 

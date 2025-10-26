@@ -153,7 +153,27 @@ class TestSchemaMutations:
 
     create_datasets_mutation = """
         mutation CreateDatasets($id: String!, $datasets: [DataSetInput!]!, $expiresInSec: Int!) {
-          createDatasets(id: $id, datasets: $datasets, expiresInSec: $expiresInSec)
+          createDatasets(id: $id, datasets: $datasets, expiresInSec: $expiresInSec){
+            __typename
+            ... on SignedUrl {
+              url
+              file
+              fields {
+                name
+                value
+              }
+            }
+            ... on SignedUrls {
+              urls {
+                url
+                file
+                fields {
+                  name
+                  value
+                }
+              }
+            }
+          }
         }
         """
 
@@ -505,27 +525,34 @@ class TestSchemaMutations:
 
         # Make sure only timestamp_node was run because the file does not exist (did not write to it in conftest.py)
         assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
-                                     ["id"]).status[-1].filtered_nodes == ["timestamp_node"]
+                                     ["id"]).status[-1].filtered_nodes == ["timestamp_node", "timestamp_partitions_node"]
         create_pipeline_resp.errors is None
 
     @pytest.mark.asyncio
     async def test_create_datasets(self,
                                    mock_app,
+                                   mock_text_in,
+                                   mock_text_out,
                                    mock_info_context):
 
         # create a staged pipeline
         response = await mock_app.schema.execute(self.create_pipeline_mutation,
                                                  variable_values={"pipeline": {
-                                                     "name": "example00",
+                                                     "name": "example01",
+                                                     "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                                                     {"name": "text_out", "config": json.dumps(
+                                                                         {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                                                     ],
+                                                     "onlyMissing": True,
+                                                     "parameters": [{"name": "example", "value": "hello"},
+                                                                    {"name": "duration", "value": "0.1", "type": "FLOAT"}],
                                                      "state": "STAGED",
-                                                 },
-                                                     "uniquePaths": None})
+                                                 }, "uniquePaths": None})
 
         create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
                                                              variable_values={"id": str(response.data["createPipeline"]["id"]),
                                                                               "datasets": [{"name": "text_in"}, {"name": "text_out"}],
                                                                               "expiresInSec": 3600})
-
         assert create_datasets_resp.errors is None
         assert create_datasets_resp.data["createDatasets"] is not None
         assert isinstance(create_datasets_resp.data["createDatasets"], list)

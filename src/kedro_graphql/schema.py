@@ -344,7 +344,7 @@ class Query:
             datasets (List[DataSetInput]): The datasets to get signed URLs for. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
         Returns:
-            List[str | None]: An array of signed URLs for downloading the dataset or None if not applicable.
+            List[SignedUrl | SignedUrls | None]: An array of signed URLs for downloading the dataset or None if not applicable.
 
         Raises:
             ValueError: If expires_in_sec is greater than max expires_in_sec
@@ -579,7 +579,7 @@ class Mutation:
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
 
         Returns:
-            List[JSON | None]: A signed URL for uploading the dataset or None if not applicable.
+            List[SignedUrl | SignedUrls | None]: A signed URL for uploading the dataset or None if not applicable.
 
         Raises:
             ValueError: If expires_in_sec is greater than max expires_in_sec

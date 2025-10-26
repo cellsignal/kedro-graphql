@@ -826,15 +826,16 @@ class PipelineLogMessage:
 
 
 @strawberry.type
-class SignedUrlFields:
-    token: Optional[str] = None
+class SignedUrlField:
+    name: Optional[str] = None
+    value: Optional[str] = None
 
 
 @strawberry.type
 class SignedUrl:
     url: str
     file: str
-    fields: Optional[SignedUrlFields] = None
+    fields: Optional[List[SignedUrlField]] = None
 
     @classmethod
     def decode(cls, payload, decoder=None):
@@ -842,9 +843,23 @@ class SignedUrl:
         """
         if decoder == "graphql":
             result = {to_snake_case(k): v for k, v in payload.items()}
-            return SignedUrl(**result)
+            return SignedUrl(url=result["url"], file=result["file"], fields=[SignedUrlField(name=f["name"], value=f["value"]) for f in result.get("fields", None)])
         else:
             raise TypeError("decoder must be 'graphql'")
+
+    def get_field_value(self, name: str) -> str | None:
+        """
+        Extract a field value from an array of SignedUrlFields.
+
+        Args:
+            name (str): The name of the field to extract.
+
+        Returns:
+            str | None: The value of the field, or None if not found.
+        """
+        for f in self.fields:
+            if f.name == name:
+                return f.value
 
 
 @strawberry.type
@@ -857,7 +872,7 @@ class SignedUrls:
         """
         if decoder == "graphql":
             result = {to_snake_case(k): v for k, v in payload.items()}
-            urls = [SignedUrl(**u) for u in result["urls"]]
+            urls = [SignedUrl.decode(u, decoder="graphql") for u in result["urls"]]
             return SignedUrls(urls=urls)
         else:
             raise TypeError("decoder must be 'graphql'")

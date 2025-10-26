@@ -104,11 +104,12 @@ class BaseExample00Form(pn.viewable.Viewer):
 
         filename, content = list(self.upload.items())[0]
         files = {
-            "token": (None, signed_urls[0]["fields"]["token"]),
             "file": (filename, content),
         }
+        for f in signed_urls[0].fields:
+            files.update({f.name: (None, f.value)})
         # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=files)
+        r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
         p_input = p.encode(encoder="input")
@@ -379,11 +380,12 @@ class BaseExample01Form(pn.viewable.Viewer):
 
         filename, content = list(self.upload.items())[0]
         files = {
-            "token": (None, signed_urls[0]["fields"]["token"]),
             "file": (filename, content),
         }
+        for f in signed_urls[0].fields:
+            files.update({f.name: (None, f.value)})
         # Upload the file to the signed URL
-        r = requests.post(signed_urls[0]["url"], files=files)
+        r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
         p_input = p.encode(encoder="input")

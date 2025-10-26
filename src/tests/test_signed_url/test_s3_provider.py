@@ -3,7 +3,7 @@ import pytest
 import json
 from ..utilities import kedro_graphql_config
 from kedro_graphql.signed_url.s3_provider import S3Provider
-from kedro_graphql.models import DataSet
+from kedro_graphql.models import DataSet, SignedUrl, SignedUrls
 
 
 class TestS3Provider:
@@ -17,6 +17,7 @@ class TestS3Provider:
         mock_s3.generate_presigned_url.return_value = "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
         mock_s3.generate_presigned_post.return_value = {
             "url": "https://your-bucket-name.s3.amazonaws.com/",
+            "file": "your-object-key",
             "fields": {
                 "key": "your-object-key",
                 "AWSAccessKeyId": "YOUR_ACCESS_KEY_ID",
@@ -50,18 +51,18 @@ class TestS3Provider:
         output = S3Provider.read(
             mock_info_context, mock_dataset, expires_in_sec=10)
 
-        assert isinstance(output, str)
+        assert isinstance(output, SignedUrl)
 
-        assert output == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
+        assert output.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
 
     def test_read_partitions(self, mock_s3_client, mock_info_context, mock_partitioned_dataset):
         """Test reading multiple partitions from a PartitionedDataset"""
 
         output = S3Provider.read(
             mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
-        assert isinstance(output, list)
-        for url in output:
-            assert url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
+        assert isinstance(output, SignedUrls)
+        for url in output.urls:
+            assert url.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
 
     def test_create(self, mock_s3_client, mock_info_context, mock_dataset):
         """Test creating a single signed URL for uploading a TextDataset"""
@@ -69,34 +70,51 @@ class TestS3Provider:
         output = S3Provider.create(
             mock_info_context, mock_dataset, expires_in_sec=10)
 
-        assert isinstance(output, dict)
+        assert isinstance(output, SignedUrl)
 
-        assert output == {
+        assert output == SignedUrl.decode({
             "url": "https://your-bucket-name.s3.amazonaws.com/",
-            "fields": {
-                "key": "your-object-key",
-                "AWSAccessKeyId": "YOUR_ACCESS_KEY_ID",
-                "policy": "YOUR_BASE64_ENCODED_POLICY",
-                "signature": "YOUR_SIGNATURE",
-                "Content-Type": "application/octet-stream"
-            }
-        }
+            "file": "file.txt",
+            "fields": [
+                {"name": "key", "value": "your-object-key"},
+                {"name": "AWSAccessKeyId", "value": "YOUR_ACCESS_KEY_ID"},
+                {"name": "policy", "value": "YOUR_BASE64_ENCODED_POLICY"},
+                {"name": "signature", "value": "YOUR_SIGNATURE"},
+                {"name": "Content-Type", "value": "application/octet-stream"}
+            ]
+        }, decoder="graphql")
 
     def test_create_partitions(self, mock_s3_client, mock_info_context, mock_partitioned_dataset):
         """Test creating signed URLs for the upload of specific partitions in a PartitionedDataset"""
 
         output = S3Provider.create(
             mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
-        assert isinstance(output, list)
+        assert isinstance(output, SignedUrls)
 
-        for item in output:
-            assert item == {
+        expected = SignedUrls(urls=[
+            SignedUrl.decode({
                 "url": "https://your-bucket-name.s3.amazonaws.com/",
-                "fields": {
-                    "key": "your-object-key",
-                    "AWSAccessKeyId": "YOUR_ACCESS_KEY_ID",
-                    "policy": "YOUR_BASE64_ENCODED_POLICY",
-                    "signature": "YOUR_SIGNATURE",
-                    "Content-Type": "application/octet-stream"
-                }
-            }
+                "file": "part-0001.txt",
+                "fields": [
+                    {"name": "key", "value": "your-object-key"},
+                    {"name": "AWSAccessKeyId", "value": "YOUR_ACCESS_KEY_ID"},
+                    {"name": "policy", "value": "YOUR_BASE64_ENCODED_POLICY"},
+                    {"name": "signature", "value": "YOUR_SIGNATURE"},
+                    {"name": "Content-Type", "value": "application/octet-stream"}
+                ]
+            }, decoder="graphql"),
+            SignedUrl.decode({
+                "url": "https://your-bucket-name.s3.amazonaws.com/",
+                "file": "part-0002.txt",
+                "fields": [
+                    {"name": "key", "value": "your-object-key"},
+                    {"name": "AWSAccessKeyId", "value": "YOUR_ACCESS_KEY_ID"},
+                    {"name": "policy", "value": "YOUR_BASE64_ENCODED_POLICY"},
+                    {"name": "signature", "value": "YOUR_SIGNATURE"},
+                    {"name": "Content-Type", "value": "application/octet-stream"}
+                ]
+            }, decoder="graphql")
+        ])
+
+        for index, item in enumerate(output.urls):
+            assert item == expected.urls[index]
