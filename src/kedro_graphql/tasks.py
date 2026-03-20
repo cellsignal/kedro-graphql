@@ -362,7 +362,11 @@ def run_pipeline(self,
                 catalog=io
             )
 
-            runner = init_runner(runner=runner)
+
+            runner_kwargs = conf_parameters.get("runner_kwargs", {})
+
+            logger.info(f"Initializing runner {runner} with kwargs: {runner_kwargs}")
+            runner_instance = init_runner(runner_import_path=runner, **runner_kwargs)
 
             # Filter the pipeline based on the slices and only_missing parameters
             if only_missing:
@@ -397,7 +401,7 @@ def run_pipeline(self,
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
             self.db.update(p)
 
-            run_result = runner().run(filtered_pipeline, catalog=io,
+            run_result = runner_instance.run(filtered_pipeline, catalog=io,
                                       hook_manager=hook_manager, session_id=session.session_id)
 
             hook_manager.hook.after_pipeline_run(
