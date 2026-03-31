@@ -1,4 +1,4 @@
-FROM python:3.11.13-alpine3.20
+FROM python:3.11.15-alpine3.23
 
 COPY . /opt/kedro-graphql
 
@@ -16,8 +16,9 @@ RUN apk add --no-cache --virtual .build-dependencies build-base curl-dev \
 
 WORKDIR /opt/kedro-graphql
 
-RUN pip install -e .[ui]
+RUN mkdir -p logs \
+    && pip install -e .
 
 EXPOSE 5000
 
-CMD ["kedro", "gql", "--reload"]
+CMD ["kedro", "gql", "--api-spec", "spec-api-auth-docker.yaml"]

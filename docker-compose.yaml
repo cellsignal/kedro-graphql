@@ -1,4 +1,14 @@
 services:
+  kedro-graphql:
+    build: .
+    restart: always
+    ports:
+      - '5000:5000'
+    depends_on:
+      - redis
+      - mongo
+    profiles:
+      - app
   redis:
     image: redis:6.2-alpine
     restart: always

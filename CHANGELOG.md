@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [1.5.1] - 2026-03-31
+
+Added:
+
+- **`.dockerignore` File**: Added a `.dockerignore` to exclude unnecessary files (docs, tests, logs, notebooks, data, IDE configs, etc.) from the Docker build context for faster builds and smaller images
+- **Docker Compose Profiles**: The `kedro-graphql` service now uses a `profiles` key (`app`), so it is only started when explicitly requested via `docker compose --profile app up`
+- **Development Docs**: Added a Docker section to `docs/development.md` covering image builds, `.dockerignore` usage, and Docker Compose profile usage
+
 ## [1.5.0] - 2026-03-31
 
 Added:

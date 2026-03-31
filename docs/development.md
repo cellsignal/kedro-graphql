@@ -63,6 +63,34 @@ Start a worker (in another terminal) with auto-reload enabled.
 kedro gql -w --reload --reload-path ./src/kedro_graphql/runners
 ```
 
+## Docker
+
+### Building the image
+
+Build the Docker image:
+
+```
+docker build -t kedro-gql:latest .
+```
+
+A `.dockerignore` file is included to exclude unnecessary files (e.g. docs, tests, logs, notebooks, data, IDE configs) from the build context, resulting in faster builds and smaller images.
+
+### Docker Compose
+
+The `docker-compose.yaml` defines the full development stack including Redis, MongoDB, and supporting admin UIs. The `kedro-graphql` service is assigned to the `app` profile, so it is **not** started by default.
+
+To start only the infrastructure services (Redis, MongoDB, etc.):
+
+```
+docker compose up
+```
+
+To start everything including the `kedro-graphql` application:
+
+```
+docker compose --profile app up
+```
+
 ## TO DO
 
 - support custom runners e.g. Argo Workflows, AWS Batch, etc...
