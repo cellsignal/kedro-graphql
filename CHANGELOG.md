@@ -1,10 +1,28 @@
 # Changelog
 
-## [Unreleased]
+
+## [1.5.0] - 2026-03-31
 
 Added:
 
 - **Configurable Lifespan Handler**: `KedroGraphQL` now accepts an optional `lifespan_handler` parameter, allowing child classes to provide custom lifespan handlers for startup/shutdown logic
+- **Runner Kwargs via Parameters File**: The Kedro parameters file now supports a `runner_kwargs` key, allowing runner constructor arguments (e.g., `is_async: true`) to be configured at runtime
+- **Comprehensive Concurrency Tests**: New test suite for WebSocket subscription concurrency, including parallel pipeline event/log subscriptions and event loop responsiveness assertions
+
+Changed:
+
+- **All GraphQL Resolvers Now Async**: Every query, mutation, and subscription resolver is now `async def`, with all blocking backend/database calls wrapped in `run_in_threadpool` to prevent event loop blocking
+- **Async Pipeline Event Monitor**: Celery `AsyncResult` property access in `PipelineEventMonitor.start()` is now wrapped in `run_in_threadpool` with error handling for missing/disabled result backends
+- **Async Pipeline Log Stream**: Task status checking in `PipelineLogStream` is now wrapped in `run_in_threadpool`, and the Redis connection uses `aclose()` for proper async cleanup
+- **Runner Initialization**: `init_runner()` now accepts `**runner_kwargs` and instantiates the runner directly, rather than returning the class for inline instantiation
+
+Fixed:
+
+- **Blocking WebSocket Connections**: Synchronous Celery and database operations in async resolvers no longer block the event loop, fixing stalled WebSocket subscriptions with multiple concurrent clients (fixes #88)
+- **Null Safety in Task Callbacks**: `on_failure()` and `after_return()` now check if the pipeline record exists before accessing `status`, preventing `AttributeError`
+- **Redis Connection Cleanup**: Changed `close()` to `aclose()` for proper async Redis connection cleanup in log streaming
+- **CloudEvents Dependency**: Pinned `cloudevents` to `>=1.12.0,<2.0.0` to avoid breaking API changes in 2.0.0 that removed `cloudevents.http`, `cloudevents.pydantic`, and `cloudevents.conversion` submodules
+- **FastAPI WebSocket Route**: Updated `add_websocket_route` to `add_api_websocket_route` for compatibility with FastAPI >=0.135.0 where the old method was removed
 
 ## [1.4.0] - 2025-10-26
 

@@ -64,7 +64,7 @@ class KedroGraphQL(FastAPI):
         self.backend = init_backend(self.config)
         self.graphql_app = GraphQLRouter(self.schema)
         self.include_router(self.graphql_app, prefix="/graphql")
-        self.add_websocket_route("/graphql", self.graphql_app)
+        self.add_api_websocket_route("/graphql", self.graphql_app)
 
         self.celery_app = celery_app(self.config, self.backend, self.schema)
 
