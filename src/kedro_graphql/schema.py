@@ -323,10 +323,11 @@ class Query:
     @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
-            if p.id == id:
+            if str(p.id) == id:
                 logger.info(
                     f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
+        raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
 
     @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
