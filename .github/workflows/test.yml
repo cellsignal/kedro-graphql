@@ -33,9 +33,9 @@ jobs:
           MONGO_INITDB_ROOT_PASSWORD: example
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
