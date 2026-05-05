@@ -37,7 +37,7 @@ Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
 
 ![strawberry-ui](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/strawberry-ui.png)
 
-The [docker-compose.yaml](./docker-compose.yaml) includes
+The [docker-compose.yaml](https://github.com/opensean/kedro-graphql/blob/main/docker-compose.yaml) includes
 [mongo-express](https://github.com/mongo-express/mongo-express) and
 [redis-commander](https://github.com/joeferner/redis-commander) services
 to provide easy access to MongoDB and redis.
