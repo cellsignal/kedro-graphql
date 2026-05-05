@@ -37,7 +37,7 @@ Navigate to <http://127.0.0.1:5000/graphql> to access the graphql interface.
 
 ![strawberry-ui](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/strawberry-ui.png)
 
-The [docker-compose.yaml](./docker-compose.yaml) includes
+The [docker-compose.yaml](https://github.com/opensean/kedro-graphql/blob/main/docker-compose.yaml) includes
 [mongo-express](https://github.com/mongo-express/mongo-express) and
 [redis-commander](https://github.com/joeferner/redis-commander) services
 to provide easy access to MongoDB and redis.
@@ -339,7 +339,8 @@ mutation MyMutation {
         {name: "text_in", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}"},
         {name: "uppercased", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/uppercased.txt\"}"},
         {name: "reversed", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/reversed.txt\"}"},
-        {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"}
+        {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"},
+        {name: "timestamped_partitioned", config: "{\"type\": \"partitions.PartitionedDataset\", \"path\": \"./data/02_intermediate/timestamped_partitioned\", \"dataset\": \"text.TextDataset\", \"filename_suffix\": \".txt\"}"}
       ],
       slices: {slice: NODE_NAMES, args: ["uppercase_node", "reverse_node"]},
       state: READY}
