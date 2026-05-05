@@ -339,7 +339,8 @@ mutation MyMutation {
         {name: "text_in", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/01_raw/text_in.txt\"}"},
         {name: "uppercased", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/uppercased.txt\"}"},
         {name: "reversed", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/reversed.txt\"}"},
-        {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"}
+        {name: "timestamped", config: "{\"type\": \"text.TextDataset\", \"filepath\": \"./data/02_intermediate/timestamped.txt\"}"},
+        {name: "timestamped_partitioned", config: "{\"type\": \"partitions.PartitionedDataset\", \"path\": \"./data/02_intermediate/timestamped_partitioned\", \"dataset\": \"text.TextDataset\", \"filename_suffix\": \".txt\"}"}
       ],
       slices: {slice: NODE_NAMES, args: ["uppercase_node", "reverse_node"]},
       state: READY}
