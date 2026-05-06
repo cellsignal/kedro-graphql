@@ -374,13 +374,22 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
 
 
 @pytest.fixture
-def mock_example01(mock_app):
+def mock_timestamped_partitioned_dir(tmp_path):
+    partitioned_dir = tmp_path / "timestamped_partitioned"
+    partitioned_dir.mkdir(parents=True, exist_ok=True)
+    (partitioned_dir / "part_00.txt").write_text("part 00")
+    (partitioned_dir / "part_01.txt").write_text("part 01")
+    return partitioned_dir
+
+
+@pytest.fixture
+def mock_example01(mock_app, mock_timestamped_partitioned_dir, mock_text_in):
 
     inputs = [{"name": "text_in", "config": json.dumps(
-        {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.txt"})}]
+        {"type": "text.TextDataset", "filepath": str(mock_text_in)})}]
     outputs = [{"name": "timestamped_partitioned", "config": json.dumps(
         {"type": "partitions.PartitionedDataset",
-         "path": "./data/02_intermediate/timestamped_partitioned",
+         "path": str(mock_timestamped_partitioned_dir),
          "filename_suffix": ".txt",
          "dataset": {"type": "text.TextDataset"}})}]
     parameters = [{"name": "example", "value": "hello"}]
