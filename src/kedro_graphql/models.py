@@ -302,6 +302,7 @@ class DataSetInput:
     config: Optional[str] = None
     tags: Optional[List[TagInput]] = None
     partitions: Optional[List[str]] = None
+    list_partitions: Optional[bool] = None
 
     def encode(self, encoder="graphql"):
         if encoder == "dict":

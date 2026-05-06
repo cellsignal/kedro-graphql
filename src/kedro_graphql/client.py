@@ -225,11 +225,11 @@ class KedroGraphqlClient():
         """Read a dataset.
         Kwargs:
             id (str): pipeline id
-            datasets (list[DataSetInput]): dataset inputs for which to get signed URLs. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
+            datasets (list[DataSetInput]): dataset inputs for which to get signed URLs. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]). To list available partitions, pass DataSetInput(name="dataset_name", list_partitions=True).
             expires_in_sec (int): number of seconds the signed URL should be valid for
 
         Returns:
-            str: signed URL for reading the dataset
+            [SignedUrl | SignedUrls | dict]: signed URL objects, or DataSet dictionaries when list_partitions is requested
         """
         query = """
             query readDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
@@ -253,6 +253,15 @@ class KedroGraphqlClient():
                     }
                   }
                 }
+                ... on DataSet {
+                  name
+                  config
+                  tags {
+                    key
+                    value
+                  }
+                  partitions
+                }
               }
             }
         """
@@ -266,6 +275,9 @@ class KedroGraphqlClient():
             elif d["__typename"] == "SignedUrls":
                 d.pop("__typename")
                 urls.append(SignedUrls.decode(d, decoder="graphql"))
+            elif d["__typename"] == "DataSet":
+                d.pop("__typename")
+                urls.append(d)
             else:
                 raise TypeError(
                     f"Unexpected type {d['__typename']} returned from readDatasets")
