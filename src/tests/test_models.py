@@ -328,3 +328,14 @@ class TestDataSetInput:
         assert isinstance(result, dict)
         assert result["name"] == dataset.name
         assert result["config"] == dataset.config
+
+    def test_encode_list_partitions(self):
+        dataset = DataSetInput(
+            name="my_partitioned_dataset",
+            list_partitions=True
+        )
+
+        result = dataset.encode(encoder="graphql")
+        assert isinstance(result, dict)
+        assert result["name"] == dataset.name
+        assert result["listPartitions"] is True

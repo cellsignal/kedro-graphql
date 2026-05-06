@@ -373,6 +373,37 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
     return p
 
 
+@pytest.fixture
+def mock_example01(mock_app):
+
+    inputs = [{"name": "text_in", "config": json.dumps(
+        {"type": "text.TextDataset", "filepath": "./data/01_raw/text_in.txt"})}]
+    outputs = [{"name": "timestamped_partitioned", "config": json.dumps(
+        {"type": "partitions.PartitionedDataset",
+         "path": "./data/02_intermediate/timestamped_partitioned",
+         "filename_suffix": ".txt",
+         "dataset": {"type": "text.TextDataset"}})}]
+    parameters = [{"name": "example", "value": "hello"}]
+    tags = [{"key": "author", "value": "harinlee83"}, {
+        "key": "package", "value": "kedro-graphql"}]
+
+    p = Pipeline(
+        name="example01",
+        data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
+        parameters=[Parameter(**p) for p in parameters],
+        tags=[Tag(**p) for p in tags],
+        status=[PipelineStatus(state=State.STAGED,
+                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
+                               session=mock_app.kedro_session.session_id,
+                               started_at=datetime.now(),
+                               task_name=str(run_pipeline))]
+    )
+
+    p.created_at = datetime.now()
+    p = mock_app.backend.create(p)
+    return p
+
+
 @pytest.fixture(autouse=True)
 def delete_pipeline_collection(mock_app):
     # Will be executed before the first test
