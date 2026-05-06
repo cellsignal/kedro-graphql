@@ -65,6 +65,10 @@ class KedroGraphqlTask(Task):
             task_id, broker_url=self._app.conf["broker_url"])
         logging.getLogger("kedro").addHandler(handler)
         p = self.db.read(id=kwargs["id"])
+        if p is None:
+            logger.error(
+                f"Pipeline id={kwargs['id']} not found in backend during before_start; task_id={task_id}")
+            return
         p.status[-1].state = State.STARTED
         p.status[-1].task_id = task_id
         p.status[-1].task_args = json.dumps(args)
@@ -151,8 +155,9 @@ class KedroGraphqlTask(Task):
         """
 
         p = self.db.read(id=kwargs["id"])
-        p.status[-1].state = State.SUCCESS
-        self.db.update(p)
+        if p is not None:
+            p.status[-1].state = State.SUCCESS
+            self.db.update(p)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.
@@ -171,10 +176,11 @@ class KedroGraphqlTask(Task):
         """
 
         p = self.db.read(id=kwargs["id"])
-        p.status[-1].state = State.RETRY
-        p.status[-1].task_exception = str(exc)
-        p.status[-1].task_einfo = str(einfo)
-        self.db.update(p)
+        if p is not None:
+            p.status[-1].state = State.RETRY
+            p.status[-1].task_exception = str(exc)
+            p.status[-1].task_einfo = str(einfo)
+            self.db.update(p)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -245,7 +251,7 @@ class KedroGraphqlTask(Task):
             # logger.info(
             #    f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
             logger.info(
-                f"Failed to clear logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
+                f"Failed to clear logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}: {e}")
 
 
 @shared_task(bind=True, base=KedroGraphqlTask)
