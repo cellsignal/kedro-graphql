@@ -159,6 +159,38 @@ class TestKedroGraphqlClient:
         assert isinstance(r[0], SignedUrl)
 
     @pytest.mark.asyncio
+    async def test_read_datasets_list_partitions(self, mock_client):
+        async def _mock_execute_query(*args, **kwargs):
+            return {
+                "readDatasets": [
+                    {
+                        "__typename": "DataSet",
+                        "name": "my_partitioned_dataset",
+                        "config": json.dumps({
+                            "type": "partitions.PartitionedDataset",
+                            "path": "/tmp/my-bucket/path/to/partitioned_dataset",
+                            "filename_suffix": ".txt",
+                            "dataset": {"type": "text.TextDataset"}
+                        }),
+                        "tags": None,
+                        "partitions": ["part-0001", "part-0002"]
+                    }
+                ]
+            }
+
+        mock_client.execute_query = _mock_execute_query
+        r = await mock_client.read_datasets(
+            id="test-id",
+            datasets=[DataSetInput(name="my_partitioned_dataset", list_partitions=True)],
+            expires_in_sec=3600,
+        )
+        assert isinstance(r, list)
+        assert len(r) == 1
+        assert isinstance(r[0], dict)
+        assert r[0]["name"] == "my_partitioned_dataset"
+        assert r[0]["partitions"] == ["part-0001", "part-0002"]
+
+    @pytest.mark.asyncio
     async def test_create_datasets(self, mock_create_pipeline_staged, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged

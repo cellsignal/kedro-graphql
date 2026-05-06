@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+Added:
+
+- `DataSetInput.list_partitions` flag to support partition discovery in `readDatasets`
+- `readDatasets` schema coverage for partition discovery and partition-specific signed URL flows
+- Schema tests to cover baseline read datasets, list partitions, and partition-specific signed URL behavior
+- Documentation updates for partitioned datasets with a clear two-step flow (discover partitions, then request signed URLs)
+
+Changed:
+
+- `read_datasets` now supports returning `DataSet` for partition discovery requests
+
+Fixed:
+
+- Mismatch in types `ObjectId` and `str` caused the `readTemplates` query to always fail
+- Celery task callback null-safety in `before_start`, `on_success`, and `on_retry` when pipeline records are missing
+- `after_return` temp log cleanup logging bug (`.name` used on string path)
+
 
 ## [1.5.1] - 2026-03-31
 

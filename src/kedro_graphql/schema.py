@@ -30,6 +30,7 @@ from .pipeline_event_monitor import PipelineEventMonitor
 from .hooks import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (
+    DataSet,
     DataSetInput,
     PageMeta,
     Pipeline,
@@ -43,7 +44,6 @@ from .models import (
     SignedUrl,
     SignedUrls,
     State,
-    DataSetInput
 )
 from .tasks import run_pipeline
 from .permissions import get_permissions
@@ -323,10 +323,11 @@ class Query:
     @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in info.context["request"].app.kedro_pipelines_index:
-            if p.id == id:
+            if str(p.id) == id:
                 logger.info(
                     f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
+        raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
 
     @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
@@ -404,17 +405,17 @@ class Query:
         )
 
     @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    async def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | None]:
+    async def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | DataSet | None]:
         """
         Get a signed URL for downloading a dataset.
 
         Args:
             id (str): The ID of the pipeline.
             info (Info): The GraphQL execution context.
-            datasets (List[DataSetInput]): The datasets to get signed URLs for. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]).
+            datasets (List[DataSetInput]): The datasets to read. In order to read specific partitions of a PartitionedDataset, pass a DataSetInput with the dataset name and list of partitions e.g. DataSetInput(name="dataset_name", partitions=["partition1", "partition2"]). To discover available partitions for a dataset, pass list_partitions=True.
             expires_in_sec (int): The number of seconds the signed URL should be valid for.
         Returns:
-            List[SignedUrl | SignedUrls | None]: An array of signed URLs for downloading the dataset or None if not applicable.
+            List[SignedUrl | SignedUrls | DataSet | None]: An array containing signed URLs, DataSet objects for partition discovery, or None if not applicable.
 
         Raises:
             ValueError: If expires_in_sec is greater than max expires_in_sec
@@ -438,6 +439,12 @@ class Query:
                 logger.warning(
                     f"Dataset '{d.name}' not found in the data catalog of pipeline_name={p.name} pipeline_id={p.id}. SignedURL set to None.")
                 urls.append(None)
+                continue
+
+            if d.list_partitions:
+                logger.info(
+                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=list_partitions, dataset={dataset.name}")
+                urls.append(dataset)
                 continue
 
             module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(

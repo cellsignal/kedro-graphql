@@ -66,6 +66,190 @@ config:
 
 The API will use the configured provider to generate signed URLs for dataset operations.
 
+### GraphQL Examples: `readDatasets` and `createDatasets`
+
+Both `readDatasets` (query) and `createDatasets` (mutation) return one signed-url object per dataset input. For non-partitioned datasets you get a `SignedUrl`. For partitioned datasets you get a `SignedUrls` wrapper containing an array.
+
+#### `readDatasets` query
+
+```graphql
+query ReadDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
+  readDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec) {
+    __typename
+    ... on SignedUrl {
+      url
+      file
+      fields {
+        name
+        value
+      }
+    }
+    ... on SignedUrls {
+      urls {
+        url
+        file
+        fields {
+          name
+          value
+        }
+      }
+    }
+    ... on DataSet {
+      name
+      partitions
+    }
+  }
+}
+```
+
+Example variables (single dataset):
+
+```json
+{
+  "id": "PIPELINE_ID",
+  "datasets": [{ "name": "text_in" }],
+  "expires_in_sec": 3600
+}
+```
+
+Example response shape (local-file provider):
+
+```json
+{
+  "data": {
+    "readDatasets": [
+      {
+        "__typename": "SignedUrl",
+        "url": "http://localhost:5000/download?token=...",
+        "file": "text_in.txt",
+        "fields": [{ "name": "token", "value": "JWT_TOKEN" }]
+      }
+    ]
+  }
+}
+```
+
+Partitioned datasets use a two-step flow:
+
+1. Discover available partition keys.
+2. Request signed URLs for the partition keys you want to read.
+
+Step 1: discover partition keys
+
+```json
+{
+  "id": "PIPELINE_ID",
+  "datasets": [
+    {
+      "name": "my_partitioned_dataset",
+      "list_partitions": true
+    }
+  ],
+  "expires_in_sec": 3600
+}
+```
+
+Expected response shape for partition discovery:
+
+```json
+{
+  "data": {
+    "readDatasets": [
+      {
+        "__typename": "DataSet",
+        "name": "my_partitioned_dataset",
+        "partitions": [
+          "2026-05-01",
+          "2026-05-02"
+        ]
+      }
+    ]
+  }
+}
+```
+
+Step 2: request signed URLs for selected partitions
+
+```json
+{
+  "id": "PIPELINE_ID",
+  "datasets": [
+    {
+      "name": "my_partitioned_dataset",
+      "partitions": ["part-1", "part-2"]
+    }
+  ],
+  "expires_in_sec": 3600
+}
+```
+
+!!! Note
+
+    Do not combine `listPartitions` and `partitions` in the same dataset input. If both are provided, `listPartitions` takes precedence and returns partition metadata (`DataSet`) instead of signed URLs.
+
+
+#### `createDatasets` mutation
+
+```graphql
+mutation CreateDatasets(
+  $id: String!
+  $datasets: [DataSetInput!]!
+  $expires_in_sec: Int!
+) {
+  createDatasets(id: $id, datasets: $datasets, expiresInSec: $expires_in_sec) {
+    __typename
+    ... on SignedUrl {
+      url
+      file
+      fields {
+        name
+        value
+      }
+    }
+    ... on SignedUrls {
+      urls {
+        url
+        file
+        fields {
+          name
+          value
+        }
+      }
+    }
+  }
+}
+```
+
+Example variables (create/upload signed URLs for datasets):
+
+```json
+{
+  "id": "PIPELINE_ID",
+  "datasets": [{ "name": "text_out" }],
+  "expires_in_sec": 3600
+}
+```
+
+Example response shape (local-file provider):
+
+```json
+{
+  "data": {
+    "createDatasets": [
+      {
+        "__typename": "SignedUrl",
+        "url": "http://localhost:5000/upload",
+        "file": "text_out.txt",
+        "fields": [{ "name": "token", "value": "JWT_TOKEN" }]
+      }
+    ]
+  }
+}
+```
+Use `SignedUrl.url` as the upload endpoint and submit `SignedUrl.fields` as the required form fields (along with the file payload).
+
+If the underlying dataset type is a `partitions.PartitionedDataset`, `createDatasets` requires `partitions` to be provided inside each `DataSetInput`.
+
 ### Additional Configuration
 
 You can further customize the behavior of signed URL providers using the following configuration attributes:
