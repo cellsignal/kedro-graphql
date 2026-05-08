@@ -1,7 +1,10 @@
 import json
 import time
+import asyncio
+from unittest.mock import patch
 
 import pytest
+from kedro_graphql.models import State
 
 IN_DEV = True
 
@@ -363,6 +366,98 @@ class TestSchemaMutations:
             "key": "author", "value": "opensean"}
         assert update_pipeline_resp.data["updatePipeline"]["tags"][1] == {
             "key": "package", "value": "kedro-graphql"}
+
+    @pytest.mark.asyncio
+    async def test_update_pipeline_abort_non_running_fails(self,
+                                                           mock_app,
+                                                           mock_pipeline_staged):
+        resp = await mock_app.schema.execute(
+            self.update_pipeline_mutation,
+            variable_values={
+                "id": str(mock_pipeline_staged.id),
+                "pipeline": {"name": mock_pipeline_staged.name, "state": "ABORTED"},
+                "uniquePaths": None,
+            },
+        )
+        assert resp.errors is not None
+        assert "cannot be aborted" in str(resp.errors[0]).lower()
+
+    @pytest.mark.asyncio
+    async def test_update_pipeline_abort(self,
+                                         mock_app,
+                                         mock_text_in,
+                                         mock_text_out):
+        create_resp = await mock_app.schema.execute(
+            self.create_pipeline_mutation,
+            variable_values={"pipeline": {
+                "name": "example00",
+                "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
+                                {"name": "text_out", "config": json.dumps(
+                                    {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
+                                ],
+                "parameters": [{"name": "example", "value": "hello"},
+                               {"name": "duration", "value": "8", "type": "FLOAT"}],
+                "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}],
+                "state": "READY",
+            }, "uniquePaths": None})
+        assert create_resp.errors is None
+        pipeline_id = create_resp.data["createPipeline"]["id"]
+
+        # wait for task id before requesting abort
+        TASK_ID_ASSIGNMENT_TIMEOUT_SEC = 10.0
+        ABORT_SUBSCRIPTION_TIMEOUT_SEC = 20.0
+        deadline = time.monotonic() + TASK_ID_ASSIGNMENT_TIMEOUT_SEC
+        p = None
+        while time.monotonic() < deadline:
+            p = mock_app.backend.read(id=pipeline_id)
+            if p and p.status[-1].task_id:
+                break
+            await asyncio.sleep(0.1)
+        assert p is not None and p.status[-1].task_id is not None
+
+        abort_resp = await mock_app.schema.execute(
+            self.update_pipeline_mutation,
+            variable_values={
+                "id": pipeline_id,
+                "pipeline": {"name": p.name, "state": "ABORTED"},
+                "uniquePaths": None,
+            },
+        )
+        assert abort_resp.errors is None
+        assert abort_resp.data["updatePipeline"]["status"][-1]["state"] == "ABORTING"
+
+        query = """
+          subscription {
+            pipeline(id:""" + '"' + str(pipeline_id) + '"' + """) {
+              traceback
+              timestamp
+              taskId
+              status
+              result
+              id
+            }
+          }
+        """
+        sub = await mock_app.schema.subscribe(query)
+
+        events = []
+        deadline = time.monotonic() + ABORT_SUBSCRIPTION_TIMEOUT_SEC
+        async for result in sub:
+            assert not result.errors
+            event = result.data["pipeline"]
+            events.append(event)
+            if event["status"] == "SUCCESS":
+                break
+            if time.monotonic() > deadline:
+                raise AssertionError("Timed out waiting for SUCCESS event after abort request")
+
+        assert len(events) > 0
+        assert events[-1]["status"] == "SUCCESS"
+        assert str(events[-1]["result"]).lower() == "aborted"
+
+        updated = mock_app.backend.read(id=pipeline_id)
+        assert updated is not None
+        assert updated.status[-1].state == State.ABORTED
 
     @pytest.mark.asyncio
     async def test_delete_pipeline(self,
