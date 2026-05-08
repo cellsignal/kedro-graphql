@@ -1,13 +1,18 @@
-import asyncio
 import json
 import logging
+import billiard # celery's multiprocessing fork
 import os
+import queue
 import shutil
+import signal
+import time
+import traceback
 from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List
 
-from celery import Task, shared_task
+from celery import shared_task
+from celery.contrib.abortable import AbortableTask
 from kedro import __version__ as kedro_version
 from kedro.framework.project import pipelines
 from kedro.framework.session import KedroSession
@@ -17,21 +22,16 @@ from omegaconf import OmegaConf
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.utils import add_param_to_feed_dict
 from kedro_graphql.runners import init_runner
-from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
 # from .config import load_config
 from .models import DataSet, State
-from .client import PIPELINE_GQL
-
-from cloudevents.pydantic.v1 import CloudEvent
-from cloudevents.conversion import from_json, to_json
 
 logger = logging.getLogger(__name__)
 # CONFIG = load_config()
 # logger.debug("configuration loaded by {s}".format(s=__name__))
 
 
-class KedroGraphqlTask(Task):
+class KedroGraphqlTask(AbortableTask):
 
     _db = None
     _gql_config = None
@@ -61,9 +61,12 @@ class KedroGraphqlTask(Task):
         Returns:
             None: The return value of this handler is ignored.
         """
+        kedro_logger = logging.getLogger("kedro")
         handler = KedroGraphQLLogHandler(
             task_id, broker_url=self._app.conf["broker_url"])
-        logging.getLogger("kedro").addHandler(handler)
+        # Tag handlers so we can cleanly remove only this task's handlers later.
+        handler.kedro_graphql_task_id = task_id
+        kedro_logger.addHandler(handler)
         p = self.db.read(id=kwargs["id"])
         if p is None:
             logger.error(
@@ -96,8 +99,10 @@ class KedroGraphqlTask(Task):
 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
-            logging.getLogger("kedro").addHandler(info_handler)
-            logging.getLogger("kedro").addHandler(error_handler)
+            info_handler.kedro_graphql_task_id = task_id
+            error_handler.kedro_graphql_task_id = task_id
+            kedro_logger.addHandler(info_handler)
+            kedro_logger.addHandler(error_handler)
             # logger.info(
             # f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             logger.info(
@@ -155,9 +160,12 @@ class KedroGraphqlTask(Task):
         """
 
         p = self.db.read(id=kwargs["id"])
-        if p is not None:
-            p.status[-1].state = State.SUCCESS
-            self.db.update(p)
+        if p is None:
+            return
+        if p.status[-1].state in {State.ABORTING, State.ABORTED}:
+            return
+        p.status[-1].state = State.SUCCESS
+        self.db.update(p)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.
@@ -200,6 +208,8 @@ class KedroGraphqlTask(Task):
 
         p = self.db.read(id=kwargs["id"])
         if p is not None:
+            if p.status[-1].state in {State.ABORTING, State.ABORTED}:
+                return
             p.status[-1].state = State.FAILURE
             p.status[-1].task_exception = str(exc)
             p.status[-1].task_einfo = str(einfo)
@@ -228,18 +238,26 @@ class KedroGraphqlTask(Task):
             p.status[-1].task_result = str(retval)
             self.db.update(p)
 
-        logger.info("Closing log stream")
-
-        # Clean up log handlers
-        for handler in logger.handlers:
-            if isinstance(handler, KedroGraphQLLogHandler) and handler.topic == task_id:
+        logger.info("Closing log stream for task_id=%s", task_id)
+        # Clean up only this task's handlers from the kedro logger.
+        kedro_logger = logging.getLogger("kedro")
+        handlers_to_remove = [
+            h for h in list(kedro_logger.handlers)
+            if getattr(h, "kedro_graphql_task_id", None) == task_id
+        ]
+        for handler in handlers_to_remove:
+            try:
                 handler.flush()
-                handler.close()
-                handler.broker.connection.delete(task_id)  # delete stream
-                handler.broker.connection.close()
-            if isinstance(handler, logging.FileHandler):
-                handler.close()
-        logger.handlers = []
+            except Exception:
+                pass
+            if isinstance(handler, KedroGraphQLLogHandler):
+                try:
+                    handler.broker.connection.delete(task_id)  # delete stream
+                    handler.broker.connection.close()
+                except Exception:
+                    pass
+            handler.close()
+            kedro_logger.removeHandler(handler)
 
         # Clear logs from temp_logs
         try:
@@ -252,6 +270,47 @@ class KedroGraphqlTask(Task):
             #    f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
             logger.info(
                 f"Failed to clear logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}: {e}")
+
+
+def _run_pipeline_in_child_process(
+    runner_instance,
+    filtered_pipeline,
+    io,
+    hook_manager,
+    session_id: str,
+    record_data: dict,
+    pipeline_name: str,
+    result_queue,
+):
+    """Execute Kedro pipeline in a child process and report result via queue."""
+    try:
+        # Put child in its own process group so parent can signal descendants.
+        os.setsid()
+    except OSError:
+        pass
+
+    try:
+        run_result = runner_instance.run(
+            filtered_pipeline,
+            catalog=io,
+            hook_manager=hook_manager,
+            session_id=session_id,
+        )
+        hook_manager.hook.after_pipeline_run(
+            run_params=record_data,
+            run_result=run_result,
+            pipeline=pipelines.get(pipeline_name, None),
+            catalog=io,
+        )
+        result_queue.put({"status": "success"})
+    except BaseException as child_error:
+        result_queue.put(
+            {
+                "status": "error",
+                "error": str(child_error),
+                "traceback": traceback.format_exc(),
+            }
+        )
 
 
 @shared_task(bind=True, base=KedroGraphqlTask)
@@ -409,15 +468,116 @@ def run_pipeline(self,
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
             self.db.update(p)
 
-            run_result = runner_instance.run(filtered_pipeline, catalog=io,
-                                      hook_manager=hook_manager, session_id=session.session_id)
+            # Use Celery's multiprocessing library (billiard) instead of multiprocessing
+            # to avoid AssertionError: daemonic processes are not allowed to have children
+            ctx = billiard.get_context("fork")
 
-            hook_manager.hook.after_pipeline_run(
-                run_params=record_data,
-                run_result=run_result,
-                pipeline=pipelines.get(name, None),
-                catalog=io
+            # queue to communicate with the child process
+            result_queue = ctx.Queue(maxsize=1)
+            child = ctx.Process(
+                target=_run_pipeline_in_child_process,
+                args=(
+                    runner_instance,
+                    filtered_pipeline,
+                    io,
+                    hook_manager,
+                    session.session_id,
+                    record_data,
+                    name,
+                    result_queue,
+                ),
             )
+            child.start()
+
+            polling_interval = self.gql_config.get(
+                "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL", 5
+            )
+            try:
+                polling_interval = float(polling_interval)
+                if polling_interval < 1:
+                    logger.warning(
+                        "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=%s is below minimum 1s; clamping to 1s",
+                        polling_interval,
+                    )
+                    polling_interval = 1.0
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=%s, falling back to 5s",
+                    polling_interval,
+                )
+                polling_interval = 5.0
+            grace_period = self.gql_config.get(
+                "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD", 60
+            )
+            try:
+                grace_period = float(grace_period)
+                if grace_period < 5:
+                    logger.warning(
+                        "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=%s is below minimum 5s; clamping to 5s",
+                        grace_period,
+                    )
+                    grace_period = 5.0
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=%s, falling back to 60s",
+                    grace_period,
+                )
+                grace_period = 60.0
+            
+            sigint_sent_at = None
+            sigterm_sent_at = None
+
+            while child.is_alive():
+                if self.is_aborted():
+                    now = time.monotonic()
+                    if sigint_sent_at is None:
+                        logger.info("Abort requested for task=%s; sending SIGINT to child pid=%s", self.request.id, child.pid)
+                        try:
+                            os.killpg(os.getpgid(child.pid), signal.SIGINT)
+                        except ProcessLookupError:
+                            pass
+                        sigint_sent_at = now
+                    elif now - sigint_sent_at >= grace_period and sigterm_sent_at is None:
+                        logger.warning("Child pid=%s did not exit after SIGINT; escalating to SIGTERM", child.pid)
+                        try:
+                            os.killpg(os.getpgid(child.pid), signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
+                        sigterm_sent_at = now
+                    elif sigterm_sent_at is not None and now - sigterm_sent_at >= grace_period:
+                        logger.error("Child pid=%s did not exit after SIGTERM; escalating to SIGKILL", child.pid)
+                        try:
+                            os.killpg(os.getpgid(child.pid), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    # Quick checks to see if the child process has exited
+                    child.join(timeout=1)
+                else:
+                    # Interval to check if child process should be aborted
+                    child.join(timeout=polling_interval)
+
+            child.join()
+
+            child_result = {
+                "status": "error",
+                "error": "Child process exited without returning a result",
+            }
+            try:
+                child_result = result_queue.get_nowait()
+            except queue.Empty:
+                logger.warning("Child process pid=%s finished without posting a result", child.pid)
+
+            if self.is_aborted():
+                p = self.db.read(id=id)
+                if p is not None:
+                    p.status[-1].state = State.ABORTED
+                    p.status[-1].abort_completed_at = datetime.now()
+                    self.db.update(p)
+                return "aborted"
+
+            if child_result.get("status") != "success":
+                error_message = child_result.get("error", "Unknown child process error")
+                raise RuntimeError(error_message)
 
             return "success"
         except Exception as e:

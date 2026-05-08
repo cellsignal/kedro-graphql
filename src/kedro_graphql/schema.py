@@ -9,6 +9,7 @@ from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
 from bson.objectid import ObjectId
+from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES, READY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
@@ -566,6 +567,31 @@ class Mutation:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
         pipeline_input_dict = jsonable_encoder(pipeline)
+        requested_state = pipeline_input_dict.get("state", None)
+
+        if requested_state == "ABORTED":
+            if p.status[-1].state == State.ABORTED:
+                return p
+            if p.status[-1].state == State.ABORTING:
+                return p
+            # abortable states are {PENDING, RECEIVED, STARTED, REJECTED, RETRY, READY}
+            if p.status[-1].state.value not in UNREADY_STATES.union({"READY"}):
+                raise InvalidPipeline(
+                    f"Pipeline {id} is not currently running and cannot be aborted.")
+            if not p.status[-1].task_id:
+                raise InvalidPipeline(
+                    f"Pipeline {id} is running but has no task_id; abort is not possible.")
+            AbortableAsyncResult(
+                p.status[-1].task_id,
+                app=info.context["request"].app.celery_app
+            ).abort()
+            p.status[-1].state = State.ABORTING
+            p.status[-1].abort_requested_at = datetime.now()
+            # Run blocking database update in thread pool
+            p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+            logger.info(
+                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
+            return p
 
         # Update pipeline with new pipeline input
         p.parameters = pipeline_input_dict.get("parameters")
@@ -576,7 +602,7 @@ class Mutation:
             "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
 
         # If PipelineInput is READY and pipeline is not already running
-        if pipeline_input_dict.get("state", None) == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
+        if requested_state == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
             if (p.status[-1].state.value != "STAGED"):
                 # Add new status object to pipeline because this is another run attempt
@@ -620,7 +646,7 @@ class Mutation:
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
-        elif pipeline_input_dict.get("state", None) == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
+        elif requested_state == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
             p.status.append(PipelineStatus(state=State.STAGED,
                                            runner=runner,
                                            session=None,

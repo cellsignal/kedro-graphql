@@ -467,6 +467,7 @@ class PipelineSlice:
 class PipelineInputStatus(Enum):
     STAGED = "STAGED"
     READY = "READY"
+    ABORTED = "ABORTED"
 
 
 @strawberry.input(description="PipelineInput")
@@ -591,12 +592,14 @@ class State(Enum):
     READY = 'READY'
     STAGED = 'STAGED'
     STARTED = 'STARTED'
+    ABORTING = 'ABORTING'
+    ABORTED = 'ABORTED'
     RETRY = 'RETRY'
     FAILURE = 'FAILURE'
     SUCCESS = 'SUCCESS'
     REVOKED = 'REVOKED'
     PENDING = 'PENDING'
-    RECIEVED = 'RECIEVED'
+    RECEIVED = 'RECEIVED'
 
 
 @strawberry.type
@@ -607,6 +610,8 @@ class PipelineStatus:
     filtered_nodes: Optional[List[str]] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    abort_requested_at: Optional[datetime] = None
+    abort_completed_at: Optional[datetime] = None
     task_id: Optional[str] = None
     task_name: Optional[str] = None
     task_args: Optional[str] = None
@@ -723,6 +728,10 @@ class Pipeline:
                     s["started_at"]) if s.get("started_at") else None,
                 finished_at=datetime.fromisoformat(
                     s["finished_at"]) if s.get("finished_at") else None,
+                abort_requested_at=datetime.fromisoformat(
+                    s["abort_requested_at"]) if s.get("abort_requested_at") else None,
+                abort_completed_at=datetime.fromisoformat(
+                    s["abort_completed_at"]) if s.get("abort_completed_at") else None,
                 task_name=s.get("task_name"),
                 task_id=s.get("task_id"),
                 task_args=s.get("task_args"),
