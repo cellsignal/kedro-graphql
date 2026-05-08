@@ -351,6 +351,42 @@ mutation MyMutation {
 }
 ```
 
+### Aborting a pipeline
+
+To abort an in-flight pipeline, call `updatePipeline` with `state: ABORTED`.
+The running Celery task checks abort status in a small polling loop and runs the Kedro
+execution in a child subprocess. When abort is requested, the parent task sends `SIGINT`
+first (for graceful interruption), then escalates to stronger signals if needed.
+After the mutation, pipeline state is set to `ABORTING` until the worker confirms the
+child process has stopped, then it transitions to `ABORTED`.
+
+```graphql
+mutation MyMutation {
+  updatePipeline(
+    id: "67b8b41535ac10b558916cba"
+    pipeline: {name: "example00", state: ABORTED}
+  ) {
+    id
+    status {
+      state
+      taskId
+    }
+  }
+}
+```
+
+You can tune how quickly abort requests are observed via:
+
+```bash
+export KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=5
+```
+
+And tune how long each graceful shutdown phase waits before escalation:
+
+```bash
+export KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=60
+```
+
 ### Search for a pipeline
 
 Search for a pipeline using the [MongoDB document query filter](https://www.mongodb.com/docs/manual/core/document/#std-label-document-query-filter), [MongoDB cursor sort sytnax](https://www.mongodb.com/docs/manual/reference/method/cursor.sort/#syntax), and the [MongoDB cursor limit](https://www.mongodb.com/docs/manual/reference/method/cursor.limit/#cursor.limit--) in the `readPipelines` query. Executing the following query below will return up to **10 pipelines** that have a tag key of `"owner"` with a tag value of `"harinlee83"`, sorted chronologically in **descending order**.

@@ -8,6 +8,8 @@ The following table describes each configuration attribute available:
 | `backend`                              | string | `kedro_graphql.backends.mongodb.MongoBackend` | Python path to the backend class for data storage and retrieval.                                 |
 | `broker`                               | string | `redis://localhost` | URI for the message broker (e.g., Redis) used for task queueing.                                |
 | `celery_result_backend`                 | string | `redis://localhost` | URI for the Celery result backend (e.g., Redis).                                                 |
+| `celery_abort_polling_interval`         | float | `5` | Polling interval in seconds used by abortable Celery tasks to check whether a running pipeline should be interrupted. Minimum value is `1` second (values below are clamped to `1`). |
+| `celery_abort_grace_period`             | float | `60` | Grace period in seconds before escalating task abort signals (`SIGINT` -> `SIGTERM` -> `SIGKILL`). Minimum value is `5` seconds (values below are clamped to `5`). |
 | `client_uri_graphql`                   | string | `http://localhost:5000/graphql` | URI for GraphQL API endpoint used by the GraphQL client.                                         |
 | `client_uri_ws`                        | string | `ws://localhost:5000/graphql` | URI for WebSocket endpoint used by the GraphQL client for subscriptions.                         |
 | `conf_source`                          | string | `None` | Optional path to an alternative configuration source.                                             |
@@ -131,6 +133,8 @@ config:
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
   broker: "redis://localhost"
   celery_result_backend: "redis://localhost"
+  celery_abort_polling_interval: 5
+  celery_abort_grace_period: 60
   client_uri_graphql: "http://localhost:5000/graphql"
   client_uri_ws: "ws://localhost:5000/graphql"
   conf_source: null
@@ -217,6 +221,8 @@ provide them as JSON strings.
 | backend                                            | --backend                                        | kedro_graphql.backends.mongodb.MongoBackend         |
 | broker                                             | --broker                                         | redis://localhost                                    |
 | celery_result_backend                              | --celery-result-backend                          | redis://localhost                                    |
+| celery_abort_polling_interval                      | --celery-abort-polling-interval                  | 5                                                    |
+| celery_abort_grace_period                          | --celery-abort-grace-period                      | 60                                                   |
 | client_uri_graphql                                 | --client-uri-graphql                             | http://localhost:5000/graphql                        |
 | client_uri_ws                                      | --client-uri-ws                                  | ws://localhost:5000/graphql                          |
 | conf_source                                        | --conf-source                                    | $HOME/myproject/conf                                 |
@@ -301,6 +307,8 @@ Environment variables will take precedence over values defined in a `.env` file.
 KEDRO_GRAPHQL_MONGO_URI=mongodb://root:example@localhost:27017/
 KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL=http://localhost:5000/graphql
 KEDRO_GRAPHQL_CLIENT_URI_WS=ws://localhost:5000/graphql
+KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=5
+KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=60
 KEDRO_GRAPHQL_APP_TITLE="My Custom Kedro GraphQL"
 KEDRO_GRAPHQL_BACKEND=kedro_graphql.backends.mongodb.MongoBackend
 ```
