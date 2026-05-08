@@ -22,9 +22,14 @@ from omegaconf import OmegaConf
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.utils import add_param_to_feed_dict
 from kedro_graphql.runners import init_runner
+from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
 # from .config import load_config
 from .models import DataSet, State
+from .client import PIPELINE_GQL
+
+from cloudevents.pydantic.v1 import CloudEvent
+from cloudevents.conversion import from_json, to_json
 
 logger = logging.getLogger(__name__)
 # CONFIG = load_config()
