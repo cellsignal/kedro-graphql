@@ -370,6 +370,7 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_update_pipeline_abort_non_running_fails(self,
                                                            mock_app,
+                                                           mock_info_context,
                                                            mock_pipeline_staged):
         resp = await mock_app.schema.execute(
             self.update_pipeline_mutation,
@@ -385,6 +386,9 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_update_pipeline_abort(self,
                                          mock_app,
+                                         mock_celery_session_app,
+                                         celery_session_worker,
+                                         mock_info_context,
                                          mock_text_in,
                                          mock_text_out):
         create_resp = await mock_app.schema.execute(
