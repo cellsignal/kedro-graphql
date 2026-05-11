@@ -8,17 +8,28 @@ Added:
 - `readDatasets` schema coverage for partition discovery and partition-specific signed URL flows
 - Schema tests to cover baseline read datasets, list partitions, and partition-specific signed URL behavior
 - Documentation updates for partitioned datasets with a clear two-step flow (discover partitions, then request signed URLs)
+- `ABORTED` to both `PipelineInputStatus` and pipeline `State` enums so clients can request and observe pipeline aborts through GraphQL
+- `ABORTING` pipeline state and `abort_requested_at` / `abort_completed_at` timestamps on `PipelineStatus` for explicit abort lifecycle tracking
+- `KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL` (default `5`) for controlling abort check frequency in Celery task execution (values below `1` second are clamped at runtime)
+- `KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD` (default `60`) for controlling how long the worker waits before escalating abort signals (values below `5` seconds are clamped at runtime)
+- CLI flags `--celery-abort-polling-interval` and `--celery-abort-grace-period` on `kedro gql` to override the above settings
+- Schema mutation tests for aborting a running pipeline and rejecting abort requests for non-running pipelines
 
 Changed:
 
 - `read_datasets` now supports returning `DataSet` for partition discovery requests
+- `KedroGraphqlTask` now inherits from Celery `AbortableTask`
+- `run_pipeline` now executes the Kedro runner in a child subprocess while the parent task monitors abort status and sends OS signals (`SIGINT` first, then escalation)
+- `updatePipeline` now handles `state: ABORTED` by calling `AbortableAsyncResult.abort()` and persisting `ABORTING` in the document backend until worker-side abort completion; repeated abort requests while already `ABORTING` or `ABORTED` return without error
+- Task `on_success` and `on_failure` handlers now preserve abort states and avoid overwriting `ABORTING`/`ABORTED` with `SUCCESS` or `FAILURE`
 
 Fixed:
 
 - Mismatch in types `ObjectId` and `str` caused the `readTemplates` query to always fail
 - Celery task callback null-safety in `before_start`, `on_success`, and `on_retry` when pipeline records are missing
 - `after_return` temp log cleanup logging bug (`.name` used on string path)
-
+- Kedro log handlers added during pipeline runs are now removed from the `kedro` logger (not the task module logger), tagged per Celery task id, reducing duplicate log output and teardown noise
+- Pipeline `State` enum typo corrected from `RECIEVED` to `RECEIVED`
 
 ## [1.5.1] - 2026-03-31
 

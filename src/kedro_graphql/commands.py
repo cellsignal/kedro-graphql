@@ -49,6 +49,8 @@ def commands():
 @click.option("--backend", default=None, help="The only supported value for this option is 'kedro_graphql.backends.mongodb.MongoBackend'")
 @click.option("--broker", default=None, help="URI to broker e.g. 'redis://localhost'")
 @click.option("--celery-result-backend", default=None, help="URI to backend for celery results e.g. 'redis://localhost'")
+@click.option("--celery-abort-polling-interval", default=None, type=float, help="Polling interval in seconds for checking abort status while a pipeline subprocess is running")
+@click.option("--celery-abort-grace-period", default=None, type=float, help="Grace period in seconds before escalating abort signals from SIGINT to SIGTERM/SIGKILL")
 @click.option("--client-uri-graphql", default=None, help="URI for GraphQL API endpoint used by the GraphQL client")
 @click.option("--client-uri-ws", default=None, help="URI for WebSocket endpoint used by the GraphQL client for subscriptions")
 @click.option("--conf-source", default=None, help="Path of a directory where project configuration is stored.")
@@ -83,7 +85,7 @@ def commands():
 @click.option("--ui", "-u", is_flag=True, default=False, help="Start a viz app.")
 @click.option("--ui-spec", default="", help="UI YAML specification file")
 @click.option("--worker", "-w", is_flag=True, default=False, help="Start a celery worker.")
-def gql(metadata, app, app_title, app_description, backend, broker, celery_result_backend, client_uri_graphql, client_uri_ws, conf_source,
+def gql(metadata, app, app_title, app_description, backend, broker, celery_result_backend, celery_abort_polling_interval, celery_abort_grace_period, client_uri_graphql, client_uri_ws, conf_source,
         dataset_filepath_masks, dataset_filepath_allowed_roots, deprecations_docs, env, events_config, imports,
         local_file_provider_download_allowed_roots,
         local_file_provider_jwt_algorithm, local_file_provider_jwt_secret_key, local_file_provider_server_url,
@@ -109,6 +111,10 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         cli_config["KEDRO_GRAPHQL_BROKER"] = broker
     if celery_result_backend:
         cli_config["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"] = celery_result_backend
+    if celery_abort_polling_interval is not None:
+        cli_config["KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL"] = celery_abort_polling_interval
+    if celery_abort_grace_period is not None:
+        cli_config["KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD"] = celery_abort_grace_period
     if client_uri_graphql:
         cli_config["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"] = client_uri_graphql
     if client_uri_ws:

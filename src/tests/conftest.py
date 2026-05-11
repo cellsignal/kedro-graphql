@@ -133,6 +133,8 @@ def mock_app(kedro_session):
             app = KedroGraphQL(kedro_session=kedro_session, config=config)
             app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
             app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
+            app.config["KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL"] = 1
+            app.config["KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD"] = 5
 
             yield app
 
@@ -142,7 +144,7 @@ def celery_config():
     return {
         'broker_url': 'redis://',
         'result_backend': 'redis://',
-        'result_extened': True,
+        'result_extended': True,
         'worker_send_task_events': True,
         'task_send_sent_event': True,
         'task_store_eager_result': True,
