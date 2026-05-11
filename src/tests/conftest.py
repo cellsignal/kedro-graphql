@@ -144,7 +144,7 @@ def celery_config():
     return {
         'broker_url': 'redis://',
         'result_backend': 'redis://',
-        'result_extened': True,
+        'result_extended': True,
         'worker_send_task_events': True,
         'task_send_sent_event': True,
         'task_store_eager_result': True,

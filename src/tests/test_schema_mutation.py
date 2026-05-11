@@ -2,6 +2,7 @@ import json
 import time
 import asyncio
 from unittest.mock import patch
+from celery.states import UNREADY_STATES
 
 import pytest
 from kedro_graphql.models import State
@@ -376,8 +377,7 @@ class TestSchemaMutations:
             self.update_pipeline_mutation,
             variable_values={
                 "id": str(mock_pipeline_staged.id),
-                "pipeline": {"name": mock_pipeline_staged.name, "state": "ABORTED"},
-                "uniquePaths": None,
+                "pipeline": {"name": mock_pipeline_staged.name, "state": "ABORTED"}
             },
         )
         assert resp.errors is not None
@@ -400,62 +400,79 @@ class TestSchemaMutations:
                                     {"type": "text.TextDataset", "filepath": str(mock_text_out)})}
                                 ],
                 "parameters": [{"name": "example", "value": "hello"},
-                               {"name": "duration", "value": "8", "type": "FLOAT"}],
-                "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}],
+                               {"name": "duration", "value": "60", "type": "FLOAT"}],
+                "tags": [{"key": "author", "value": "harinlee83"}, {"key": "package", "value": "kedro-graphql"}],
                 "state": "READY",
-            }, "uniquePaths": None})
+            }})
         assert create_resp.errors is None
         pipeline_id = create_resp.data["createPipeline"]["id"]
 
-        # wait for task id before requesting abort
-        TASK_ID_ASSIGNMENT_TIMEOUT_SEC = 10.0
-        ABORT_SUBSCRIPTION_TIMEOUT_SEC = 20.0
-        deadline = time.monotonic() + TASK_ID_ASSIGNMENT_TIMEOUT_SEC
-        p = None
-        while time.monotonic() < deadline:
-            p = mock_app.backend.read(id=pipeline_id)
-            if p and p.status[-1].task_id:
-                break
-            await asyncio.sleep(0.1)
-        assert p is not None and p.status[-1].task_id is not None
-
-        abort_resp = await mock_app.schema.execute(
-            self.update_pipeline_mutation,
-            variable_values={
-                "id": pipeline_id,
-                "pipeline": {"name": p.name, "state": "ABORTED"},
-                "uniquePaths": None,
-            },
-        )
-        assert abort_resp.errors is None
-        assert abort_resp.data["updatePipeline"]["status"][-1]["state"] == "ABORTING"
-
+        # Confirm the pipeline is running before sending an abort request.
         query = """
-          subscription {
+          subscription MySubscription {
             pipeline(id:""" + '"' + str(pipeline_id) + '"' + """) {
-              traceback
-              timestamp
-              taskId
               status
-              result
+              taskId
               id
             }
           }
         """
         sub = await mock_app.schema.subscribe(query)
 
-        events = []
-        deadline = time.monotonic() + ABORT_SUBSCRIPTION_TIMEOUT_SEC
-        async for result in sub:
-            assert not result.errors
-            event = result.data["pipeline"]
-            events.append(event)
-            if event["status"] == "SUCCESS":
-                break
-            if time.monotonic() > deadline:
-                raise AssertionError("Timed out waiting for SUCCESS event after abort request")
+        async def wait_for_started_event():
+            async for result in sub:
+                assert not result.errors
+                event = result.data["pipeline"]
+                if event["status"] == "PENDING" and event["taskId"] is not None:
+                    return event
+
+        started_event = await asyncio.wait_for(wait_for_started_event(), timeout=30.0)
+        assert started_event["id"] == pipeline_id
+        assert started_event["status"] in UNREADY_STATES
+        assert started_event["taskId"] is not None
+        p = mock_app.backend.read(id=pipeline_id)
+        assert p is not None
+
+        # Send an abort request
+        abort_resp = await mock_app.schema.execute(
+            self.update_pipeline_mutation,
+            variable_values={
+                "id": pipeline_id,
+                "pipeline": {"name": p.name, "state": "ABORTED"},
+            }
+        )
+        assert abort_resp.errors is None
+        assert abort_resp.data["updatePipeline"]["status"][-1]["state"] == "ABORTING"
+
+        # Subscribe to confirm pipeline aborts successfully.
+        query = """
+          subscription MySubscription {
+            pipeline(id:""" + '"' + str(pipeline_id) + '"' + """) {
+              status
+              taskId
+              result
+              id
+              timestamp
+              traceback
+            }
+          }
+        """
+        sub = await mock_app.schema.subscribe(query)
+
+        async def wait_for_aborted_event():
+            events = []
+            async for result in sub:
+                assert not result.errors
+                event = result.data["pipeline"]
+                events.append(event)
+                if event["status"] == "SUCCESS":
+                    return events
+            return events
+
+        events = await asyncio.wait_for(wait_for_aborted_event(), timeout=90.0)
 
         assert len(events) > 0
+        assert events[-1]["id"] == pipeline_id
         assert events[-1]["status"] == "SUCCESS"
         assert str(events[-1]["result"]).lower() == "aborted"
 

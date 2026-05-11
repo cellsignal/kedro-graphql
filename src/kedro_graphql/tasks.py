@@ -243,7 +243,6 @@ class KedroGraphqlTask(AbortableTask):
             p.status[-1].task_result = str(retval)
             self.db.update(p)
 
-        logger.info("Closing log stream for task_id=%s", task_id)
         # Clean up only this task's handlers from the kedro logger.
         kedro_logger = logging.getLogger("kedro")
         handlers_to_remove = [
@@ -317,7 +316,6 @@ def _run_pipeline_in_child_process(
             }
         )
 
-
 @shared_task(bind=True, base=KedroGraphqlTask)
 def run_pipeline(self,
                  id: str = None,
@@ -338,6 +336,13 @@ def run_pipeline(self,
         hook_manager = session._hook_manager
 
         p = self.db.read(id=id)
+        if p is None:
+            logger.warning(
+                "Pipeline id=%s not found in backend during run_pipeline; task_id=%s",
+                id,
+                self.request.id,
+            )
+            return
         p.status[-1].session = session.session_id
         self.db.update(p)
 
@@ -538,21 +543,37 @@ def run_pipeline(self,
                     if sigint_sent_at is None:
                         logger.info("Abort requested for task=%s; sending SIGINT to child pid=%s", self.request.id, child.pid)
                         try:
-                            os.killpg(os.getpgid(child.pid), signal.SIGINT)
+                            child_pgid = os.getpgid(child.pid)
+                            # there could be a small window where the child process doesn't yet have its own process group
+                            # so we ensure we don't signal the parent process group
+                            if child_pgid == os.getpgrp():
+                                # send SIGINT to the child process directly
+                                os.kill(child.pid, signal.SIGINT)
+                            else:
+                                # send SIGINT to the child process's process group
+                                os.killpg(child_pgid, signal.SIGINT)
                         except ProcessLookupError:
                             pass
                         sigint_sent_at = now
                     elif now - sigint_sent_at >= grace_period and sigterm_sent_at is None:
                         logger.warning("Child pid=%s did not exit after SIGINT; escalating to SIGTERM", child.pid)
                         try:
-                            os.killpg(os.getpgid(child.pid), signal.SIGTERM)
+                            child_pgid = os.getpgid(child.pid)
+                            if child_pgid == os.getpgrp():
+                                os.kill(child.pid, signal.SIGTERM)
+                            else:
+                                os.killpg(child_pgid, signal.SIGTERM)
                         except ProcessLookupError:
                             pass
                         sigterm_sent_at = now
                     elif sigterm_sent_at is not None and now - sigterm_sent_at >= grace_period:
                         logger.error("Child pid=%s did not exit after SIGTERM; escalating to SIGKILL", child.pid)
                         try:
-                            os.killpg(os.getpgid(child.pid), signal.SIGKILL)
+                            child_pgid = os.getpgid(child.pid)
+                            if child_pgid == os.getpgrp():
+                                os.kill(child.pid, signal.SIGKILL)
+                            else:
+                                os.killpg(child_pgid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
                     # Quick checks to see if the child process has exited
