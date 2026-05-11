@@ -10,7 +10,7 @@ Added:
 - Documentation updates for partitioned datasets with a clear two-step flow (discover partitions, then request signed URLs)
 - `ABORTED` to both `PipelineInputStatus` and pipeline `State` enums so clients can request and observe pipeline aborts through GraphQL
 - `ABORTING` pipeline state and `abort_requested_at` / `abort_completed_at` timestamps on `PipelineStatus` for explicit abort lifecycle tracking
-- `KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL` (default `15`) for controlling abort check frequency in Celery task execution (values below `1` second are clamped at runtime)
+- `KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL` (default `5`) for controlling abort check frequency in Celery task execution (values below `1` second are clamped at runtime)
 - `KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD` (default `60`) for controlling how long the worker waits before escalating abort signals (values below `5` seconds are clamped at runtime)
 - CLI flags `--celery-abort-polling-interval` and `--celery-abort-grace-period` on `kedro gql` to override the above settings
 - Schema mutation tests for aborting a running pipeline and rejecting abort requests for non-running pipelines
