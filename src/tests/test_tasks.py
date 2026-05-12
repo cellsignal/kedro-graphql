@@ -64,12 +64,9 @@ async def test_run_pipeline(mock_app,
 def test_run_pipeline_child_process_recreates_catalog():
     """
     Verify that the child process recreates the catalog from config (dict) and parameters,
-    avoiding fork-safety issues with S3 and MongoDB connections.
-    
-    This test ensures that the catalog is not inherited from the parent process but
-    recreated fresh in the child process, where connections are created anew.
+    avoiding fork-safety issues with S3.
     """
-    # Setup: Create mock data
+
     catalog_config = {
         "text_in": {
             "type": "text.TextDataset",
@@ -84,22 +81,18 @@ def test_run_pipeline_child_process_recreates_catalog():
         mock_catalog_class.from_config.return_value = mock_catalog_instance
         
         with patch('kedro_graphql.tasks.queue.Queue') as mock_queue:
-            # Mock the result queue
+            # Mock the result queue, runner, and pipeline
             result_queue = MagicMock()
-            
-            # Mock runner and pipeline
             mock_runner = MagicMock()
             mock_runner.run.return_value = {"status": "success"}
-            
             mock_pipeline = MagicMock()
             mock_hook_manager = MagicMock()
             
-            # Call the child process function
             _run_pipeline_in_child_process(
                 runner_instance=mock_runner,
                 filtered_pipeline=mock_pipeline,
-                catalog_config=catalog_config,  # Pass dict, not DataCatalog instance
-                parameters=parameters,           # Pass dict, not DataCatalog instance
+                catalog_config=catalog_config,
+                parameters=parameters,
                 hook_manager=mock_hook_manager,
                 session_id="test-session",
                 record_data={},

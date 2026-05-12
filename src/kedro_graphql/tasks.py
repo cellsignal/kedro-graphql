@@ -295,7 +295,7 @@ def _run_pipeline_in_child_process(
         pass
 
     try:
-        # Recreate catalog in child process to avoid fork-unsafe connections (S3, MongoDB, etc.)
+        # Recreate catalog in child process to avoid fork-unsafe connections with S3
         io = DataCatalog.from_config(catalog=catalog_config)
         
         # Re-add parameters to catalog
