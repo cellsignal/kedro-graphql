@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from unittest.mock import patch, MagicMock
 
 from kedro_graphql.models import (
     DataSet,
@@ -10,7 +11,7 @@ from kedro_graphql.models import (
     State,
     Tag,
 )
-from kedro_graphql.tasks import run_pipeline
+from kedro_graphql.tasks import run_pipeline, _run_pipeline_in_child_process
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -58,4 +59,66 @@ async def test_run_pipeline(mock_app,
         runner="kedro.runner.SequentialRunner"
     )
     result = result.wait(timeout=None, interval=0.5)
+
+
+def test_run_pipeline_child_process_recreates_catalog():
+    """
+    Verify that the child process recreates the catalog from config (dict) and parameters,
+    avoiding fork-safety issues with S3 and MongoDB connections.
+    
+    This test ensures that the catalog is not inherited from the parent process but
+    recreated fresh in the child process, where connections are created anew.
+    """
+    # Setup: Create mock data
+    catalog_config = {
+        "text_in": {
+            "type": "text.TextDataset",
+            "filepath": "./data/text_in.txt"
+        }
+    }
+    parameters = {"example": "hello"}
+    
+    # Mock the DataCatalog to track if from_config is called in the child
+    with patch('kedro_graphql.tasks.DataCatalog') as mock_catalog_class:
+        mock_catalog_instance = MagicMock()
+        mock_catalog_class.from_config.return_value = mock_catalog_instance
+        
+        with patch('kedro_graphql.tasks.queue.Queue') as mock_queue:
+            # Mock the result queue
+            result_queue = MagicMock()
+            
+            # Mock runner and pipeline
+            mock_runner = MagicMock()
+            mock_runner.run.return_value = {"status": "success"}
+            
+            mock_pipeline = MagicMock()
+            mock_hook_manager = MagicMock()
+            
+            # Call the child process function
+            _run_pipeline_in_child_process(
+                runner_instance=mock_runner,
+                filtered_pipeline=mock_pipeline,
+                catalog_config=catalog_config,  # Pass dict, not DataCatalog instance
+                parameters=parameters,           # Pass dict, not DataCatalog instance
+                hook_manager=mock_hook_manager,
+                session_id="test-session",
+                record_data={},
+                pipeline_name="test_pipeline",
+                result_queue=result_queue
+            )
+            
+            # Verify that DataCatalog.from_config was called with the config dict
+            mock_catalog_class.from_config.assert_called_once_with(catalog=catalog_config)
+            
+            # Verify that catalog.add_feed_dict was called to add parameters
+            mock_catalog_instance.add_feed_dict.assert_called_once()
+            
+            # Verify the runner was called with the newly created catalog
+            mock_runner.run.assert_called_once()
+            call_args = mock_runner.run.call_args
+            assert call_args[1]['catalog'] == mock_catalog_instance
+            
+            # Verify success was reported
+            result_queue.put.assert_called_with({"status": "success"})
+
 

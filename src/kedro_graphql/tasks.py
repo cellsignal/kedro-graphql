@@ -279,7 +279,8 @@ class KedroGraphqlTask(AbortableTask):
 def _run_pipeline_in_child_process(
     runner_instance,
     filtered_pipeline,
-    io,
+    catalog_config: dict,
+    parameters: dict,
     hook_manager,
     session_id: str,
     record_data: dict,
@@ -294,6 +295,15 @@ def _run_pipeline_in_child_process(
         pass
 
     try:
+        # Recreate catalog in child process to avoid fork-unsafe connections (S3, MongoDB, etc.)
+        io = DataCatalog.from_config(catalog=catalog_config)
+        
+        # Re-add parameters to catalog
+        feed_dict = {"parameters": parameters}
+        for param_name, param_value in parameters.items():
+            add_param_to_feed_dict(feed_dict, param_name, param_value)
+        io.add_feed_dict(feed_dict)
+        
         run_result = runner_instance.run(
             filtered_pipeline,
             catalog=io,
@@ -489,7 +499,8 @@ def run_pipeline(self,
                 args=(
                     runner_instance,
                     filtered_pipeline,
-                    io,
+                    catalog,
+                    conf_parameters,
                     hook_manager,
                     session.session_id,
                     record_data,
