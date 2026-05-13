@@ -4,6 +4,7 @@
 
 Added:
 
+- Test for catalog recreation in child process to prevent fork-safety issues with S3 and MongoDB connections
 - `DataSetInput.list_partitions` flag to support partition discovery in `readDatasets`
 - `readDatasets` schema coverage for partition discovery and partition-specific signed URL flows
 - Schema tests to cover baseline read datasets, list partitions, and partition-specific signed URL behavior
@@ -25,6 +26,7 @@ Changed:
 
 Fixed:
 
+- Catalog now recreated in child process to prevent fork-safety errors with S3 (`TextDataset` with S3 protocol) and MongoDB connections; connections are now created fresh in the child process instead of inherited from parent
 - Mismatch in types `ObjectId` and `str` caused the `readTemplates` query to always fail
 - Celery task callback null-safety in `before_start`, `on_success`, and `on_retry` when pipeline records are missing
 - `after_return` temp log cleanup logging bug (`.name` used on string path)
