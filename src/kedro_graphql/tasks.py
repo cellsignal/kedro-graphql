@@ -66,12 +66,15 @@ class KedroGraphqlTask(AbortableTask):
         Returns:
             None: The return value of this handler is ignored.
         """
-        kedro_logger = logging.getLogger("kedro")
-        handler = KedroGraphQLLogHandler(
-            task_id, broker_url=self._app.conf["broker_url"])
-        # Tag handlers so we can cleanly remove only this task's handlers later.
-        handler.kedro_graphql_task_id = task_id
-        kedro_logger.addHandler(handler)
+        root_logger = logging.getLogger()
+        # Attach a task-scoped Redis stream handler so all propagated logs can be
+        # consumed by the `pipelineLogs` GraphQL subscription for this task.
+        stream_handler = KedroGraphQLLogHandler(
+            task_id,
+            broker_url=self._app.conf["broker_url"],
+        )
+        stream_handler.kedro_graphql_task_id = task_id
+        root_logger.addHandler(stream_handler)
         p = self.db.read(id=kwargs["id"])
         if p is None:
             logger.error(
@@ -106,8 +109,8 @@ class KedroGraphqlTask(AbortableTask):
             error_handler.setFormatter(formatter)
             info_handler.kedro_graphql_task_id = task_id
             error_handler.kedro_graphql_task_id = task_id
-            kedro_logger.addHandler(info_handler)
-            kedro_logger.addHandler(error_handler)
+            root_logger.addHandler(info_handler)
+            root_logger.addHandler(error_handler)
             # logger.info(
             # f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             logger.info(
@@ -243,10 +246,10 @@ class KedroGraphqlTask(AbortableTask):
             p.status[-1].task_result = str(retval)
             self.db.update(p)
 
-        # Clean up only this task's handlers from the kedro logger.
-        kedro_logger = logging.getLogger("kedro")
+        # Clean up only this task's handlers from the root logger.
+        root_logger = logging.getLogger()
         handlers_to_remove = [
-            h for h in list(kedro_logger.handlers)
+            h for h in list(root_logger.handlers)
             if getattr(h, "kedro_graphql_task_id", None) == task_id
         ]
         for handler in handlers_to_remove:
@@ -254,14 +257,17 @@ class KedroGraphqlTask(AbortableTask):
                 handler.flush()
             except Exception:
                 pass
+
             if isinstance(handler, KedroGraphQLLogHandler):
                 try:
-                    handler.broker.connection.delete(task_id)  # delete stream
+                    # Remove the Redis stream for this task and close connection.
+                    handler.broker.connection.delete(task_id)
                     handler.broker.connection.close()
                 except Exception:
                     pass
+
             handler.close()
-            kedro_logger.removeHandler(handler)
+            root_logger.removeHandler(handler)
 
         # Clear logs from temp_logs
         try:
@@ -285,6 +291,8 @@ def _run_pipeline_in_child_process(
     session_id: str,
     record_data: dict,
     pipeline_name: str,
+    task_id: str,
+    broker_url: str,
     result_queue,
 ):
     """Execute Kedro pipeline in a child process and report result via queue."""
@@ -293,6 +301,27 @@ def _run_pipeline_in_child_process(
         os.setsid()
     except OSError:
         pass
+
+    # Recreate stream handler in child process so Redis connection is process-local.
+    root_logger = logging.getLogger()
+    handlers_to_remove = [
+        h for h in list(root_logger.handlers)
+        if getattr(h, "kedro_graphql_task_id", None) == task_id
+        and isinstance(h, KedroGraphQLLogHandler)
+    ]
+    for handler in handlers_to_remove:
+        try:
+            handler.flush()
+        except Exception:
+            pass
+        handler.close()
+        root_logger.removeHandler(handler)
+
+    # Recreate the stream handler in the child so Redis connection state is
+    # owned by this process and safe to use after fork.
+    stream_handler = KedroGraphQLLogHandler(task_id, broker_url=broker_url)
+    stream_handler.kedro_graphql_task_id = task_id
+    root_logger.addHandler(stream_handler)
 
     try:
         # Recreate catalog in child process to avoid fork-unsafe connections with S3
@@ -505,6 +534,8 @@ def run_pipeline(self,
                     session.session_id,
                     record_data,
                     name,
+                    self.request.id,
+                    self._app.conf["broker_url"],
                     result_queue,
                 ),
             )
