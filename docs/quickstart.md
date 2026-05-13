@@ -161,9 +161,9 @@ subscription MySubscription {
 
 ![subscription](https://raw.githubusercontent.com/cellsignal/kedro-graphql/refs/heads/main/docs/subscription.gif)
 
-### Susbscribe to pipeline logs
+### Subscribe to pipeline logs
 
-Execute the following subscription to recieve log messages:
+Execute the following subscription to receive log messages:
 
 ```graphql
 subscription MySubscriptionLogs {
