@@ -98,7 +98,7 @@ def test_run_pipeline_child_process_recreates_catalog():
                 record_data={},
                 pipeline_name="test_pipeline",
                 task_id="test-task-id",
-                broker_url="redis://localhost:6379/0",
+                broker_url="redis://localhost:6379/15",
                 result_queue=result_queue
             )
             

@@ -42,6 +42,7 @@ Fixed:
 - `MongoBackend` now detects fork boundaries and recreates `MongoClient` per process to eliminate fork-safety warnings
 - Celery config now sets `broker_connection_retry_on_startup=True` to suppress deprecation warning for future Celery 6.0 compatibility
 - Child pipeline process now handles `SIGINT`/`SIGTERM` gracefully during abort so logs flush and hook-based log persistence still run before exit
+- Tests now use an isolated Redis DB and flush it before/after the session to clean up Celery result keys and stream artifacts
 
 ## [1.5.1] - 2026-03-31
 

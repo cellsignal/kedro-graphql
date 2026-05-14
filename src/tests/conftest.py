@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 import tempfile
+import redis
 
 import pytest
 from kedro.framework.session import KedroSession
@@ -142,8 +143,8 @@ def mock_app(kedro_session):
 @pytest.fixture(scope='session')
 def celery_config():
     return {
-        'broker_url': 'redis://',
-        'result_backend': 'redis://',
+        'broker_url': 'redis://localhost:6379/15',
+        'result_backend': 'redis://localhost:6379/15',
         'result_extended': True,
         'worker_send_task_events': True,
         'task_send_sent_event': True,
@@ -153,6 +154,15 @@ def celery_config():
         'imports': ["kedro_graphql.tasks"]
 
     }
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_redis():
+    """Ensure Redis keys created by tests are cleaned up before and after the session."""
+    connection = redis.Redis.from_url("redis://localhost:6379/15")
+    connection.flushdb()
+    yield
+    connection.flushdb()
 
 
 @pytest.fixture(scope='session')
