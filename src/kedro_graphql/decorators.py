@@ -50,7 +50,7 @@ def gql_mutation():
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["mutation"].append(plugin_class)
-        logger.info("registered type plugin 'query': " + str(plugin_class))
+        logger.info("registered type plugin 'mutation': " + str(plugin_class))
         return plugin_class
 
     return register_plugin
@@ -60,7 +60,7 @@ def gql_subscription():
 
     def register_plugin(plugin_class):
         TYPE_PLUGINS["subscription"].append(plugin_class)
-        logger.info("registered type plugin 'query': " + str(plugin_class))
+        logger.info("registered type plugin 'subscription': " + str(plugin_class))
         return plugin_class
 
     return register_plugin

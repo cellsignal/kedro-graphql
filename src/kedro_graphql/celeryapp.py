@@ -17,6 +17,7 @@ def celery_app(config, backend, schema):
         task_send_sent_event = True
         imports = "kedro_graphql.tasks"
         worker_soft_shutdown_timeout = 10
+        broker_connection_retry_on_startup = True
 
     app.config_from_object(Config)
     app.kedro_graphql_backend = backend

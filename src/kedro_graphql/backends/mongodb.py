@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 import uuid
 
 from bson.objectid import ObjectId
@@ -13,12 +14,22 @@ from .base import BaseBackend
 class MongoBackend(BaseBackend):
 
     def __init__(self, uri=None, db=None, collection="pipelines"):
-        self.client = MongoClient(uri)
-        self.db = self.client[db]
+        self.uri = uri
+        self.db_name = db
+        self.client = MongoClient(self.uri)
+        self.db = self.client[self.db_name]
+        # Track process id to detect fork boundaries.
+        self.client_pid = os.getpid()
         self.collection = collection
 
     def startup(self, **kwargs):
         """Startup hook."""
+        # Recreate client if this process was forked after backend initialization.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
         print("Connected to the MongoDB database!")
 
     def shutdown(self, **kwargs):
@@ -26,6 +37,13 @@ class MongoBackend(BaseBackend):
         self.client.close()
 
     def list(self, cursor: uuid.UUID = None, limit=10, filter="", sort=""):
+        # Recreate client if this method is running in a different process.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
+
         query = {}
         if len(filter) > 0:
             filter = json.loads(filter)
@@ -56,6 +74,13 @@ class MongoBackend(BaseBackend):
 
     def read(self, id: uuid.UUID = None, task_id: str = None):
         """Load a pipeline by id or task_id"""
+        # Recreate client if this method is running in a different process.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
+
         if task_id:
             r = self.db[self.collection].find_one(
                 {"status": {"$elemMatch": {"task_id": task_id}}})
@@ -71,6 +96,13 @@ class MongoBackend(BaseBackend):
 
     def create(self, pipeline: Pipeline):
         """Save a pipeline"""
+        # Recreate client if this method is running in a different process.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
+
         values = pipeline.encode()
         values.pop("id")  # we dont have an id yet, we will get it after insert
         created = self.db[self.collection].insert_one(values)
@@ -81,6 +113,13 @@ class MongoBackend(BaseBackend):
 
     def update(self, pipeline: Pipeline = None):
         """Update a pipeline"""
+        # Recreate client if this method is running in a different process.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
+
         id = ObjectId(pipeline.id)
         filter = {'_id': id}
         values = pipeline.encode()
@@ -94,5 +133,12 @@ class MongoBackend(BaseBackend):
 
     def delete(self, id: uuid.UUID = None):
         """Delete a pipeline using id"""
+        # Recreate client if this method is running in a different process.
+        if self.client_pid != os.getpid():
+            self.client.close()
+            self.client = MongoClient(self.uri)
+            self.db = self.client[self.db_name]
+            self.client_pid = os.getpid()
+
         self.db[self.collection].delete_one({"_id": ObjectId(id)})
         return id

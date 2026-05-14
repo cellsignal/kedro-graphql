@@ -120,6 +120,7 @@ class PipelineEventMonitor:
             """Helper to get task state in thread pool - Celery AsyncResult properties are blocking."""
             try:
                 task = app.AsyncResult(task_id)
+
                 # Check if backend is disabled/not available
                 if not hasattr(task.backend, '_get_task_meta_for'):
                     # No result backend configured, return pending status
@@ -127,6 +128,16 @@ class PipelineEventMonitor:
                         "task_id": task_id,
                         "status": "PENDING",
                         "result": "No result backend configured",
+                        "timestamp": time.time(),
+                        "traceback": None
+                    }
+                # if task result is None and status is "ABORTED", change status to "ABORTING" to indicate that the task is in the process of being aborted
+                # celery doesn't have "ABORTING" status
+                if task.status == "ABORTED" and task.result is None:
+                    return {
+                        "task_id": task_id,
+                        "status": "ABORTING",
+                        "result": None,
                         "timestamp": time.time(),
                         "traceback": None
                     }
@@ -153,5 +164,13 @@ class PipelineEventMonitor:
             yield task_state
             
             if task_state["status"] in READY_STATES:
+                if task_state["result"] == "aborted":
+                    yield {
+                    "task_id": task_state["task_id"],
+                    "status": "ABORTED",
+                    "result": str(task_state["result"]),
+                    "timestamp": time.time(),
+                    "traceback": task_state["traceback"]
+                }
                 break
             await asyncio.sleep(interval)

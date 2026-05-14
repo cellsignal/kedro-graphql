@@ -15,6 +15,7 @@ Added:
 - `KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD` (default `60`) for controlling how long the worker waits before escalating abort signals (values below `5` seconds are clamped at runtime)
 - CLI flags `--celery-abort-polling-interval` and `--celery-abort-grace-period` on `kedro gql` to override the above settings
 - Schema mutation tests for aborting a running pipeline and rejecting abort requests for non-running pipelines
+- Documentation updates for log subscriptions, including custom log capture guidance and refreshed `pipelineLogs` examples
 
 Changed:
 
@@ -23,6 +24,9 @@ Changed:
 - `run_pipeline` now executes the Kedro runner in a child subprocess while the parent task monitors abort status and sends OS signals (`SIGINT` first, then escalation)
 - `updatePipeline` now handles `state: ABORTED` by calling `AbortableAsyncResult.abort()` and persisting `ABORTING` in the document backend until worker-side abort completion; repeated abort requests while already `ABORTING` or `ABORTED` return without error
 - Task `on_success` and `on_failure` handlers now preserve abort states and avoid overwriting `ABORTING`/`ABORTED` with `SUCCESS` or `FAILURE`
+- Pipeline subscription events now map Celery `SUCCESS` with result `aborted` to `ABORTED` so streamed status aligns with pipeline abort semantics
+- Task-scoped log stream handlers are now attached to the root logger so propagated logs from Kedro and custom modules are captured consistently
+- Task subprocess logging reinitializes stream handlers in the child process to keep Redis stream publishing process-local after fork
 
 Fixed:
 
@@ -32,6 +36,13 @@ Fixed:
 - `after_return` temp log cleanup logging bug (`.name` used on string path)
 - Kedro log handlers added during pipeline runs are now removed from the `kedro` logger (not the task module logger), tagged per Celery task id, reducing duplicate log output and teardown noise
 - Pipeline `State` enum typo corrected from `RECIEVED` to `RECEIVED`
+- `PipelineLogStream` now always closes async Redis connections with `aclose()` via `finally`, including subscription cancellation/disconnect paths
+- `PipelineLogStream` terminal state detection now includes explicit `ABORTED` status
+- Plugin registration logs now use correct labels for mutation and subscription plugin types
+- `MongoBackend` now detects fork boundaries and recreates `MongoClient` per process to eliminate fork-safety warnings
+- Celery config now sets `broker_connection_retry_on_startup=True` to suppress deprecation warning for future Celery 6.0 compatibility
+- Child pipeline process now handles `SIGINT`/`SIGTERM` gracefully during abort so logs flush and hook-based log persistence still run before exit
+- Tests now use an isolated Redis DB and flush it before/after the session to clean up Celery result keys and stream artifacts
 
 ## [1.5.1] - 2026-03-31
 
