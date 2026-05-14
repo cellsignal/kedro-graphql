@@ -39,6 +39,8 @@ Fixed:
 - `PipelineLogStream` now always closes async Redis connections with `aclose()` via `finally`, including subscription cancellation/disconnect paths
 - `PipelineLogStream` terminal state detection now includes explicit `ABORTED` status
 - Plugin registration logs now use correct labels for mutation and subscription plugin types
+- `MongoBackend` now detects fork boundaries and recreates `MongoClient` per process to eliminate fork-safety warnings
+- Celery config now sets `broker_connection_retry_on_startup=True` to suppress deprecation warning for future Celery 6.0 compatibility
 
 ## [1.5.1] - 2026-03-31
 
