@@ -323,6 +323,23 @@ def _run_pipeline_in_child_process(
     stream_handler.kedro_graphql_task_id = task_id
     root_logger.addHandler(stream_handler)
 
+    # Track abort state so signal handlers can safely flush logs and call hooks.
+    abort_triggered = False
+    io = None
+    run_result = None
+
+    def handle_abort_signal(signum, frame):
+        """Handle SIGINT or SIGTERM by setting flag so logs and hooks are properly cleaned up."""
+        nonlocal abort_triggered
+        abort_triggered = True
+        # Raise KeyboardInterrupt to exit pipeline execution and trigger except block.
+        raise KeyboardInterrupt("Pipeline abort signal received")
+
+    # Register signal handlers so SIGINT/SIGTERM don't forcefully kill the child
+    # before logs and hooks are flushed.
+    signal.signal(signal.SIGINT, handle_abort_signal)
+    signal.signal(signal.SIGTERM, handle_abort_signal)
+
     try:
         # Recreate catalog in child process to avoid fork-unsafe connections with S3
         io = DataCatalog.from_config(catalog=catalog_config)
@@ -347,6 +364,27 @@ def _run_pipeline_in_child_process(
         )
         result_queue.put({"status": "success"})
     except BaseException as child_error:
+        # Always attempt to flush logs and call hooks even if pipeline was aborted or failed.
+        # This ensures persisted logs and S3 uploads happen before child exits.
+        if io is not None:
+            try:
+                # Flush all file handlers to ensure logs are written to disk.
+                for handler in list(root_logger.handlers):
+                    try:
+                        handler.flush()
+                    except Exception:
+                        pass
+                # Call after_pipeline_run hook so logs are saved to S3.
+                # For aborted pipelines, run_result may be None, but hook should still run.
+                hook_manager.hook.after_pipeline_run(
+                    run_params=record_data,
+                    run_result=run_result,
+                    pipeline=pipelines.get(pipeline_name, None),
+                    catalog=io,
+                )
+            except Exception as cleanup_error:
+                logger.warning(f"Error during log cleanup after abort: {cleanup_error}")
+        
         result_queue.put(
             {
                 "status": "error",

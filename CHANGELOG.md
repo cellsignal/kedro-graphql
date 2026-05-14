@@ -41,6 +41,7 @@ Fixed:
 - Plugin registration logs now use correct labels for mutation and subscription plugin types
 - `MongoBackend` now detects fork boundaries and recreates `MongoClient` per process to eliminate fork-safety warnings
 - Celery config now sets `broker_connection_retry_on_startup=True` to suppress deprecation warning for future Celery 6.0 compatibility
+- Child pipeline process now handles `SIGINT`/`SIGTERM` gracefully during abort so logs flush and hook-based log persistence still run before exit
 
 ## [1.5.1] - 2026-03-31
 
