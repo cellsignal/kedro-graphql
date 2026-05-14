@@ -762,10 +762,11 @@ class Subscription:
                 e["id"] = id
                 yield PipelineEvent(**e)
         else:
+            finished_at = p.status[-1].finished_at
             yield PipelineEvent(
                 id=id,
                 task_id=p.status[-1].task_id,
-                timestamp=p.status[-1].finished_at,
+                timestamp=finished_at.isoformat() if finished_at is not None else None,
                 status=p.status[-1].state.value,
                 result=p.status[-1].task_result,
                 traceback=p.status[-1].task_traceback

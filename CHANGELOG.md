@@ -19,6 +19,7 @@ Added:
 
 Changed:
 
+- `PipelineEvent.timestamp` is now always a UTC ISO 8601 string (e.g. `"2026-05-14T12:55:52.779094"`). Live subscription events previously emitted a Unix epoch float from `time.time()` where as already-completed pipeline events previously passed the raw `datetime` object for `finished_at` so there was an inconsistency
 - `read_datasets` now supports returning `DataSet` for partition discovery requests
 - `KedroGraphqlTask` now inherits from Celery `AbortableTask`
 - `run_pipeline` now executes the Kedro runner in a child subprocess while the parent task monitors abort status and sends OS signals (`SIGINT` first, then escalation)

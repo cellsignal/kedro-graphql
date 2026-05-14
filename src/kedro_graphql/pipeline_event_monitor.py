@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import time
+from datetime import datetime, timezone
 from queue import Empty as QueueEmptyException
 from queue import Queue
 from threading import Thread
@@ -128,7 +128,7 @@ class PipelineEventMonitor:
                         "task_id": task_id,
                         "status": "PENDING",
                         "result": "No result backend configured",
-                        "timestamp": time.time(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "traceback": None
                     }
                 # if task result is None and status is "ABORTED", change status to "ABORTING" to indicate that the task is in the process of being aborted
@@ -138,14 +138,14 @@ class PipelineEventMonitor:
                         "task_id": task_id,
                         "status": "ABORTING",
                         "result": None,
-                        "timestamp": time.time(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "traceback": None
                     }
                 return {
                     "task_id": task.id,
                     "status": task.state,
                     "result": str(task.result),
-                    "timestamp": time.time(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "traceback": task.traceback
                 }
             except (AttributeError, NotImplementedError) as e:
@@ -154,7 +154,7 @@ class PipelineEventMonitor:
                     "task_id": task_id,
                     "status": "PENDING",
                     "result": f"Backend error: {str(e)}",
-                    "timestamp": time.time(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "traceback": None
                 }
 
@@ -169,7 +169,7 @@ class PipelineEventMonitor:
                     "task_id": task_state["task_id"],
                     "status": "ABORTED",
                     "result": str(task_state["result"]),
-                    "timestamp": time.time(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                     "traceback": task_state["traceback"]
                 }
                 break
