@@ -36,6 +36,15 @@ def mark_deprecated(default=None):
     return strawberry.field(default=default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
 
 
+def _camelize_keys(value):
+    """Recursively convert dictionary keys to camelCase."""
+    if isinstance(value, dict):
+        return {to_camel_case(k) if isinstance(k, str) else k: _camelize_keys(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_camelize_keys(v) for v in value]
+    return value
+
+
 @strawberry.type
 class Tag:
     key: str
@@ -308,9 +317,7 @@ class DataSetInput:
         if encoder == "dict":
             return jsonable_encoder(self)
         elif encoder == "graphql":
-            p = jsonable_encoder(self)
-            p = {to_camel_case(k): v for k, v in p.items()}
-            return p
+            return _camelize_keys(jsonable_encoder(self))
         else:
             raise TypeError("encoder must be 'dict' or 'graphql'")
 
@@ -545,8 +552,7 @@ class PipelineInput:
         if encoder == "dict":
             return jsonable_encoder(self)
         elif encoder == "graphql":
-            p = jsonable_encoder(self)
-            p = {to_camel_case(k): v for k, v in p.items()}
+            p = _camelize_keys(jsonable_encoder(self))
             # make sure parameter types are uppercase
             if p.get("parameters", None):
                 for param in p["parameters"]:
