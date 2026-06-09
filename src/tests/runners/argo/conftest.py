@@ -5,6 +5,7 @@ import pytest
 
 from kedro_graphql.models import DataSet, Parameter, Pipeline, Tag
 from kedro_graphql.tasks import run_pipeline
+from kedro_graphql.utils import run_sync
 
 IN_DEV = True
 REASON = "Argo runner in development"
@@ -125,7 +126,7 @@ def mock_pipeline_argo(mock_app, s3_object, s3_client):
     )
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(p.task_id))
-    p = mock_app.backend.create(p)
+    p = run_sync(mock_app.backend.create(p))
     yield p
     # cleanup
     s3_client.remove_object("my-bucket", out_fname)

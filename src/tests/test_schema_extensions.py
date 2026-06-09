@@ -122,7 +122,7 @@ class TestSchemaExtensions:
                 assert not c["filepath"].startswith(prefix)
 
         # check backend to make sure filepaths are unmasked
-        pipeline = mock_app.backend.read(id=p.id)
+        pipeline = await mock_app.backend.read(id=p.id)
         for d in pipeline.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):

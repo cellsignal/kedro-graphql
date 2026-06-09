@@ -48,7 +48,7 @@ async def test_run_pipeline(mock_app,
                                task_name=None)]
     )
 
-    p = mock_app.backend.create(p)
+    p = await mock_app.backend.create(p)
     serial = p.serialize()
 
     result = run_pipeline.delay(
