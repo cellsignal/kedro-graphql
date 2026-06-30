@@ -20,7 +20,7 @@ from kedro.io import AbstractDataset, DataCatalog
 from omegaconf import OmegaConf
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
-from kedro_graphql.utils import add_param_to_feed_dict
+from kedro_graphql.utils import add_param_to_feed_dict, run_sync
 from kedro_graphql.runners import init_runner
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
@@ -75,7 +75,7 @@ class KedroGraphqlTask(AbortableTask):
         )
         stream_handler.kedro_graphql_task_id = task_id
         root_logger.addHandler(stream_handler)
-        p = self.db.read(id=kwargs["id"])
+        p = run_sync(self.db.read(id=kwargs["id"]))
         if p is None:
             logger.error(
                 f"Pipeline id={kwargs['id']} not found in backend during before_start; task_id={task_id}")
@@ -84,7 +84,7 @@ class KedroGraphqlTask(AbortableTask):
         p.status[-1].task_id = task_id
         p.status[-1].task_args = json.dumps(args)
         p.status[-1].task_kwargs = json.dumps(kwargs)
-        self.db.update(p)
+        run_sync(self.db.update(p))
 
         try:
             # Create info and error handlers for the run
@@ -137,7 +137,7 @@ class KedroGraphqlTask(AbortableTask):
                 # Save metadata to S3
                 AbstractDataset.from_config(gql_meta.name, json.loads(
                     gql_meta.config)).save(p.serialize())
-                p = self.db.update(p)
+                p = run_sync(self.db.update(p))
 
                 logger.info(
                     f"Capturing pipeline metadata in {os.path.join(log_path_prefix,f'year={today.year}',f'month={today.month}',f'day={today.day}',str(p.id),'meta.json')}")
@@ -167,13 +167,13 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = self.db.read(id=kwargs["id"])
+        p = run_sync(self.db.read(id=kwargs["id"]))
         if p is None:
             return
         if p.status[-1].state in {State.ABORTING, State.ABORTED}:
             return
         p.status[-1].state = State.SUCCESS
-        self.db.update(p)
+        run_sync(self.db.update(p))
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.
@@ -191,12 +191,12 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = self.db.read(id=kwargs["id"])
+        p = run_sync(self.db.read(id=kwargs["id"]))
         if p is not None:
             p.status[-1].state = State.RETRY
             p.status[-1].task_exception = str(exc)
             p.status[-1].task_einfo = str(einfo)
-            self.db.update(p)
+            run_sync(self.db.update(p))
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -214,14 +214,14 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = self.db.read(id=kwargs["id"])
+        p = run_sync(self.db.read(id=kwargs["id"]))
         if p is not None:
             if p.status[-1].state in {State.ABORTING, State.ABORTED}:
                 return
             p.status[-1].state = State.FAILURE
             p.status[-1].task_exception = str(exc)
             p.status[-1].task_einfo = str(einfo)
-            self.db.update(p)
+            run_sync(self.db.update(p))
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -240,11 +240,11 @@ class KedroGraphqlTask(AbortableTask):
 
         finished_at = datetime.now()
 
-        p = self.db.read(id=kwargs["id"])
+        p = run_sync(self.db.read(id=kwargs["id"]))
         if p is not None:
             p.status[-1].finished_at = finished_at
             p.status[-1].task_result = str(retval)
-            self.db.update(p)
+            run_sync(self.db.update(p))
 
         # Clean up only this task's handlers from the root logger.
         root_logger = logging.getLogger()
@@ -412,7 +412,7 @@ def run_pipeline(self,
 
         hook_manager = session._hook_manager
 
-        p = self.db.read(id=id)
+        p = run_sync(self.db.read(id=id))
         if p is None:
             logger.warning(
                 "Pipeline id=%s not found in backend during run_pipeline; task_id=%s",
@@ -421,7 +421,7 @@ def run_pipeline(self,
             )
             return
         p.status[-1].session = session.session_id
-        self.db.update(p)
+        run_sync(self.db.update(p))
 
         # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
         if getattr(self, "kedro_graphql_pipeline", None):
@@ -551,9 +551,9 @@ def run_pipeline(self,
                     node_namespace=node_namespace,
                 )
 
-            p = self.db.read(id=id)
+            p = run_sync(self.db.read(id=id))
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
-            self.db.update(p)
+            run_sync(self.db.update(p))
 
             # Use Celery's multiprocessing library (billiard) instead of multiprocessing
             # to avoid AssertionError: daemonic processes are not allowed to have children
@@ -674,11 +674,11 @@ def run_pipeline(self,
                 logger.warning("Child process pid=%s finished without posting a result", child.pid)
 
             if self.is_aborted():
-                p = self.db.read(id=id)
+                p = run_sync(self.db.read(id=id))
                 if p is not None:
                     p.status[-1].state = State.ABORTED
                     p.status[-1].abort_completed_at = datetime.now()
-                    self.db.update(p)
+                    run_sync(self.db.update(p))
                 return "aborted"
 
             if child_result.get("status") != "success":

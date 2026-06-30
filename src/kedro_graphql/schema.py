@@ -13,7 +13,6 @@ from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES, READY_STATES
 from fastapi.encoders import jsonable_encoder
 from kedro.framework.project import pipelines
-from starlette.concurrency import run_in_threadpool
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
@@ -365,8 +364,7 @@ class Query:
     @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")]), PipelineExtension()])
     async def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -385,9 +383,7 @@ class Query:
         else:
             pipe_id = "000000000000000000000000"  # unix epoch Jan 1, 1970 as objectId
 
-        # Run blocking database list in thread pool
-        results = await run_in_threadpool(
-            info.context["request"].app.backend.list,
+        results = await info.context["request"].app.backend.list(
             cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
         if len(results) > limit:
 
@@ -429,8 +425,7 @@ class Query:
                 f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
 
         urls = []
-        # Run blocking database read in thread pool
-        p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+        p = await info.context["request"].app.backend.read(id=id)
 
         catalog = {d.name: d for d in p.data_catalog}
 
@@ -514,12 +509,10 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
-            # Run blocking database create in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.create, p)
+            p = await info.context["request"].app.backend.create(p)
             if unique_paths:
                 p = generate_unique_paths(p, unique_paths)
-                # Run blocking database update in thread pool
-                p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+                p = await info.context["request"].app.backend.update(p)
 
             logger.info(
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
@@ -533,12 +526,10 @@ class Mutation:
                                            task_id=None,
                                            task_name=str(run_pipeline)))
 
-            # Run blocking database create in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.create, p)
+            p = await info.context["request"].app.backend.create(p)
             if unique_paths:
                 p = generate_unique_paths(p, unique_paths)
-                # Run blocking database update in thread pool
-                p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+                p = await info.context["request"].app.backend.update(p)
 
             result = run_pipeline.delay(
                 id=str(p.id),
@@ -558,8 +549,7 @@ class Mutation:
     async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
 
         try:
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -587,8 +577,7 @@ class Mutation:
             ).abort()
             p.status[-1].state = State.ABORTING
             p.status[-1].abort_requested_at = datetime.now()
-            # Run blocking database update in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+            p = await info.context["request"].app.backend.update(p)
             logger.info(
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
             return p
@@ -627,8 +616,7 @@ class Mutation:
                 p = generate_unique_paths(p, unique_paths)
 
             # Update pipeline in backend before running task
-            # Run blocking database update in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+            p = await info.context["request"].app.backend.update(p)
 
             serial = p.encode(encoder="kedro")
 
@@ -657,8 +645,7 @@ class Mutation:
             logger.info(f'Staging pipeline {p.name}')
         if unique_paths:
             p = generate_unique_paths(p, unique_paths)
-        # Run blocking database update in thread pool
-        p = await run_in_threadpool(info.context["request"].app.backend.update, p)
+        p = await info.context["request"].app.backend.update(p)
         logger.info(
             f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
 
@@ -667,16 +654,14 @@ class Mutation:
     @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")]), PipelineExtension()])
     async def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        # Run blocking database delete in thread pool
-        await run_in_threadpool(info.context["request"].app.backend.delete, id=id)
+        await info.context["request"].app.backend.delete(id=id)
         logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
         return p
 
@@ -703,8 +688,7 @@ class Mutation:
             raise ValueError(
                 f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
         urls = []
-        # Run blocking database read in thread pool
-        p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+        p = await info.context["request"].app.backend.read(id=id)
 
         if p.status[-1].state.value != "STAGED":
             raise ValueError(
@@ -743,8 +727,7 @@ class Subscription:
         """Subscribe to pipeline events.
         """
         try:
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -754,8 +737,7 @@ class Subscription:
         while (not p.status[-1].task_id):
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
 
         if p and p.status[-1].state.value not in READY_STATES:
             async for e in PipelineEventMonitor(app=info.context["request"].app.celery_app, task_id=p.status[-1].task_id).start(interval=interval):
@@ -776,8 +758,7 @@ class Subscription:
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -787,8 +768,7 @@ class Subscription:
         while (not p.status[-1].task_id):
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
-            # Run blocking database read in thread pool
-            p = await run_in_threadpool(info.context["request"].app.backend.read, id=id)
+            p = await info.context["request"].app.backend.read(id=id)
 
         if p:
             stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"])

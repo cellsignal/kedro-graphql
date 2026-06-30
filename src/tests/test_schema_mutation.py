@@ -430,7 +430,7 @@ class TestSchemaMutations:
         assert started_event["id"] == pipeline_id
         assert started_event["status"] in UNREADY_STATES
         assert started_event["taskId"] is not None
-        p = mock_app.backend.read(id=pipeline_id)
+        p = await mock_app.backend.read(id=pipeline_id)
         assert p is not None
 
         # Send an abort request
@@ -476,7 +476,7 @@ class TestSchemaMutations:
         assert events[-1]["status"] == "SUCCESS"
         assert str(events[-1]["result"]).lower() == "aborted"
 
-        updated = mock_app.backend.read(id=pipeline_id)
+        updated = await mock_app.backend.read(id=pipeline_id)
         assert updated is not None
         assert updated.status[-1].state == State.ABORTED
 
@@ -545,8 +545,8 @@ class TestSchemaMutations:
             assert not result.errors
             if result.data["pipeline"]["status"] == "SUCCESS":
                 break
-        dataset_names = {ds.name for ds in mock_app.backend.read(
-            create_pipeline_resp.data["createPipeline"]["id"]).data_catalog}
+        dataset_names = {ds.name for ds in (await mock_app.backend.read(
+            create_pipeline_resp.data["createPipeline"]["id"])).data_catalog}
 
         assert "gql_meta" in dataset_names
         assert "gql_logs" in dataset_names
@@ -594,8 +594,8 @@ class TestSchemaMutations:
                 break
 
         # Make sure only nodes specified in "slices" were run
-        assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
-                                     ["id"]).status[-1].filtered_nodes == ["uppercase_node", "reverse_node"]
+        assert (await mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
+                                            ["id"])).status[-1].filtered_nodes == ["uppercase_node", "reverse_node"]
         create_pipeline_resp.errors is None
 
     @pytest.mark.asyncio
@@ -640,8 +640,8 @@ class TestSchemaMutations:
                 break
 
         # Make sure only timestamp_node was run because the file does not exist (did not write to it in conftest.py)
-        assert mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
-                                     ["id"]).status[-1].filtered_nodes == ["timestamp_node", "timestamp_partitions_node"]
+        assert (await mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
+                                            ["id"])).status[-1].filtered_nodes == ["timestamp_node", "timestamp_partitions_node"]
         create_pipeline_resp.errors is None
 
     @pytest.mark.asyncio

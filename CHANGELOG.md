@@ -4,6 +4,7 @@
 
 Added:
 
+- `run_sync` helper in `utils` to execute async backend coroutines from synchronous contexts (e.g. Celery task handlers) on a dedicated, fork-safe per-process event loop; raises `RuntimeError` if called from a running event loop
 - Test for catalog recreation in child process to prevent fork-safety issues with S3 and MongoDB connections
 - `DataSetInput.list_partitions` flag to support partition discovery in `readDatasets`
 - `readDatasets` schema coverage for partition discovery and partition-specific signed URL flows
@@ -19,6 +20,11 @@ Added:
 
 Changed:
 
+- `MongoBackend` migrated from synchronous PyMongo (`MongoClient`) to PyMongo's native async API (`AsyncMongoClient`); all backend methods (`startup`, `shutdown`, `read`, `list`, `create`, `update`, `delete`) are now async coroutines (Motor is deprecated as of May 14th, 2026)
+- GraphQL resolvers in `schema.py` now `await` backend methods directly, eliminating all `run_in_threadpool` delegation for database operations and providing true async I/O
+- `MongoBackend` now creates and caches one `AsyncMongoClient` per running event loop (keyed by process id) since an `AsyncMongoClient` is not thread safe and must be bound to a single event loop
+- Celery task handlers in `tasks.py` now invoke the async backend via `run_sync`
+- `MongoBackend.startup` now verifies connectivity with a `ping` command (warming the connection pool) and logs via `logger` instead of `print`
 - `PipelineEvent.timestamp` is now always a UTC ISO 8601 string (e.g. `"2026-05-14T12:55:52.779094"`). Live subscription events previously emitted a Unix epoch float from `time.time()` where as already-completed pipeline events previously passed the raw `datetime` object for `finished_at` so there was an inconsistency
 - `read_datasets` now supports returning `DataSet` for partition discovery requests
 - `KedroGraphqlTask` now inherits from Celery `AbortableTask`

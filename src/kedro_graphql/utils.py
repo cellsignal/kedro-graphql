@@ -1,13 +1,63 @@
+import asyncio
 import gql
 import json
+import os
+import threading
 from functools import reduce
 from graphql.language import print_ast
 from importlib_resources import files
-from typing import Any, Optional
+from typing import Any, Awaitable, Optional, TypeVar
 from .models import Pipeline
 from urllib.parse import urlparse
 from .logs.logger import logger
 from .exceptions import DataSetConfigError
+
+T = TypeVar("T")
+
+_async_loops_lock = threading.Lock()
+_async_loops: dict[int, asyncio.AbstractEventLoop] = {}
+
+
+def run_sync(coro: Awaitable[T]) -> T:
+    """Run an async coroutine from a synchronous context and return its result.
+
+    PyMongo's ``AsyncMongoClient`` is not thread safe and may only be used by a
+    single event loop. Synchronous callers (e.g. Celery task handlers and scripts)
+    therefore execute backend coroutines on a dedicated, persistent event loop
+    running on a background thread. One loop is maintained per process so the
+    helper remains safe across ``fork`` (Celery's prefork worker pool).
+
+    Args:
+        coro: The coroutine to execute.
+
+    Returns:
+        The result of awaiting ``coro``.
+
+    Raises:
+        RuntimeError: If called from a thread with a running event loop;
+            async callers must ``await`` the coroutine directly.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError(
+            "run_sync() called from a running event loop; await the coroutine directly instead.")
+
+    pid = os.getpid()
+    with _async_loops_lock:
+        loop = _async_loops.get(pid)
+        if loop is None or loop.is_closed():
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(
+                target=loop.run_forever,
+                name=f"kedro-graphql-async-{pid}",
+                daemon=True,
+            )
+            thread.start()
+            _async_loops[pid] = loop
+    return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
 
 def build_graphql_query(

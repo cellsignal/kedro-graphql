@@ -20,6 +20,7 @@ from kedro_graphql.models import (
     Tag,
 )
 from kedro_graphql.tasks import run_pipeline
+from kedro_graphql.utils import run_sync
 from fastapi.middleware.cors import CORSMiddleware
 from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
@@ -271,7 +272,7 @@ def mock_pipeline(mock_celery_session_app,
     )
 
     p.created_at = datetime.now()
-    p = mock_app.backend.create(p)
+    p = run_sync(mock_app.backend.create(p))
 
     serial = p.serialize()
 
@@ -284,7 +285,7 @@ def mock_pipeline(mock_celery_session_app,
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p.status[-1].task_id = result.id
-    p = mock_app.backend.update(p)
+    p = run_sync(mock_app.backend.update(p))
     return p
 
 
@@ -312,7 +313,7 @@ def mock_pipeline_staged(mock_app):
     )
 
     p.created_at = datetime.now()
-    p = mock_app.backend.create(p)
+    p = run_sync(mock_app.backend.create(p))
     return p
 
 
@@ -340,7 +341,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
     )
 
     p.created_at = datetime.now()
-    p = mock_app.backend.create(p)
+    p = run_sync(mock_app.backend.create(p))
 
     serial = p.serialize()
 
@@ -353,7 +354,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p.status[-1].task_id = result.id
-    p = mock_app.backend.update(p)
+    p = run_sync(mock_app.backend.update(p))
     return p
 
 
@@ -421,7 +422,7 @@ def mock_example01(mock_app, mock_timestamped_partitioned_dir, mock_text_in):
     )
 
     p.created_at = datetime.now()
-    p = mock_app.backend.create(p)
+    p = run_sync(mock_app.backend.create(p))
     return p
 
 
@@ -430,4 +431,9 @@ def delete_pipeline_collection(mock_app):
     # Will be executed before the first test
     yield
     # Will be executed after the last test
-    mock_app.backend.db[mock_app.config["KEDRO_GRAPHQL_MONGO_DB_NAME"]].drop()
+
+    async def _drop():
+        db = mock_app.backend._get_collection().database
+        await db[mock_app.config["KEDRO_GRAPHQL_MONGO_DB_NAME"]].drop()
+
+    run_sync(_drop())

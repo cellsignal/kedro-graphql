@@ -28,9 +28,9 @@ PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.backend.startup()
+    await app.backend.startup()
     yield
-    app.backend.shutdown()
+    await app.backend.shutdown()
 
 
 class KedroGraphQL(FastAPI):
