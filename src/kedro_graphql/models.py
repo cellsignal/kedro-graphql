@@ -537,7 +537,10 @@ class PipelineInput:
             p = jsonable_encoder(self)
             if self.data_catalog:
                 p["data_catalog"] = [
-                    dataset.encode(encoder="graphql") for dataset in self.data_catalog
+                    (dataset if isinstance(dataset, DataSetInput) else DataSetInput(**dataset)).encode(
+                        encoder="graphql"
+                    )
+                    for dataset in self.data_catalog
                 ]
             p = {to_camel_case(k): v for k, v in p.items()}
             # make sure parameter types are uppercase

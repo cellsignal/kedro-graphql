@@ -63,7 +63,7 @@ PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
 
 
-def _normalize_pipeline(p, app, slices, only_missing, runner):
+def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     full_pipeline = app.kedro_pipelines[p.name]
     submitted_catalog = {
         dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
@@ -86,7 +86,7 @@ def _normalize_pipeline(p, app, slices, only_missing, runner):
         parameter for parameter in p.parameters or [] if parameter.name in parameters
     ]
 
-    if not only_missing:
+    if validate and not only_missing:
         selected_pipeline = filter_pipeline(full_pipeline, slices)
         runner_class = get_runner_class(runner)
         validate_pipeline_config(
@@ -525,6 +525,7 @@ class Mutation:
             d.get("slices"),
             d.get("only_missing", False),
             runner,
+            validate=d["state"] == "READY",
         )
         serial = p.encode(encoder="kedro")
         # credentials not supported yet
@@ -638,6 +639,7 @@ class Mutation:
             pipeline_input_dict.get("slices"),
             pipeline_input_dict.get("only_missing", False),
             runner,
+            validate=requested_state == "READY",
         )
 
         # Update pipeline with normalized pipeline input

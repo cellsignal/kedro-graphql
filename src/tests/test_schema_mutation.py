@@ -226,10 +226,9 @@ class TestSchemaMutations:
                                              variable_values={"pipeline": {
                                                  "name": "example00",
                                                  "dataCatalog": [
-                                                     {"name": "text_in", "config": json.dumps({"type": "pandas.CSVDataset", "filepath": str(mock_text_in_tsv), "loadArgs": [
-                                                                                              {"name": "sep", "value": "\t"}], "saveArgs": [{"name": "sep", "value": "\t"}]})},
+                                                     {"name": "text_in", "config": json.dumps({"type": "pandas.CSVDataset", "filepath": str(mock_text_in_tsv), "load_args": {"sep": "\t"}, "save_args": {"sep": "\t"}})},
                                                      {"name": "text_out", "config": json.dumps({"type": "pandas.CSVDataset", "filepath": str(
-                                                         mock_text_out_tsv), "loadArgs": [{"name": "sep", "value": "\t"}], "saveArgs": [{"name": "sep", "value": "\t"}]})}
+                                                         mock_text_out_tsv), "load_args": {"sep": "\t"}, "save_args": {"sep": "\t"}})}
                                                  ],
                                                  "parameters": [{"name": "example", "value": "hello"}],
                                                  "tags": [{"key": "author", "value": "opensean"}, {"key": "package", "value": "kedro-graphql"}]

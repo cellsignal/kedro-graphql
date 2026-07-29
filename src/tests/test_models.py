@@ -344,7 +344,7 @@ class TestDataSetInput:
 def test_pipeline_input_encodes_nested_dataset_fields_for_graphql():
     result = PipelineInput(
         name="example",
-        data_catalog=[DataSetInput(name="dataset", list_partitions=True)],
+        data_catalog=[{"name": "dataset", "list_partitions": True}],
     ).encode(encoder="graphql")
 
     assert result["dataCatalog"][0]["listPartitions"] is True

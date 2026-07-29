@@ -148,7 +148,7 @@ class KedroGraphQL(FastAPI):
                 for n in pipeline_names:
 
                     pipeline_input = PipelineInput.from_event(
-                        name=n, event=event, state="READY"
+                        name=n, event=event, state="STAGED"
                     )
 
                     q_create = build_graphql_query(
