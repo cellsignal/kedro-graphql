@@ -22,6 +22,7 @@ from kedro_graphql.exceptions import DataSetConfigError
 
 from .config import load_config
 from .logs.logger import logger
+from .pipeline_config import normalize_pipeline_config
 # from .permissions import get_permissions
 
 
@@ -364,6 +365,11 @@ class PipelineTemplate:
     kedro_catalog: strawberry.Private[dict]
     kedro_parameters: strawberry.Private[dict]
 
+    def _resolved_config(self):
+        return normalize_pipeline_config(
+            self.kedro_pipelines[self.name], self.kedro_catalog, self.kedro_parameters
+        )
+
     @strawberry.field
     def describe(self) -> str:
         return self.kedro_pipelines[self.name].describe()
@@ -376,43 +382,26 @@ class PipelineTemplate:
 
     @strawberry.field
     def parameters(self) -> List[Parameter]:
-        # keep track of parameters to avoid returning duplicates
-        params = {}
-        for n in self.kedro_pipelines[self.name].all_inputs():
-            if n.startswith("params:"):
-                name = n.split("params:")[1]
-                value = self.kedro_parameters[name]
-                if not params.get(name, False):
-                    params[name] = value
-            elif n == "parameters":
-                for k, v in self.kedro_parameters.items():
-                    if not params.get(k, False):
-                        params[k] = v
+        _, params, _ = self._resolved_config()
         return [Parameter(name=k, value=v) for k, v in params.items()]
 
     @strawberry.field
     def inputs(self) -> List[DataSet]:
-        inputs_resolved = []
-        for n in self.kedro_pipelines[self.name].all_inputs():
-            if not n.startswith("params:") and n != "parameters":
-                config = self.kedro_catalog[n]
-                inputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
-
-        return inputs_resolved
+        catalog, _, _ = self._resolved_config()
+        return [
+            DataSet(name=name, config=json.dumps(catalog[name]))
+            for name in sorted(self.kedro_pipelines[self.name].all_inputs())
+            if name in catalog
+        ]
 
     @strawberry.field
     def outputs(self) -> List[DataSet]:
-        outputs_resolved = []
-        for n in self.kedro_pipelines[self.name].all_outputs():
-            if self.kedro_catalog.get(n, None):
-                config = self.kedro_catalog[n]
-                outputs_resolved.append(DataSet(name=n, config=json.dumps(config)))
-            else:
-                logger.warning(
-                    f"PipelineTemplate '{self.name}' has an output '{n}' that is not defined in the catalog. This may be due to a missing dataset configuration or because it is a MemoryDataset."
-                )
-
-        return outputs_resolved
+        catalog, _, _ = self._resolved_config()
+        return [
+            DataSet(name=name, config=json.dumps(catalog[name]))
+            for name in sorted(self.kedro_pipelines[self.name].all_outputs())
+            if name in catalog
+        ]
 
 
 @strawberry.type
@@ -546,6 +535,13 @@ class PipelineInput:
             return jsonable_encoder(self)
         elif encoder == "graphql":
             p = jsonable_encoder(self)
+            if self.data_catalog:
+                p["data_catalog"] = [
+                    (dataset if isinstance(dataset, DataSetInput) else DataSetInput(**dataset)).encode(
+                        encoder="graphql"
+                    )
+                    for dataset in self.data_catalog
+                ]
             p = {to_camel_case(k): v for k, v in p.items()}
             # make sure parameter types are uppercase
             if p.get("parameters", None):

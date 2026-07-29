@@ -7,18 +7,11 @@ from kedro.pipeline import Pipeline
 from kedro_graphql.logs.logger import logger
 
 from .config import load_config
+from .exceptions import InvalidPipeline
 
 CONFIG = load_config()
 
 logger.debug("configuration loaded by {s}".format(s=__name__))
-
-
-class InvalidPipeline(Exception):
-    """Custom exception for invalid pipeline."""
-
-    def __init__(self, message="The pipeline is invalid"):
-        self.message = message
-        super().__init__(self.message)
 
 
 class DataValidationHooks:

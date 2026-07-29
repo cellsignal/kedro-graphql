@@ -27,7 +27,7 @@ from strawberry.extensions import FieldExtension
 from . import __version__ as kedro_graphql_version
 from .config import load_config
 from .pipeline_event_monitor import PipelineEventMonitor
-from .hooks import InvalidPipeline
+from .exceptions import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
@@ -45,6 +45,12 @@ from .models import (
     SignedUrls,
     State,
 )
+from .pipeline_config import (
+    filter_pipeline,
+    normalize_pipeline_config,
+    validate_pipeline_config,
+)
+from .runners import get_runner_class
 from .tasks import run_pipeline
 from .permissions import get_permissions
 from .signed_url.base import SignedUrlProvider
@@ -55,6 +61,41 @@ logger.debug("configuration loaded by {s}".format(s=__name__))
 
 PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
 logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
+
+
+def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
+    full_pipeline = app.kedro_pipelines[p.name]
+    submitted_catalog = {
+        dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
+    }
+    submitted_parameters = p.serialize()["parameters"]
+    catalog, parameters, sources = normalize_pipeline_config(
+        full_pipeline, submitted_catalog, submitted_parameters
+    )
+
+    datasets = {dataset.name: dataset for dataset in p.data_catalog or []}
+    p.data_catalog = [
+        DataSet(
+            name=name,
+            config=json.dumps(config),
+            tags=datasets[sources[name]].tags if sources[name] in datasets else None,
+        )
+        for name, config in catalog.items()
+    ]
+    p.parameters = [
+        parameter for parameter in p.parameters or [] if parameter.name in parameters
+    ]
+
+    if validate and not only_missing:
+        selected_pipeline = filter_pipeline(full_pipeline, slices)
+        runner_class = get_runner_class(runner)
+        validate_pipeline_config(
+            selected_pipeline,
+            catalog,
+            parameters,
+            getattr(runner_class, "supports_memory_datasets", True),
+        )
+    return p
 
 
 def encode_cursor(id: int) -> str:
@@ -475,10 +516,18 @@ class Mutation:
         p = Pipeline.decode(d)
         p.describe = info.context["request"].app.kedro_pipelines[p.name].describe()
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
-        serial = p.encode(encoder="kedro")
 
         runner = d.get(
             "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        p = _normalize_pipeline(
+            p,
+            info.context["request"].app,
+            d.get("slices"),
+            d.get("only_missing", False),
+            runner,
+            validate=d["state"] == "READY",
+        )
+        serial = p.encode(encoder="kedro")
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -582,13 +631,22 @@ class Mutation:
                 f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
             return p
 
-        # Update pipeline with new pipeline input
-        p.parameters = pipeline_input_dict.get("parameters")
-        p.data_catalog = pipeline_input_dict.get("data_catalog")
-        p.tags = pipeline_input_dict.get("tags")
-        p.parent = pipeline_input_dict.get("parent")
         runner = pipeline_input_dict.get(
             "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        submitted = _normalize_pipeline(
+            Pipeline.decode(pipeline_input_dict),
+            info.context["request"].app,
+            pipeline_input_dict.get("slices"),
+            pipeline_input_dict.get("only_missing", False),
+            runner,
+            validate=requested_state == "READY",
+        )
+
+        # Update pipeline with normalized pipeline input
+        p.parameters = submitted.parameters
+        p.data_catalog = submitted.data_catalog
+        p.tags = submitted.tags
+        p.parent = pipeline_input_dict.get("parent")
 
         # If PipelineInput is READY and pipeline is not already running
         if requested_state == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
