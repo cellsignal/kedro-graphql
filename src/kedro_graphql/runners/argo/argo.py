@@ -16,6 +16,8 @@ class ArgoWorkflowsRunner(AbstractRunner):
     """``ArgoWorkflowsRunner`` is an ``AbstractRunner`` implementation. It can be used
     to run pipelines on [argo workflows](https://argoproj.github.io/argo-workflows/).
     """
+    supports_memory_datasets = False
+
     ## NEED TO ADD TO kedro_graphq.config
     namespace = "default"
     host = "http://127.0.0.1:2746"
@@ -148,6 +150,5 @@ class ArgoWorkflowsRunner(AbstractRunner):
         with requests.get(url=endpoint, params=params, stream=True) as resp:
             for _line in resp.iter_lines():
                 self._logger.info(json.loads(_line.decode())["result"]["content"])
-
 
 

@@ -22,6 +22,11 @@ from omegaconf import OmegaConf
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.utils import add_param_to_feed_dict, run_sync
 from kedro_graphql.runners import init_runner
+from kedro_graphql.pipeline_config import (
+    filter_only_missing_pipeline,
+    filter_pipeline,
+    validate_pipeline_config,
+)
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 
 # from .config import load_config
@@ -510,13 +515,6 @@ def run_pipeline(self,
                 load_versions=None
             )
 
-            hook_manager.hook.before_pipeline_run(
-                run_params=record_data,
-                pipeline=pipelines.get(name, None),
-                catalog=io
-            )
-
-
             runner_kwargs = conf_parameters.get("runner_kwargs", {})
 
             logger.info(f"Initializing runner {runner} with kwargs: {runner_kwargs}")
@@ -524,32 +522,23 @@ def run_pipeline(self,
 
             # Filter the pipeline based on the slices and only_missing parameters
             if only_missing:
-                # https://github.com/kedro-org/kedro/blob/06d5a6920cbb6b45c07dca6f77d14bb35e283b19/kedro/runner/runner.py#L154
-                free_outputs = pipelines[name].outputs() - set(io.list())
-                missing = {ds for ds in io.list() if not io.exists(ds)}
-                to_build = free_outputs | missing
-                filtered_pipeline = pipelines[name].only_nodes_with_outputs(*to_build) + pipelines[name].from_inputs(
-                    *to_build
+                filtered_pipeline = filter_only_missing_pipeline(pipelines[name], io)
+            else:
+                filtered_pipeline = filter_pipeline(
+                    pipelines[name], slices
                 )
 
-                # We also need any missing datasets that are required to run the
-                # `filtered_pipeline` pipeline, including any chains of missing datasets.
-                unregistered_ds = pipelines[name].datasets() - set(io.list())
-                output_to_unregistered = pipelines[name].only_nodes_with_outputs(
-                    *unregistered_ds)
-                input_from_unregistered = filtered_pipeline.inputs() & unregistered_ds
-                filtered_pipeline += output_to_unregistered.to_outputs(
-                    *input_from_unregistered)
-            else:
-                filtered_pipeline = pipelines[name].filter(
-                    tags=tags,
-                    from_nodes=from_nodes,
-                    to_nodes=to_nodes,
-                    node_names=node_names,
-                    from_inputs=from_inputs,
-                    to_outputs=to_outputs,
-                    node_namespace=node_namespace,
-                )
+            validate_pipeline_config(
+                filtered_pipeline,
+                catalog,
+                parameters,
+                getattr(runner_instance, "supports_memory_datasets", True),
+            )
+            hook_manager.hook.before_pipeline_run(
+                run_params=record_data,
+                pipeline=filtered_pipeline,
+                catalog=io,
+            )
 
             p = run_sync(self.db.read(id=id))
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
@@ -695,4 +684,3 @@ def run_pipeline(self,
                 catalog=io
             )
             raise e
-

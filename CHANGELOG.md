@@ -37,6 +37,8 @@ Changed:
 
 Fixed:
 
+- Pipeline catalogs are now resolved against the full registered pipeline before persistence, including Kedro dataset factory patterns, while sliced-run validation only checks the selected execution DAG
+- Custom runners can declare `supports_memory_datasets = False` to require persistent configurations for every dataset in the selected execution DAG
 - Catalog now recreated in child process to prevent fork-safety errors with S3 (`TextDataset` with S3 protocol) and MongoDB connections; connections are now created fresh in the child process instead of inherited from parent
 - Mismatch in types `ObjectId` and `str` caused the `readTemplates` query to always fail
 - Celery task callback null-safety in `before_start`, `on_success`, and `on_retry` when pipeline records are missing

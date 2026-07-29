@@ -10,3 +10,9 @@ class DataSetError(Exception):
     """
 
     pass
+
+
+class InvalidPipeline(Exception):
+    """Raised when a pipeline cannot be staged or executed safely."""
+
+    pass
