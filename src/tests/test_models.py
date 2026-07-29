@@ -339,3 +339,13 @@ class TestDataSetInput:
         assert isinstance(result, dict)
         assert result["name"] == dataset.name
         assert result["listPartitions"] is True
+
+
+def test_pipeline_input_encodes_nested_dataset_fields_for_graphql():
+    result = PipelineInput(
+        name="example",
+        data_catalog=[DataSetInput(name="dataset", list_partitions=True)],
+    ).encode(encoder="graphql")
+
+    assert result["dataCatalog"][0]["listPartitions"] is True
+    assert "list_partitions" not in result["dataCatalog"][0]
