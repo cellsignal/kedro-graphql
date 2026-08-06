@@ -13,6 +13,8 @@
 
 **kedro-graphql** is a [kedro-plugin](https://docs.kedro.org/en/stable/extend_kedro/plugins.html) that adds powerful, production-ready features to any Kedro project by exposing your data pipelines as a secure and extensible GraphQL API.
 
+`createPipeline` and `updatePipeline` accept `dryRun: true` to validate and return the projected pipeline response without saving it or submitting a task. The response uses the normal GraphQL field names (for example, `dataCatalog` and `createdAt`); a dry-run create has no `id`, so it cannot project `uniquePaths`.
+
 ## Why Use kedro-graphql?
 
 - **Unified API for Data Pipelines:** Interact with all your Kedro pipelines, datasets, and parameters through a single GraphQL endpoint with fllexible queries, mutations, and subscriptions—ideal for frontend, automation, and integration use cases.

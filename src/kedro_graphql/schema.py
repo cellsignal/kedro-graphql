@@ -503,7 +503,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")]), PipelineInputExtension()])
-    async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
+    async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
@@ -557,6 +557,8 @@ class Mutation:
                                            finished_at=None,
                                            task_id=None,
                                            task_name=None))
+            if dry_run:
+                return p
             logger.info(f'Staging pipeline {p.name}')
             p = await info.context["request"].app.backend.create(p)
             if unique_paths:
@@ -574,6 +576,9 @@ class Mutation:
                                            finished_at=None,
                                            task_id=None,
                                            task_name=str(run_pipeline)))
+
+            if dry_run:
+                return p
 
             p = await info.context["request"].app.backend.create(p)
             if unique_paths:
@@ -595,7 +600,7 @@ class Mutation:
             return p
 
     @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")]), PipelineInputExtension()])
-    async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
+    async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
 
         try:
             p = await info.context["request"].app.backend.read(id=id)
@@ -620,6 +625,10 @@ class Mutation:
             if not p.status[-1].task_id:
                 raise InvalidPipeline(
                     f"Pipeline {id} is running but has no task_id; abort is not possible.")
+            if dry_run:
+                p.status[-1].state = State.ABORTING
+                p.status[-1].abort_requested_at = datetime.now()
+                return p
             AbortableAsyncResult(
                 p.status[-1].task_id,
                 app=info.context["request"].app.celery_app
@@ -648,6 +657,9 @@ class Mutation:
         p.tags = submitted.tags
         p.parent = pipeline_input_dict.get("parent")
 
+        if unique_paths:
+            p = generate_unique_paths(p, unique_paths)
+
         # If PipelineInput is READY and pipeline is not already running
         if requested_state == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
 
@@ -670,8 +682,8 @@ class Mutation:
                                               task_id=None,
                                               task_name=str(run_pipeline))
 
-            if unique_paths:
-                p = generate_unique_paths(p, unique_paths)
+            if dry_run:
+                return p
 
             # Update pipeline in backend before running task
             p = await info.context["request"].app.backend.update(p)
@@ -701,8 +713,8 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
-        if unique_paths:
-            p = generate_unique_paths(p, unique_paths)
+        if dry_run:
+            return p
         p = await info.context["request"].app.backend.update(p)
         logger.info(
             f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")

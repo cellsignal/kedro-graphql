@@ -124,22 +124,23 @@ class KedroGraphqlClient():
         result = await session.execute(gql(query), variable_values=variable_values)
         return result
 
-    async def create_pipeline(self, pipeline_input: PipelineInput = None, unique_paths: List[str] = None):
+    async def create_pipeline(self, pipeline_input: PipelineInput = None, unique_paths: List[str] = None, dry_run: bool = False):
         """Create a pipeline
 
         Kwargs:
             pipeline (PipelineInput): pipeline input object
+            dry_run (bool): validate and return the projected pipeline without saving or submitting it
 
         Returns:
             Pipeline: pipeline object
         """
         query = """
-            mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
-              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) """ + self.pipeline_gql + """
+            mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!], $dryRun: Boolean!) {
+              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """ + self.pipeline_gql + """
             }
         """
 
-        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths})
+        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths, "dryRun": dry_run})
         return Pipeline.decode(result["createPipeline"], decoder="graphql")
 
     async def read_pipeline(self, id: str = None):
@@ -184,23 +185,24 @@ class KedroGraphqlClient():
         result = await self.execute_query(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
         return Pipelines.decode(result, decoder="graphql")
 
-    async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None, unique_paths: List[str] = None):
+    async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None, unique_paths: List[str] = None, dry_run: bool = False):
         """Update a pipeline
 
         Kwargs:
             id (str): pipeline id
             pipeline_input (PipelineInput): pipeline input object
+            dry_run (bool): validate and return the projected pipeline without saving or submitting it
 
         Returns:
             Pipeline: pipeline object
         """
         query = """
-            mutation updatePipeline($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!]) {
-              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths) """ + self.pipeline_gql + """
+            mutation updatePipeline($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!], $dryRun: Boolean!) {
+              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """ + self.pipeline_gql + """
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths})
+        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths, "dryRun": dry_run})
         return Pipeline.decode(result["updatePipeline"], decoder="graphql")
 
     async def delete_pipeline(self, id: str = None):

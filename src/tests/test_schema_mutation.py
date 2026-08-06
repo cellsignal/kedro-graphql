@@ -1,7 +1,7 @@
 import json
 import time
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from celery.states import UNREADY_STATES
 
 import pytest
@@ -180,6 +180,74 @@ class TestSchemaMutations:
           }
         }
         """
+
+    @pytest.mark.asyncio
+    async def test_create_pipeline_dry_run_returns_camel_case_json_without_submitting(
+            self, mock_app, mock_info_context):
+        mutation = """
+            mutation CreatePipeline($pipeline: PipelineInput!, $dryRun: Boolean!) {
+              createPipeline(pipeline: $pipeline, dryRun: $dryRun) {
+                id
+                name
+                createdAt
+                dataCatalog { name config }
+                status { state }
+              }
+            }
+        """
+        with patch.object(mock_app.backend, "create", new_callable=AsyncMock) as create, \
+             patch("kedro_graphql.schema.run_pipeline.delay") as delay:
+            response = await mock_app.schema.execute(
+                mutation,
+                variable_values={"pipeline": {
+                    "name": "example00",
+                    "state": "READY",
+                    "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": "/tmp/text_in.txt"})}],
+                    "parameters": [{"name": "example", "value": "hello"}],
+                }, "dryRun": True},
+            )
+
+        assert response.errors is None
+        assert response.data["createPipeline"]["id"] is None
+        assert response.data["createPipeline"]["status"] == [{"state": "READY"}]
+        assert "createdAt" in response.data["createPipeline"]
+        create.assert_not_awaited()
+        delay.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_pipeline_dry_run_returns_camel_case_json_without_submitting(
+            self, mock_app, mock_info_context, mock_pipeline_staged):
+        mutation = """
+            mutation UpdatePipeline($id: String!, $pipeline: PipelineInput!, $dryRun: Boolean!) {
+              updatePipeline(id: $id, pipeline: $pipeline, dryRun: $dryRun) {
+                id
+                name
+                dataCatalog { name config }
+                status { state }
+              }
+            }
+        """
+        with patch.object(mock_app.backend, "update", new_callable=AsyncMock) as update, \
+             patch("kedro_graphql.schema.run_pipeline.delay") as delay:
+            response = await mock_app.schema.execute(
+                mutation,
+                variable_values={
+                    "id": str(mock_pipeline_staged.id),
+                    "pipeline": {
+                        "name": "example00",
+                        "state": "READY",
+                        "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": "/tmp/text_in.txt"})}],
+                        "parameters": [{"name": "example", "value": "hello"}],
+                    },
+                    "dryRun": True,
+                },
+            )
+
+        assert response.errors is None
+        assert response.data["updatePipeline"]["id"] == str(mock_pipeline_staged.id)
+        assert response.data["updatePipeline"]["status"][-1] == {"state": "READY"}
+        update.assert_not_awaited()
+        delay.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_pipeline_00(self,
