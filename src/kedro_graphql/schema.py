@@ -32,6 +32,7 @@ from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
     DataSetInput,
+    Node,
     PageMeta,
     Pipeline,
     PipelineEvent,
@@ -67,7 +68,10 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     full_pipeline = app.kedro_pipelines[p.name]
     selected_pipeline = filter_pipeline(full_pipeline, slices)
     p.describe = selected_pipeline.describe()
-    p.nodes = selected_pipeline.nodes
+    p.nodes = [
+        Node(name=node.name, inputs=node.inputs, outputs=node.outputs, tags=node.tags)
+        for node in selected_pipeline.nodes
+    ]
     submitted_catalog = {
         dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
     }
@@ -525,8 +529,6 @@ class Mutation:
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
         p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
-        p.describe = info.context["request"].app.kedro_pipelines[p.name].describe()
-        p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
 
         runner = d.get(
             "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]

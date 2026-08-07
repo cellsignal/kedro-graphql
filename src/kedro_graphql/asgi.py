@@ -180,9 +180,7 @@ class KedroGraphQL(FastAPI):
                         context_value={"request": request},
                     )
 
-                    staged = Pipeline.decode(
-                        resp.data["createPipeline"], decoder="graphql"
-                    )
+                    staged = Pipeline.decode(resp.data["createPipeline"])
 
                     pipeline_input.state = "READY"
 
@@ -203,9 +201,7 @@ class KedroGraphQL(FastAPI):
                         context_value={"request": request},
                     )
 
-                    created = Pipeline.decode(
-                        resp.data["updatePipeline"], decoder="graphql"
-                    )
+                    created = Pipeline.decode(resp.data["updatePipeline"])
                     created_pipelines.append(created.encode(encoder="dict"))
 
                     logger.info(

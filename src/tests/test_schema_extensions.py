@@ -31,7 +31,7 @@ class TestSchemaExtensions:
 
         resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
         assert resp.errors is None
-        p = Pipeline.decode(resp.data["readPipeline"], decoder="graphql")
+        p = Pipeline.decode(resp.data["readPipeline"])
         for d in p.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):
@@ -114,7 +114,7 @@ class TestSchemaExtensions:
         assert resp.errors is None
 
         # check response to make sure filepaths are masked
-        p = Pipeline.decode(resp.data["createPipeline"], decoder="graphql")
+        p = Pipeline.decode(resp.data["createPipeline"])
         for d in p.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):

@@ -1,9 +1,20 @@
 import json
+from datetime import datetime
 
 import pytest
 from omegaconf import OmegaConf
 
-from kedro_graphql.models import DataSet, DataSetInput, Parameter, ParameterInput, PipelineInput, TagInput
+from kedro_graphql.models import (
+    DataSet,
+    DataSetInput,
+    Parameter,
+    ParameterInput,
+    Pipeline,
+    PipelineInput,
+    Pipelines,
+    State,
+    TagInput,
+)
 from .utilities import kedro_graphql_config
 from pathlib import Path
 
@@ -306,6 +317,53 @@ class TestParameter:
         assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
         assert len(result.parameters) == len(mock_pipeline_staged.parameters)
         assert len(result.tags) == len(mock_pipeline_staged.tags)
+
+
+def test_pipeline_decode_normalizes_and_converts_declared_fields():
+    payload = {
+        "_id": "ignored",
+        "id": "pipeline-id",
+        "name": "example",
+        "createdAt": "2026-08-07T12:00:00",
+        "hooks": ["logging"],
+        "nodes": [{"name": "first", "inputs": ["in"], "outputs": ["out"], "tags": []}],
+        "dataCatalog": [{"name": "in", "config": "{}", "tags": [{"key": "owner", "value": "data"}]}],
+        "parameters": [{"name": "count", "value": "1", "type": "INTEGER"}],
+        "status": [{
+            "state": "READY",
+            "session": "session-id",
+            "filteredNodes": ["first"],
+            "abortRequestedAt": "2026-08-07T12:01:00",
+        }],
+        "tags": [{"key": "owner", "value": "platform"}],
+    }
+
+    pipeline = Pipeline.decode(payload)
+
+    assert pipeline.created_at == datetime(2026, 8, 7, 12)
+    assert pipeline.hooks == ["logging"]
+    assert pipeline.nodes[0].name == "first"
+    assert pipeline.data_catalog[0].tags[0].value == "data"
+    assert pipeline.parameters[0].type.value == "integer"
+    assert pipeline.status[0].state is State.READY
+    assert pipeline.status[0].filtered_nodes == ["first"]
+    assert pipeline.status[0].abort_requested_at == datetime(2026, 8, 7, 12, 1)
+    assert not hasattr(pipeline, "_id")
+
+    pipeline_input = PipelineInput(name="example", hooks=["logging"])
+    assert Pipeline.decode(pipeline_input).hooks == ["logging"]
+
+
+def test_pipelines_decode_normalizes_page_and_pipeline_keys():
+    pipelines = Pipelines.decode({
+        "readPipelines": {
+            "pageMeta": {"nextCursor": "cursor"},
+            "pipelines": [{"name": "example", "createdAt": "2026-08-07T12:00:00"}],
+        }
+    })
+
+    assert pipelines.page_meta.next_cursor == "cursor"
+    assert pipelines.pipelines[0].created_at == datetime(2026, 8, 7, 12)
 
 
 class TestDataSetInput:
