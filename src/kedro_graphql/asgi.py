@@ -134,11 +134,11 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
                         "createPipelineReturnFull", fragments=["FullPipeline"]
                     ),
                     variable_values={
-                        "pipeline": pipeline_input.encode(encoder="graphql")
+                        "pipeline": pipeline_input.to_graphql()
                     },
                     context_value=GraphQLContext(request),
                 )
-                staged = Pipeline.decode(response.data["createPipeline"])
+                staged = Pipeline.from_dict(response.data["createPipeline"])
                 pipeline_input.state = "READY"
                 pipeline_input.parameters.append(
                     ParameterInput(
@@ -151,12 +151,12 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
                     ),
                     variable_values={
                         "id": staged.id,
-                        "pipeline": pipeline_input.encode(encoder="graphql"),
+                        "pipeline": pipeline_input.to_graphql(),
                     },
                     context_value=GraphQLContext(request),
                 )
-                created = Pipeline.decode(response.data["updatePipeline"])
-                created_pipelines.append(created.encode(encoder="dict"))
+                created = Pipeline.from_dict(response.data["updatePipeline"])
+                created_pipelines.append(created.to_dict())
             return created_pipelines
 
     @app.get(

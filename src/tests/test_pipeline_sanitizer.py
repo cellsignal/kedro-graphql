@@ -11,7 +11,7 @@ class TestSchemaExtensions:
         """
          Test that the kedro_graphql.schema.PipelineSanitizer correctly masks filepaths in a PipelineInput's data catalog.
         """
-        result = mock_pipeline_staged.encode(encoder="input")
+        result = mock_pipeline_staged.to_input()
         assert isinstance(result, PipelineInput)
 
         masks = [{"prefix": "./data/", "mask": "./REDACTED/"}]
@@ -27,7 +27,7 @@ class TestSchemaExtensions:
         """
          Test that the kedro_graphql.schema.PipelineSanitizer correctly unmasks filepaths in a PipelineInput's data catalog.
         """
-        result = mock_pipeline_staged.encode(encoder="input")
+        result = mock_pipeline_staged.to_input()
         assert isinstance(result, PipelineInput)
 
         masks = [{"prefix": "./data/", "mask": "./REDACTED/"}]
@@ -44,7 +44,7 @@ class TestSchemaExtensions:
         """
          Test that the kedro_graphql.schema.PipelineSanitizer correctly validates filepaths in a PipelineInput's data catalog against allowed prefixes.
         """
-        result = mock_pipeline_staged.encode(encoder="input")
+        result = mock_pipeline_staged.to_input()
         assert isinstance(result, PipelineInput)
         allowed_roots = ["./data/"]
         sanitized = PipelineSanitizer.sanitize_filepaths(result, allowed_roots)

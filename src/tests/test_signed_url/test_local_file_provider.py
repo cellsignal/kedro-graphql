@@ -30,11 +30,11 @@ class TestLocalFileProvider:
              "dataset": {"type": "text.TextDataset"}}
         ))
 
-    def test_create_allowed_local(self, mock_info_context, mock_dataset):
+    def test_create_allowed_local(self, mock_info, mock_dataset):
         """Test creating a signed URL for a TextDataset"""
 
         output = LocalFileProvider.create(
-            mock_info_context, mock_dataset, expires_in_sec=10)
+            mock_info, mock_dataset, expires_in_sec=10)
         token = output.get_field_value("token")
 
         payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
@@ -42,12 +42,12 @@ class TestLocalFileProvider:
 
         assert isinstance(payload, dict)
 
-    def test_create_partitioned_local(self, mock_info_context, mock_partitioned_dataset):
+    def test_create_partitioned_local(self, mock_info, mock_partitioned_dataset):
         """Test creating signed URLs for specific partitions from a PartitionedDataset"""
 
         partitions = ["part-0001", "part-0002"]
         output = LocalFileProvider.create(
-            mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=partitions)
+            mock_info, mock_partitioned_dataset, expires_in_sec=10, partitions=partitions)
         assert isinstance(output, SignedUrls)
 
         expected_files = [mock_partitioned_dataset.parse_config()["path"] + "/" + f + ".txt" for f in
@@ -66,11 +66,11 @@ class TestLocalFileProvider:
             assert "iat" in payload
             assert payload["filepath"] in expected_files
 
-    def test_signed_url_read_allowed_local(self, mock_info_context, mock_dataset):
+    def test_signed_url_read_allowed_local(self, mock_info, mock_dataset):
         """Test reading a single file from a TextDataset"""
 
         output = LocalFileProvider.read(
-            mock_info_context, mock_dataset, expires_in_sec=10)
+            mock_info, mock_dataset, expires_in_sec=10)
         parsed_url = urlparse(output.url)
         query_params = parse_qs(parsed_url.query)
         token = query_params.get("token", [None])[0]
@@ -83,11 +83,11 @@ class TestLocalFileProvider:
         c = json.loads(mock_dataset.config)
         assert Path(payload["filepath"]).resolve() == Path(c["filepath"]).resolve()
 
-    def test_read_partitioned_local_00(self, mock_info_context, mock_partitioned_dataset):
+    def test_read_partitioned_local_00(self, mock_info, mock_partitioned_dataset):
         """Test reading all partitions from a PartitionedDataset"""
 
         output = LocalFileProvider.read(
-            mock_info_context, mock_partitioned_dataset, expires_in_sec=10)
+            mock_info, mock_partitioned_dataset, expires_in_sec=10)
         assert isinstance(output, SignedUrls)
 
         expected_files = [mock_partitioned_dataset.parse_config()["path"] + "/" + f for f in
@@ -105,11 +105,11 @@ class TestLocalFileProvider:
             assert "iat" in payload
             assert payload["filepath"] in expected_files
 
-    def test_read_partitioned_local_01(self, mock_info_context, mock_partitioned_dataset):
+    def test_read_partitioned_local_01(self, mock_info, mock_partitioned_dataset):
         """Test reading specific partitions from a PartitionedDataset"""
 
         output = LocalFileProvider.read(
-            mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001"])
+            mock_info, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001"])
 
         assert isinstance(output, SignedUrls)
 

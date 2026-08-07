@@ -473,7 +473,7 @@ class PipelineCloning(pn.viewable.Viewer):
         try:
             pipeline_input = PipelineInput(
                 name=self.state.name,
-                parameters=[ParameterInput(name=param.name, value=param.value, type=param.type.name)
+                parameters=[ParameterInput(name=param.name, value=param.value, type=param.type)
                             for param in self.state.parameters] if self.state.parameters else [],
                 data_catalog=[
                     DataSetInput(
