@@ -28,6 +28,7 @@ from kedro_graphql.pipeline_config import (
     validate_pipeline_config,
 )
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
+from kedro_graphql.hooks import hook_manager_for
 
 # from .config import load_config
 from .models import DataSet, State
@@ -406,7 +407,8 @@ def run_pipeline(self,
                  data_catalog: dict = None,
                  runner: str = None,
                  slices: List[Dict[str, List[str]]] = None,
-                 only_missing: bool = False):
+                 only_missing: bool = False,
+                 hooks: List[str] = None):
 
     # with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
     #                         env=CONFIG["KEDRO_GRAPHQL_ENV"],
@@ -415,7 +417,13 @@ def run_pipeline(self,
                              env=self.gql_config["KEDRO_GRAPHQL_ENV"],
                              conf_source=self.gql_config["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
 
-        hook_manager = session._hook_manager
+        hook_names = list(dict.fromkeys(hooks or []))
+        try:
+            hook_manager = hook_manager_for(hook_names)
+        except ValueError as error:
+            raise RuntimeError(f"Unable to resolve pipeline hooks: {error}") from error
+        logger.info("Pipeline id=%s will execute with Kedro hooks: %s", id, hook_names)
+        session._hook_manager = hook_manager
 
         p = run_sync(self.db.read(id=id))
         if p is None:

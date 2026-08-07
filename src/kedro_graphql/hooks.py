@@ -1,7 +1,8 @@
 import os
+from importlib.metadata import entry_points
 from typing import Any
 
-from kedro.framework.hooks import hook_impl
+from kedro.framework.hooks import _create_hook_manager, hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
 from kedro_graphql.logs.logger import logger
@@ -12,6 +13,34 @@ from .exceptions import InvalidPipeline
 CONFIG = load_config()
 
 logger.debug("configuration loaded by {s}".format(s=__name__))
+
+
+def available_hook_names() -> set[str]:
+    """Return the installed Kedro hook entry-point names."""
+    names = [entry_point.name for entry_point in entry_points(group="kedro.hooks")]
+    duplicates = {name for name in names if names.count(name) > 1}
+    if duplicates:
+        raise ValueError(f"Duplicate Kedro hook entry points: {sorted(duplicates)}")
+    return set(names)
+
+
+def hook_manager_for(hook_names: list[str]):
+    """Build a Kedro hook manager containing exactly ``hook_names``."""
+    available_hook_names()
+    entry_points_by_name = {entry_point.name: entry_point for entry_point in entry_points(group="kedro.hooks")}
+    missing = sorted(set(hook_names) - entry_points_by_name.keys())
+    if missing:
+        raise ValueError(f"Unavailable Kedro hooks: {missing}")
+
+    manager = _create_hook_manager()
+    plugins = []
+    for name in dict.fromkeys(hook_names):
+        plugin = entry_points_by_name[name].load()
+        if any(plugin is registered for registered in plugins):
+            raise ValueError(f"Kedro hook {name!r} resolves to a duplicate plugin")
+        plugins.append(plugin)
+        manager.register(plugin, name=name)
+    return manager
 
 
 class DataValidationHooks:

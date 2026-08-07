@@ -470,9 +470,10 @@ class PipelineInput:
     runner: Optional[str] = None
     slices: Optional[List[PipelineSlice]] = None
     only_missing: Optional[bool] = False
+    hooks: Optional[List[str]] = None
 
     @staticmethod
-    def create(name=None, data_catalog=None, parameters=None, tags=None):
+    def create(name=None, data_catalog=None, parameters=None, tags=None, hooks=None):
         """
         Example usage:
 
@@ -528,7 +529,8 @@ class PipelineInput:
         return PipelineInput(name=name,
                              parameters=parameters,
                              data_catalog=data_catalog,
-                             tags=tags)
+                             tags=tags,
+                             hooks=hooks)
 
     def encode(self, encoder="graphql"):
         if encoder == "dict":
@@ -634,6 +636,7 @@ class Pipeline:
     project_version: Optional[str] = None
     pipeline_version: Optional[str] = None
     kedro_graphql_version: Optional[str] = None
+    hooks: List[str] = strawberry.field(default_factory=list)
 
     def serialize(self):
         parameters = {}
@@ -654,6 +657,7 @@ class Pipeline:
             "name": self.name,
             "data_catalog": data_catalog,
             "parameters": parameters,
+            "hooks": self.hooks,
         }
 
     def encode(self, encoder="dict"):
@@ -679,7 +683,8 @@ class Pipeline:
                               for d in self.data_catalog],
                 parameters=parameters,
                 tags=[TagInput(key=t.key, value=t.value)
-                      for t in self.tags] if self.tags else None
+                      for t in self.tags] if self.tags else None,
+                hooks=self.hooks,
             )
         else:
             raise TypeError("encoder must be 'dict', 'kedro', or 'input'")

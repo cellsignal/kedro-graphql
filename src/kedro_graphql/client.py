@@ -21,6 +21,7 @@ PIPELINE_GQL = """{
                     projectVersion
                     pipelineVersion
                     kedroGraphqlVersion
+                    hooks
                     dataCatalog {
                       name
                       config

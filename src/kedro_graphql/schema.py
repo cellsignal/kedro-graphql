@@ -65,6 +65,9 @@ logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_
 
 def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     full_pipeline = app.kedro_pipelines[p.name]
+    selected_pipeline = filter_pipeline(full_pipeline, slices)
+    p.describe = selected_pipeline.describe()
+    p.nodes = selected_pipeline.nodes
     submitted_catalog = {
         dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
     }
@@ -87,7 +90,6 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     ]
 
     if validate and not only_missing:
-        selected_pipeline = filter_pipeline(full_pipeline, slices)
         runner_class = get_runner_class(runner)
         validate_pipeline_config(
             selected_pipeline,
@@ -96,6 +98,14 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
             getattr(runner_class, "supports_memory_datasets", True),
         )
     return p
+
+
+def _effective_hooks(app, hooks):
+    hooks = hooks or []
+    unknown = sorted(set(hooks) - app.available_hooks)
+    if unknown:
+        raise InvalidPipeline(f"Unavailable pipeline hooks: {unknown}")
+    return list(dict.fromkeys([*app.always_hooks, *hooks]))
 
 
 def encode_cursor(id: int) -> str:
@@ -514,6 +524,7 @@ class Mutation:
 
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
+        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
         p.describe = info.context["request"].app.kedro_pipelines[p.name].describe()
         p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
 
@@ -592,7 +603,8 @@ class Mutation:
                 data_catalog=serial["data_catalog"],
                 runner=runner,
                 slices=d.get("slices", None),
-                only_missing=d.get("only_missing", False)
+                only_missing=d.get("only_missing", False),
+                hooks=p.hooks,
             )
 
             logger.info(
@@ -656,6 +668,7 @@ class Mutation:
         p.data_catalog = submitted.data_catalog
         p.tags = submitted.tags
         p.parent = pipeline_input_dict.get("parent")
+        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
 
         if unique_paths:
             p = generate_unique_paths(p, unique_paths)
@@ -697,7 +710,8 @@ class Mutation:
                 data_catalog=serial["data_catalog"],
                 runner=runner,
                 slices=pipeline_input_dict.get("slices", None),
-                only_missing=pipeline_input_dict.get("only_missing", False)
+                only_missing=pipeline_input_dict.get("only_missing", False),
+                hooks=p.hooks,
             )
 
             logger.info(

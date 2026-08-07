@@ -13,6 +13,7 @@ defaults = {
     "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphQL",
     "KEDRO_GRAPHQL_APP_DESCRIPTION": "A tool for serving kedro projects as a GraphQL API",
     "KEDRO_GRAPHQL_APP_TITLE": "Kedro GraphQL API",
+    "KEDRO_GRAPHQL_ALWAYS_HOOKS": [],
     "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
     "KEDRO_GRAPHQL_BROKER": "redis://localhost",
     "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
@@ -115,6 +116,7 @@ def env_var_parser(config):
 
     # Fields that can be either JSON arrays, comma-separated strings, or lists
     list_fields = [
+        "KEDRO_GRAPHQL_ALWAYS_HOOKS",
         "KEDRO_GRAPHQL_IMPORTS",
         "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS",
         "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS",
