@@ -37,7 +37,7 @@ def create_pipeline_input(id: str, event: CloudEvent) -> PipelineInput:
 
     input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
     output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
-    return PipelineInput(**{
+    return PipelineInput.from_dict({
         "parent": id,
         "name": "example00",
         "state": "STAGED",
@@ -74,4 +74,4 @@ def run_example00_via_api(id: str, event: DictConfig) -> dict:
     pipeline = asyncio.run(client.create_pipeline(pipeline_input))
 
     asyncio.run(client.close_sessions())
-    return pipeline.encode(encoder="dict")
+    return pipeline.to_dict()

@@ -70,7 +70,7 @@ class BaseExample00Form(pn.viewable.Viewer):
                        "filepath": "./data/02_intermediate/text_out.txt"}
 
         # PipelineInput object
-        return PipelineInput(**{
+        return PipelineInput.from_dict({
             "name": "example00",
             "state": "STAGED",
             "data_catalog": [
@@ -112,7 +112,7 @@ class BaseExample00Form(pn.viewable.Viewer):
         r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
-        p_input = p.encode(encoder="input")
+        p_input = p.to_input()
         p_input.state = "READY"
         p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
         # Navigate to the pipeline dashboard
@@ -348,7 +348,7 @@ class BaseExample01Form(pn.viewable.Viewer):
                                         "dataset": {"type": "text.TextDataset"}}
 
         # PipelineInput object
-        return PipelineInput(**{
+        return PipelineInput.from_dict({
             "name": "example01",
             "state": "STAGED",
             "data_catalog": [{"name": "text_in", "config": json.dumps(text_in_dict)},
@@ -388,7 +388,7 @@ class BaseExample01Form(pn.viewable.Viewer):
         r = requests.post(signed_urls[0].url, files=files)
 
         # update the pipeline to READY state
-        p_input = p.encode(encoder="input")
+        p_input = p.to_input()
         p_input.state = "READY"
         p = await self.spec["config"]["client"].update_pipeline(id=p.id, pipeline_input=p_input)
         # Navigate to the pipeline dashboard

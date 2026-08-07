@@ -1,27 +1,27 @@
 import json
-from copy import deepcopy
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
-# from kedro.io.core import _parse_filepath
-# from .signed_url.local_file_provider import LocalFileProvider
-# from .signed_url.base import PreSignedUrlProvider
-# from importlib import import_module
+from pathlib import Path
+from typing import Any, TypeAlias
+
 import strawberry
 from bson.objectid import ObjectId
+from cloudevents.conversion import to_json
+from cloudevents.pydantic.v1 import CloudEvent
 from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from kedro.io.core import _parse_filepath
+from kedro.pipeline import Pipeline as KedroPipeline
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
-from cloudevents.conversion import to_json
-from cloudevents.pydantic.v1 import CloudEvent
-from pathlib import Path
 
 from kedro_graphql.exceptions import DataSetConfigError
-# from strawberry.permission import PermissionExtension
 
-from .logs.logger import logger
 from .pipeline_config import normalize_pipeline_config
+
+Primitive: TypeAlias = str | bool | int | float
+JsonObject: TypeAlias = dict[str, Any]
 
 
 @strawberry.type
@@ -44,46 +44,61 @@ class ParameterType(Enum):
     FLOAT = "float"
 
 
+def _parameter_type(value: Primitive) -> ParameterType:
+    types = {
+        str: ParameterType.STRING,
+        bool: ParameterType.BOOLEAN,
+        int: ParameterType.INTEGER,
+        float: ParameterType.FLOAT,
+    }
+    try:
+        return types[type(value)]
+    except KeyError as exc:
+        raise ValueError(
+            f"Only str, bool, int, and float parameters are supported; got {type(value).__name__}"
+        ) from exc
+
+
+def _parameter_type_from_wire(value: str | ParameterType | None) -> ParameterType:
+    if value is None:
+        return ParameterType.STRING
+    if isinstance(value, ParameterType):
+        return value
+    try:
+        return ParameterType[value.upper()]
+    except KeyError as exc:
+        raise ValueError(f"Unknown parameter type: {value}") from exc
+
+
 @strawberry.type
 class Parameter:
     name: str
     value: str
-    type: Optional[ParameterType] = ParameterType.STRING
+    type: ParameterType = ParameterType.STRING
 
-    @staticmethod
-    def decode(input_dict) -> dict:
-        """
-        Returns a Parameter object from a dictionary.
-        """
-        if input_dict.get("type", False):
-            return Parameter(
-                name=input_dict["name"],
-                value=input_dict["value"],
-                type=ParameterType[input_dict["type"].upper()])
-        else:
-            return Parameter(**input_dict)
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "Parameter":
+        return cls(
+            name=str(payload["name"]),
+            value=str(payload["value"]),
+            type=_parameter_type_from_wire(payload.get("type")),
+        )
 
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        value = self.value
-        if self.type == "boolean":
-            value = self.value.lower()
-            if value == "true":
-                value = True
-            elif value == "false":
-                value = False
-            else:
-                raise ValueError(
-                    "Parameter of type BOOL must be one of 'True', 'true', 'False', or 'false'")
+    @classmethod
+    def from_value(cls, name: str, value: Primitive) -> "Parameter":
+        return cls(name=name, value=str(value), type=_parameter_type(value))
 
-        elif self.type == "integer":
+    def serialize(self) -> dict[str, Primitive]:
+        value: Primitive = self.value
+        if self.type is ParameterType.BOOLEAN:
+            normalized = self.value.lower()
+            if normalized not in {"true", "false"}:
+                raise ValueError("Boolean parameters must be 'true' or 'false'")
+            value = normalized == "true"
+        elif self.type is ParameterType.INTEGER:
             value = int(self.value)
-
-        elif self.type == "float":
+        elif self.type is ParameterType.FLOAT:
             value = float(self.value)
-
         return {self.name: value}
 
 
@@ -91,268 +106,165 @@ class Parameter:
 class ParameterInput:
     name: str
     value: str
-    type: Optional[ParameterType] = ParameterType.STRING
+    type: ParameterType = ParameterType.STRING
 
-    @staticmethod
-    def create(parameters: dict):
-
-        def _create_parameter_input(name, value):
-
-            type_map = [
-                (int, ParameterType.INTEGER),
-                (float, ParameterType.FLOAT),
-                (bool, ParameterType.BOOLEAN),
-                (str, ParameterType.STRING),
-            ]
-
-            try:
-                type_enum: ParameterType = next(
-                    t[1] for t in type_map if type(value) == t[0])
-            except StopIteration:
-                raise ValueError(
-                    f"Only primitive types are supported ({' '.join(str(x[0]) for x in type_map)}). Got {type(value)}"
-                )
-
-            return ParameterInput(name=name, value=str(value), type=type_enum.value.upper())
-
-        params = [_create_parameter_input(k, v) for k, v in parameters.items()]
-        return params
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ParameterInput":
+        return cls(
+            name=str(payload["name"]),
+            value=str(payload["value"]),
+            type=_parameter_type_from_wire(payload.get("type")),
+        )
 
 
-@strawberry.input
-class CredentialSetInput:
-    name: str
-    value: str
-
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        return {self.name: self.value}
-
-
-@strawberry.input
-class CredentialInput:
-    name: str
-    value: List[CredentialSetInput]
-
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        values = {}
-        for v in self.value:
-            values.update(v.serialize())
-        return {self.name: values}
-
-
-@strawberry.input
-class CredentialNestedInput:
-    name: str
-    value: List[CredentialInput]
-
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        values = {}
-        for v in self.value:
-            values.update(v.serialize())
-        return {self.name: values}
+def parameter_inputs_from_mapping(
+    parameters: Mapping[str, Primitive],
+) -> list[ParameterInput]:
+    return [
+        ParameterInput(name=name, value=str(value), type=_parameter_type(value))
+        for name, value in parameters.items()
+    ]
 
 
 @strawberry.type
 class DataSet:
     name: str
-    config: Optional[str] = None
-    # credentials: Optional[List[CredentialInput]]
-    tags: Optional[List[Tag]] = None
+    config: str
+    tags: list[Tag] = strawberry.field(default_factory=list)
 
     @strawberry.field
     def exists(self) -> bool:
-        if self.config:
-            return AbstractDataset.from_config(self.name, self.parse_config()).exists()
-        else:
-            return False
+        return AbstractDataset.from_config(self.name, self.parse_config()).exists()
 
     @strawberry.field
-    def partitions(self) -> Optional[List[str]]:
+    def partitions(self) -> list[str]:
         config = self.parse_config()
-        if not config.get("type", None):
+        if "type" not in config:
             raise DataSetConfigError(
-                "Invalid dataset configuration. Must have 'type' key")
-        elif config["type"] != "partitions.PartitionedDataset":
-            raise DataSetConfigError(
-                "Dataset is not a PartitionedDataset. 'partitions' field is only available for PartitionedDatasets."
+                "Invalid dataset configuration. Must have 'type' key"
             )
-        else:
-            partitions = AbstractDataset.from_config(self.name, config).load()
-            return list(partitions.keys())
+        if config["type"] != "partitions.PartitionedDataset":
+            raise DataSetConfigError(
+                "Dataset is not a PartitionedDataset. 'partitions' is only available for PartitionedDatasets."
+            )
+        partitions = AbstractDataset.from_config(self.name, config).load()
+        return list(partitions)
 
-    def serialize(self) -> dict:
-        """
-        Returns serializable dict in format compatible with kedro.
-        """
-        temp = self.__dict__.copy()
-        temp.pop("name")
-        return {self.name: json.loads(temp['config'])}
-
-    @staticmethod
-    def decode(payload):
-        """
-        Return a new DataSet from a dictionary.
-
-        Args:
-            payload (dict): dict representing DataSet e.g.
-
-                {
-                  "name": "text_in",
-                  "config": '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
-                  "tags":[{"key": "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
-                }
-
-        """
-        if payload.get("tags", False):
-            tags = [Tag(**t) for t in payload["tags"]]
-        else:
-            tags = None
-
-        return DataSet(
-            name=payload["name"],
-            config=payload["config"],
-            tags=tags
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "DataSet":
+        config = payload.get("config")
+        if not isinstance(config, str):
+            raise DataSetConfigError("Dataset config must be a JSON string")
+        return cls(
+            name=str(payload["name"]),
+            config=config,
+            tags=[Tag(**tag) for tag in payload.get("tags") or []],
         )
 
-    def parse_config(self) -> dict:
-        """
-        Return the config as a dictionary.
+    def serialize(self) -> dict[str, JsonObject]:
+        return {self.name: self.parse_config()}
 
-        Example usage:
-
-            from kedro_graphql.models import DataSet
-
-            d = DataSet(name="text_in", config='{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}')
-
-            print(d.parse_config())
-
-            {'filepath': './data/01_raw/text_in.txt',
-             'type': 'text.TextDataSet',
-             'save_args': [{'name': 'say', 'value': 'hello'}],
-             'load_args': [{'name': 'say', 'value': 'hello'}]}
-
-        """
+    def parse_config(self) -> JsonObject:
         try:
-            return json.loads(self.config)
-        except json.JSONDecodeError as e:
-            raise DataSetConfigError(f"Unable to parse JSON in config: {e}")
-        except Exception as e:
-            raise DataSetConfigError(f"Invalid dataset configuration: {e}")
+            value = json.loads(self.config)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise DataSetConfigError(
+                f"Unable to parse dataset config as JSON: {exc}"
+            ) from exc
+        if not isinstance(value, dict):
+            raise DataSetConfigError("Dataset config must be a JSON object")
+        return value
 
     def parse_filepath(self) -> tuple[str, str]:
-        """
-        Parse the filepath from the dataset configuration.
-
-        Args:
-            config (dict): The dataset configuration.
-
-        Returns:
-            tuple[str, str]: (protocol, the file path).
-        """
-        config = self.parse_config()
-        filepath = config.get("filepath", None)
-        if not filepath:
+        filepath = self.parse_config().get("filepath")
+        if not isinstance(filepath, str) or not filepath:
             raise DataSetConfigError(
-                "Invalid dataset configuration. Must have 'filepath' key")
-
+                "Invalid dataset configuration. Must have 'filepath' key"
+            )
         return _parse_filepath(filepath)["protocol"], filepath
 
     def parse_path(self) -> tuple[str, str]:
-        """
-        Parse the path from the dataset configuration.
-
-        Args:
-            config (dict): The dataset configuration.
-
-        Returns:
-            tuple[str, str]: (protocol, the file path).
-        """
-        path = self.parse_config().get("path", None)
-        if not path:
+        path = self.parse_config().get("path")
+        if not isinstance(path, str) or not path:
             raise DataSetConfigError(
-                "Invalid dataset configuration. Must have 'path' key")
-
+                "Invalid dataset configuration. Must have 'path' key"
+            )
         return _parse_filepath(path)["protocol"], path
 
 
 @strawberry.input
 class DataSetInput:
     name: str
-    config: Optional[str] = None
-    tags: Optional[List[TagInput]] = None
-    partitions: Optional[List[str]] = None
-    list_partitions: Optional[bool] = None
+    config: str | None = None
+    tags: list[TagInput] = strawberry.field(default_factory=list)
+    partitions: list[str] = strawberry.field(default_factory=list)
+    list_partitions: bool = False
 
-    def encode(self, encoder="graphql"):
-        if encoder == "dict":
-            return jsonable_encoder(self)
-        elif encoder == "graphql":
-            p = jsonable_encoder(self)
-            p = {to_camel_case(k): v for k, v in p.items()}
-            return p
-        else:
-            raise TypeError("encoder must be 'dict' or 'graphql'")
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "DataSetInput":
+        values = _snake_case_keys(payload)
+        return cls(
+            name=str(values["name"]),
+            config=values.get("config"),
+            tags=[TagInput(**tag) for tag in values.get("tags") or []],
+            partitions=list(values.get("partitions") or []),
+            list_partitions=bool(values.get("list_partitions", False)),
+        )
+
+    def to_graphql(self) -> JsonObject:
+        return {
+            to_camel_case(key): value for key, value in jsonable_encoder(self).items()
+        }
 
 
-class DataCatalog:
-    datasets: List[DataSet]
+def dataset_inputs_from_mapping(
+    catalog: Mapping[str, Mapping[str, Any]],
+) -> list[DataSetInput]:
+    return [
+        DataSetInput(name=name, config=json.dumps(config))
+        for name, config in catalog.items()
+    ]
 
 
-@strawberry.input
-class DataCatalogInput:
-    datasets: List[DataSetInput]
+@dataclass
+class DataSetPartitions:
+    name: str
+    partitions: list[str]
+    config: str | None = None
+    tags: list[Tag] = field(default_factory=list)
 
-    @staticmethod
-    def create(config):
-        """
-        context.config_loader["catalog"]
-
-        {'text_in': {'type': 'text.TextDataSet',
-                     'filepath': './data/01_raw/text_in.txt'},
-         'text_out': {'type': 'text.TextDataSet',
-                      'filepath': './data/02_intermediate/text_out.txt'}}
-
-        Example usage:
-
-            from kedro_graphql.models import DataCatalogInput
-
-            catalog = DataCatalogInput.create(context.config_loader["catalog"])
-
-            print(catalog)
-
-            [DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
-             DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
-
-        """
-        return [DataSetInput(name=k, config=json.dumps(v)) for k, v in config.items()]
+    @classmethod
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "DataSetPartitions":
+        result = _snake_case_keys(payload)
+        return cls(
+            name=result["name"],
+            config=result.get("config"),
+            tags=[Tag(**tag) for tag in result.get("tags") or []],
+            partitions=result.get("partitions") or [],
+        )
 
 
 @strawberry.type
 class Node:
     name: str
-    inputs: List[str]
-    outputs: List[str]
-    tags: List[str]
+    inputs: list[str]
+    outputs: list[str]
+    tags: list[str]
 
 
-@strawberry.type(description="PipelineTemplates are definitions of Pipelines.  They represent the supported interface for executing a Pipeline.")
+@strawberry.type(
+    description="PipelineTemplates are definitions of Pipelines. They represent the supported interface for executing a Pipeline."
+)
 class PipelineTemplate:
     id: str = strawberry.field(description="ID of the pipeline template.")
     name: str
-    kedro_pipelines: strawberry.Private[dict]
-    kedro_catalog: strawberry.Private[dict]
-    kedro_parameters: strawberry.Private[dict]
+    kedro_pipelines: strawberry.Private[Mapping[str, KedroPipeline]]
+    kedro_catalog: strawberry.Private[Mapping[str, JsonObject]]
+    kedro_parameters: strawberry.Private[Mapping[str, Any]]
 
-    def _resolved_config(self):
+    def _resolved_config(
+        self,
+    ) -> tuple[dict[str, JsonObject], dict[str, Primitive], dict[str, str]]:
         return normalize_pipeline_config(
             self.kedro_pipelines[self.name], self.kedro_catalog, self.kedro_parameters
         )
@@ -362,18 +274,21 @@ class PipelineTemplate:
         return self.kedro_pipelines[self.name].describe()
 
     @strawberry.field
-    def nodes(self) -> List[Node]:
-        nodes = self.kedro_pipelines[self.name].nodes
-
-        return [Node(name=n.name, inputs=n.inputs, outputs=n.outputs, tags=n.tags) for n in nodes]
-
-    @strawberry.field
-    def parameters(self) -> List[Parameter]:
-        _, params, _ = self._resolved_config()
-        return [Parameter(name=k, value=v) for k, v in params.items()]
+    def nodes(self) -> list[Node]:
+        return [
+            Node(
+                name=node.name, inputs=node.inputs, outputs=node.outputs, tags=node.tags
+            )
+            for node in self.kedro_pipelines[self.name].nodes
+        ]
 
     @strawberry.field
-    def inputs(self) -> List[DataSet]:
+    def parameters(self) -> list[Parameter]:
+        _, parameters, _ = self._resolved_config()
+        return [Parameter.from_value(name, value) for name, value in parameters.items()]
+
+    @strawberry.field
+    def inputs(self) -> list[DataSet]:
         catalog, _, _ = self._resolved_config()
         return [
             DataSet(name=name, config=json.dumps(catalog[name]))
@@ -382,7 +297,7 @@ class PipelineTemplate:
         ]
 
     @strawberry.field
-    def outputs(self) -> List[DataSet]:
+    def outputs(self) -> list[DataSet]:
         catalog, _, _ = self._resolved_config()
         return [
             DataSet(name=name, config=json.dumps(catalog[name]))
@@ -393,33 +308,35 @@ class PipelineTemplate:
 
 @strawberry.type
 class PageMeta:
-    next_cursor: Optional[str] = strawberry.field(
-        description="The next cursor to continue with."
+    next_cursor: str | None = strawberry.field(
+        default=None, description="The next cursor to continue with."
     )
 
 
 @strawberry.type
 class PipelineTemplates:
-    pipeline_templates: List[PipelineTemplate] = strawberry.field(
-        description="The list of pipeline templates.")
-
+    pipeline_templates: list[PipelineTemplate] = strawberry.field(
+        description="The list of pipeline templates."
+    )
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
 
     @staticmethod
-    def _build_pipeline_index(kedro_pipelines, kedro_catalog, kedro_parameters):
-        """
-        """
-        pipes = []
+    def _build_pipeline_index(
+        kedro_pipelines: Mapping[str, KedroPipeline],
+        kedro_catalog: Mapping[str, JsonObject],
+        kedro_parameters: Mapping[str, Any],
+    ) -> list[PipelineTemplate]:
         count = 100000000000000000000000
-        for k, v in kedro_pipelines.items():
-            pipes.append(PipelineTemplate(name=k,
-                                          id=ObjectId(str(count)),
-                                          kedro_pipelines=kedro_pipelines,
-                                          kedro_catalog=kedro_catalog,
-                                          kedro_parameters=kedro_parameters))
-            count += 1
-
-        return pipes
+        return [
+            PipelineTemplate(
+                name=name,
+                id=str(ObjectId(str(count + index))),
+                kedro_pipelines=kedro_pipelines,
+                kedro_catalog=kedro_catalog,
+                kedro_parameters=kedro_parameters,
+            )
+            for index, name in enumerate(kedro_pipelines)
+        ]
 
 
 @strawberry.enum
@@ -436,7 +353,14 @@ class PipelineSliceType(Enum):
 @strawberry.input(description="Slice a pipeline.")
 class PipelineSlice:
     slice: PipelineSliceType
-    args: List[str]  # e.g. ["node1", "node2"]
+    args: list[str]
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "PipelineSlice":
+        slice_type = payload["slice"]
+        if not isinstance(slice_type, PipelineSliceType):
+            slice_type = PipelineSliceType[str(slice_type).upper()]
+        return cls(slice=slice_type, args=list(payload["args"]))
 
 
 @strawberry.enum
@@ -450,304 +374,284 @@ class PipelineInputStatus(Enum):
 class PipelineInput:
     name: str
     state: PipelineInputStatus = PipelineInputStatus.STAGED
-    parameters: Optional[List[ParameterInput]] = None
-    data_catalog: Optional[List[DataSetInput]] = None
-    tags: Optional[List[TagInput]] = None
-    parent: Optional[strawberry.ID] = None
-    runner: Optional[str] = None
-    slices: Optional[List[PipelineSlice]] = None
-    only_missing: Optional[bool] = False
-    hooks: Optional[List[str]] = None
-
-    @staticmethod
-    def create(name=None, data_catalog=None, parameters=None, tags=None, hooks=None):
-        """
-        Example usage:
-
-            from kedro_graphql.models import PipelineInput
-            from fastapi.encoders import jsonable_encoder
-
-            p = PipelineInput(name = "example00",
-                         data_catalog = context.config_loader["catalog"],
-                         parameters = context.config_loader["parameters"],
-                         tags = [{""owner":"person"}])
-
-            print(p)
-
-            PipelineInput(name='example00',
-                          parameters=[
-                            ParameterInput(name='example',
-                                           value='hello',
-                                           type=<ParameterType.STRING: 'string'>),
-                            ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
-                          ],
-                          data_catalog=[
-                            DataSetInput(
-                                name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
-                            DataSetInput(
-                                name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
-                          ],
-                          tags=[TagInput(key='owner', value='sean')])
-
-            print(jsonable_encoder(p))
-
-            ## this can be used as the PipelineInput parameter when calleing the pipeline mutation via the API
-            {'name': 'example00',
-            'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
-             {'name': 'duration', 'value': '1', 'type': 'string'}],
-            'data_catalog': [{'name': 'text_in',
-              'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'},
-             {'name': 'text_out',
-              'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}'}],
-            'tags': [{'key': 'owner', 'value': 'sean'}],
-            'credentials': None,
-            'credentials_nested': None}
-
-        """
-        if tags:
-            tags = [TagInput(key=k, value=v) for t in tags for k, v in tags.items()]
-
-        if data_catalog:
-            data_catalog = DataCatalogInput.create(data_catalog)
-
-        if parameters:
-            parameters = ParameterInput.create(parameters)
-
-        return PipelineInput(name=name,
-                             parameters=parameters,
-                             data_catalog=data_catalog,
-                             tags=tags,
-                             hooks=hooks)
-
-    def encode(self, encoder="graphql"):
-        if encoder == "dict":
-            return jsonable_encoder(self)
-        elif encoder == "graphql":
-            p = jsonable_encoder(self)
-            if self.data_catalog:
-                p["data_catalog"] = [
-                    (dataset if isinstance(dataset, DataSetInput) else DataSetInput(**dataset)).encode(
-                        encoder="graphql"
-                    )
-                    for dataset in self.data_catalog
-                ]
-            p = {to_camel_case(k): v for k, v in p.items()}
-            # make sure parameter types are uppercase
-            if p.get("parameters", None):
-                for param in p["parameters"]:
-                    if param.get("type", None):
-                        param["type"] = param["type"].upper()
-            return p
-        else:
-            raise TypeError("encoder must be 'dict' or 'graphql'")
+    parameters: list[ParameterInput] = strawberry.field(default_factory=list)
+    data_catalog: list[DataSetInput] = strawberry.field(default_factory=list)
+    tags: list[TagInput] = strawberry.field(default_factory=list)
+    parent: strawberry.ID | None = None
+    runner: str | None = None
+    slices: list[PipelineSlice] = strawberry.field(default_factory=list)
+    only_missing: bool = False
+    hooks: list[str] = strawberry.field(default_factory=list)
 
     @classmethod
-    def from_event(cls, name: str, state: PipelineInputStatus, event: CloudEvent) -> "PipelineInput":
-        """
-        Factory method to create a new PipelineInput from a CloudEvent. 
-        Tags will be added for event metadata and the entire event will be added 
-        as a single parameter (json-serialized).
-        """
+    def from_dict(cls, payload: Mapping[str, Any]) -> "PipelineInput":
+        values = _snake_case_keys(payload)
+        state = values.get("state", PipelineInputStatus.STAGED)
+        if not isinstance(state, PipelineInputStatus):
+            state = PipelineInputStatus[str(state).upper()]
+        return cls(
+            name=str(values["name"]),
+            state=state,
+            parameters=[
+                ParameterInput.from_dict(item)
+                for item in values.get("parameters") or []
+            ],
+            data_catalog=[
+                DataSetInput.from_dict(item)
+                for item in values.get("data_catalog") or []
+            ],
+            tags=[TagInput(**item) for item in values.get("tags") or []],
+            parent=values.get("parent"),
+            runner=values.get("runner"),
+            slices=[
+                PipelineSlice.from_dict(item) for item in values.get("slices") or []
+            ],
+            only_missing=bool(values.get("only_missing", False)),
+            hooks=list(values.get("hooks") or []),
+        )
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        data_catalog: Mapping[str, Mapping[str, Any]] | None = None,
+        parameters: Mapping[str, Primitive] | None = None,
+        tags: Mapping[str, str] | None = None,
+        hooks: list[str] | None = None,
+    ) -> "PipelineInput":
+        return cls(
+            name=name,
+            parameters=parameter_inputs_from_mapping(parameters or {}),
+            data_catalog=dataset_inputs_from_mapping(data_catalog or {}),
+            tags=[
+                TagInput(key=key, value=value) for key, value in (tags or {}).items()
+            ],
+            hooks=list(hooks or []),
+        )
+
+    def to_graphql(self) -> JsonObject:
+        payload = jsonable_encoder(self)
+        payload["data_catalog"] = [
+            dataset.to_graphql() for dataset in self.data_catalog
+        ]
+        for parameter in payload["parameters"]:
+            parameter["type"] = parameter["type"].upper()
+        return {to_camel_case(key): value for key, value in payload.items()}
+
+    @classmethod
+    def from_event(
+        cls, name: str, state: PipelineInputStatus, event: CloudEvent
+    ) -> "PipelineInput":
         event_bytes = to_json(event)
-        event = json.loads(event_bytes.decode())
-
-        id = event.get("id")
-        source = event.get("source")
-        type = event.get("type")
-
-        if not id or not source or not type:
+        event_data = json.loads(event_bytes.decode())
+        event_id = event_data.get("id")
+        source = event_data.get("source")
+        event_type = event_data.get("type")
+        if not event_id or not source or not event_type:
             raise ValueError(
-                "CloudEvent must have 'id', 'source', and 'type' attributes")
-
+                "CloudEvent must have 'id', 'source', and 'type' attributes"
+            )
         return cls(
             name=name,
             state=state,
-            parameters=[ParameterInput(
-                name="event", value=event_bytes, type="STRING")],
+            parameters=[
+                ParameterInput(
+                    name="event",
+                    value=event_bytes.decode(),
+                    type=ParameterType.STRING,
+                )
+            ],
             tags=[
-                {"key": "event_id", "value": id},
-                {"key": "event_source", "value": source},
-                {"key": "event_type", "value": type}
-            ]
+                TagInput(key="event_id", value=event_id),
+                TagInput(key="event_source", value=source),
+                TagInput(key="event_type", value=event_type),
+            ],
         )
 
 
 @strawberry.enum
 class State(Enum):
-    READY = 'READY'
-    STAGED = 'STAGED'
-    STARTED = 'STARTED'
-    ABORTING = 'ABORTING'
-    ABORTED = 'ABORTED'
-    RETRY = 'RETRY'
-    FAILURE = 'FAILURE'
-    SUCCESS = 'SUCCESS'
-    REVOKED = 'REVOKED'
-    PENDING = 'PENDING'
-    RECEIVED = 'RECEIVED'
+    READY = "READY"
+    STAGED = "STAGED"
+    STARTED = "STARTED"
+    ABORTING = "ABORTING"
+    ABORTED = "ABORTED"
+    RETRY = "RETRY"
+    FAILURE = "FAILURE"
+    SUCCESS = "SUCCESS"
+    REVOKED = "REVOKED"
+    PENDING = "PENDING"
+    RECEIVED = "RECEIVED"
 
 
 @strawberry.type
 class PipelineStatus:
     state: State
-    session: Optional[str]
-    runner: Optional[str] = None
-    filtered_nodes: Optional[List[str]] = None
-    started_at: Optional[datetime] = None
-    finished_at: Optional[datetime] = None
-    abort_requested_at: Optional[datetime] = None
-    abort_completed_at: Optional[datetime] = None
-    task_id: Optional[str] = None
-    task_name: Optional[str] = None
-    task_args: Optional[str] = None
-    task_kwargs: Optional[str] = None
-    task_request: Optional[str] = None
-    task_exception: Optional[str] = None
-    task_traceback: Optional[str] = None
-    task_einfo: Optional[str] = None
-    task_result: Optional[str] = None
+    session: str | None = None
+    runner: str | None = None
+    filtered_nodes: list[str] = strawberry.field(default_factory=list)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    abort_requested_at: datetime | None = None
+    abort_completed_at: datetime | None = None
+    task_id: str | None = None
+    task_name: str | None = None
+    task_args: str | None = None
+    task_kwargs: str | None = None
+    task_request: str | None = None
+    task_exception: str | None = None
+    task_traceback: str | None = None
+    task_einfo: str | None = None
+    task_result: str | None = None
 
 
-def _snake_case_keys(value):
-    if isinstance(value, dict):
-        return {to_snake_case(key): _snake_case_keys(item) for key, item in value.items()}
+def _snake_case_keys(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            to_snake_case(str(key)): _snake_case_keys(item)
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [_snake_case_keys(item) for item in value]
     return value
 
 
-def _decode_datetime(value):
+def _decode_datetime(value: str | datetime | None) -> datetime | None:
     return datetime.fromisoformat(value) if isinstance(value, str) else value
 
 
-def _identity(value):
-    return value
-
-
-def _decode_status(payload):
-    converters = {
-        "state": State,
-        "started_at": _decode_datetime,
-        "finished_at": _decode_datetime,
-        "abort_requested_at": _decode_datetime,
-        "abort_completed_at": _decode_datetime,
-    }
-    values = {
-        key: converters.get(key, _identity)(value)
-        for key, value in payload.items()
-        if key in PipelineStatus.__dataclass_fields__
-    }
-    return PipelineStatus(**values)
+def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
+    values = _snake_case_keys(payload)
+    return PipelineStatus(
+        **{
+            **{
+                key: value
+                for key, value in values.items()
+                if key in PipelineStatus.__dataclass_fields__
+            },
+            "state": State(values["state"]),
+            "filtered_nodes": values.get("filtered_nodes") or [],
+            "started_at": _decode_datetime(values.get("started_at")),
+            "finished_at": _decode_datetime(values.get("finished_at")),
+            "abort_requested_at": _decode_datetime(values.get("abort_requested_at")),
+            "abort_completed_at": _decode_datetime(values.get("abort_completed_at")),
+        }
+    )
 
 
 @strawberry.type
 class Pipeline:
-    id: Optional[strawberry.ID] = None
+    id: strawberry.ID | None = None
     name: str
-    data_catalog: Optional[List[DataSet]] = None
-    describe: Optional[str] = None
-    nodes: Optional[List[Node]] = None
-    parameters: Optional[List[Parameter]] = None
-    status: List[PipelineStatus] = strawberry.field(default_factory=list)
-    tags: Optional[List[Tag]] = None
-    created_at: Optional[datetime] = None
-    parent: Optional[strawberry.ID] = None
-    project_version: Optional[str] = None
-    pipeline_version: Optional[str] = None
-    kedro_graphql_version: Optional[str] = None
-    hooks: List[str] = strawberry.field(default_factory=list)
+    data_catalog: list[DataSet] = strawberry.field(default_factory=list)
+    describe: str | None = None
+    nodes: list[Node] = strawberry.field(default_factory=list)
+    parameters: list[Parameter] = strawberry.field(default_factory=list)
+    status: list[PipelineStatus] = strawberry.field(default_factory=list)
+    tags: list[Tag] = strawberry.field(default_factory=list)
+    created_at: datetime | None = None
+    parent: strawberry.ID | None = None
+    project_version: str | None = None
+    pipeline_version: str | None = None
+    kedro_graphql_version: str | None = None
+    hooks: list[str] = strawberry.field(default_factory=list)
 
-    def serialize(self):
-        parameters = {}
-        data_catalog = {}
-
-        if self.parameters:
-            for p in self.parameters:
-                s = p.serialize()
-                parameters.update(s)
-
-        if self.data_catalog:
-            for d in self.data_catalog:
-                s = d.serialize()
-                data_catalog.update(s)
-
+    def to_kedro(self) -> JsonObject:
+        parameters: dict[str, Primitive] = {}
+        for parameter in self.parameters:
+            parameters.update(parameter.serialize())
+        catalog: dict[str, JsonObject] = {}
+        for dataset in self.data_catalog:
+            catalog.update(dataset.serialize())
         return {
             "id": str(self.id),
             "name": self.name,
-            "data_catalog": data_catalog,
+            "data_catalog": catalog,
             "parameters": parameters,
             "hooks": self.hooks,
         }
 
-    def encode(self, encoder="dict"):
+    def to_dict(self) -> JsonObject:
+        return jsonable_encoder(self, custom_encoder={ObjectId: str})
 
-        if encoder == "dict":
-            p = deepcopy(self)
-            # if type ObjectID the jsonable_encoder will throw an error
-            p.id = str(p.id)
-            encoded_pipeline = jsonable_encoder(p)
-
-            return encoded_pipeline
-        elif encoder == "kedro":
-            return self.serialize()
-        elif encoder == "input":
-            if self.parameters:
-                parameters = [ParameterInput(name=p.name, value=p.value, type=p.type.value)
-                              for p in self.parameters]
-            else:
-                parameters = None
-            return PipelineInput(
-                name=self.name,
-                data_catalog=[DataSetInput(name=d.name, config=d.config)
-                              for d in self.data_catalog],
-                parameters=parameters,
-                tags=[TagInput(key=t.key, value=t.value)
-                      for t in self.tags] if self.tags else None,
-                hooks=self.hooks,
-            )
-        else:
-            raise TypeError("encoder must be 'dict', 'kedro', or 'input'")
+    def to_input(self) -> PipelineInput:
+        return PipelineInput(
+            name=self.name,
+            data_catalog=[
+                DataSetInput(name=dataset.name, config=dataset.config)
+                for dataset in self.data_catalog
+            ],
+            parameters=[
+                ParameterInput(
+                    name=parameter.name,
+                    value=parameter.value,
+                    type=parameter.type,
+                )
+                for parameter in self.parameters
+            ],
+            tags=[TagInput(key=tag.key, value=tag.value) for tag in self.tags],
+            hooks=list(self.hooks),
+        )
 
     @classmethod
-    def decode(cls, payload):
-        """Create a Pipeline from a PipelineInput or API/storage dictionary."""
-        if isinstance(payload, PipelineInput):
-            payload = jsonable_encoder(payload)
-        if not isinstance(payload, dict):
-            raise TypeError("payload must be a PipelineInput or dictionary")
+    def from_input(cls, pipeline_input: PipelineInput) -> "Pipeline":
+        return cls.from_dict(jsonable_encoder(pipeline_input))
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "Pipeline":
+        values = _snake_case_keys(payload)
         converters = {
             "created_at": _decode_datetime,
-            "data_catalog": lambda items: [DataSet.decode(item) for item in items] if items else [],
+            "data_catalog": lambda items: [
+                DataSet.from_dict(item) for item in items or []
+            ],
             "nodes": lambda items: [
-                Node(**{key: value for key, value in item.items() if key in Node.__dataclass_fields__})
-                for item in items
-            ] if items else None,
-            "parameters": lambda items: [Parameter.decode(item) for item in items] if items else None,
-            "status": lambda items: [_decode_status(item) for item in items] if items else [],
-            "tags": lambda items: [Tag(**item) for item in items] if items else None,
+                Node(
+                    **{
+                        key: value
+                        for key, value in item.items()
+                        if key in Node.__dataclass_fields__
+                    }
+                )
+                for item in items or []
+            ],
+            "parameters": lambda items: [
+                Parameter.from_dict(item) for item in items or []
+            ],
+            "status": lambda items: [_decode_status(item) for item in items or []],
+            "tags": lambda items: [Tag(**item) for item in items or []],
+            "hooks": lambda items: list(items or []),
         }
-        values = {
-            key: converters.get(key, _identity)(value)
-            for key, value in _snake_case_keys(payload).items()
+        converted = {
+            key: converters[key](value) if key in converters else value
+            for key, value in values.items()
             if key in cls.__dataclass_fields__
         }
-        return cls(**values)
+        for field_name in (
+            "data_catalog",
+            "nodes",
+            "parameters",
+            "status",
+            "tags",
+            "hooks",
+        ):
+            converted.setdefault(field_name, [])
+        return cls(**converted)
 
 
 @strawberry.type
 class Pipelines:
-    pipelines: List[Pipeline] = strawberry.field(
-        description="The list of pipeline instances.")
+    pipelines: list[Pipeline] = strawberry.field(
+        description="The list of pipeline instances."
+    )
     page_meta: PageMeta = strawberry.field(description="Metadata to aid in pagination.")
 
     @classmethod
-    def decode(cls, payload):
-        """Create Pipelines from a paginated API response."""
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "Pipelines":
         result = _snake_case_keys(payload)["read_pipelines"]
         return cls(
             page_meta=PageMeta(**result["page_meta"]),
-            pipelines=[Pipeline.decode(pipeline) for pipeline in result["pipelines"]],
+            pipelines=[Pipeline.from_dict(item) for item in result["pipelines"]],
         )
 
 
@@ -756,19 +660,13 @@ class PipelineEvent:
     id: str
     task_id: str
     status: str
-    result: Optional[str] = None
+    result: str | None
     timestamp: str
-    traceback: Optional[str] = None
+    traceback: str | None
 
     @classmethod
-    def decode(cls, payload, decoder=None):
-        """Factory method to create a new PipelineEvent from a graphql api response.
-        """
-        if decoder == "graphql":
-            result = {to_snake_case(k): v for k, v in payload["pipeline"].items()}
-            return PipelineEvent(**result)
-        else:
-            raise TypeError("decoder must be 'graphql'")
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "PipelineEvent":
+        return cls(**_snake_case_keys(payload["pipeline"]))
 
 
 @strawberry.type
@@ -780,68 +678,47 @@ class PipelineLogMessage:
     time: str
 
     @classmethod
-    def decode(cls, payload, decoder=None):
-        """Factory method to create a new PipelineLogMessage from a graphql api response.
-        """
-        if decoder == "graphql":
-            result = {to_snake_case(k): v for k, v in payload["pipelineLogs"].items()}
-            return PipelineLogMessage(id=result["id"],
-                                      message=result.get("message", ""),
-                                      message_id=result.get("message_id", ""),
-                                      task_id=result.get("task_id", ""),
-                                      time=result.get("time", ""))
-        else:
-            raise TypeError("decoder must be 'graphql'")
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "PipelineLogMessage":
+        result = _snake_case_keys(payload["pipelineLogs"])
+        return cls(
+            id=result["id"],
+            message=result.get("message", ""),
+            message_id=result.get("message_id", ""),
+            task_id=result.get("task_id", ""),
+            time=result.get("time", ""),
+        )
 
 
 @strawberry.type
 class SignedUrlField:
-    name: Optional[str] = None
-    value: Optional[str] = None
+    name: str
+    value: str
 
 
 @strawberry.type
 class SignedUrl:
     url: str
     file: str
-    fields: Optional[List[SignedUrlField]] = None
+    fields: list[SignedUrlField] = strawberry.field(default_factory=list)
 
     @classmethod
-    def decode(cls, payload, decoder=None):
-        """Factory method to create a new SignedUrl from a graphql api response.
-        """
-        if decoder == "graphql":
-            result = {to_snake_case(k): v for k, v in payload.items()}
-            return SignedUrl(url=result["url"], file=result["file"], fields=[SignedUrlField(name=f["name"], value=f["value"]) for f in result.get("fields", None)])
-        else:
-            raise TypeError("decoder must be 'graphql'")
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "SignedUrl":
+        result = _snake_case_keys(payload)
+        return cls(
+            url=result["url"],
+            file=result["file"],
+            fields=[SignedUrlField(**field) for field in result.get("fields") or []],
+        )
 
     def get_field_value(self, name: str) -> str | None:
-        """
-        Extract a field value from an array of SignedUrlFields.
-
-        Args:
-            name (str): The name of the field to extract.
-
-        Returns:
-            str | None: The value of the field, or None if not found.
-        """
-        for f in self.fields:
-            if f.name == name:
-                return f.value
+        return next((field.value for field in self.fields if field.name == name), None)
 
 
 @strawberry.type
 class SignedUrls:
-    urls: List[SignedUrl]
+    urls: list[SignedUrl]
 
     @classmethod
-    def decode(cls, payload, decoder=None):
-        """Factory method to create a new SignedUrls from a graphql api response.
-        """
-        if decoder == "graphql":
-            result = {to_snake_case(k): v for k, v in payload.items()}
-            urls = [SignedUrl.decode(u, decoder="graphql") for u in result["urls"]]
-            return SignedUrls(urls=urls)
-        else:
-            raise TypeError("decoder must be 'graphql'")
+    def from_graphql(cls, payload: Mapping[str, Any]) -> "SignedUrls":
+        result = _snake_case_keys(payload)
+        return cls(urls=[SignedUrl.from_graphql(item) for item in result["urls"]])

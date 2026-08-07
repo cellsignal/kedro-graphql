@@ -4,6 +4,6 @@ from starlette.websockets import WebSocket
 
 
 class GraphQLContext(BaseContext):
-    def __init__(self, request: Request | WebSocket):
+    def __init__(self, request: Request | WebSocket | None = None):
         super().__init__()
         self.request = request

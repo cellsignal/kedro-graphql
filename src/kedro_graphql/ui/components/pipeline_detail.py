@@ -28,7 +28,7 @@ class PipelineDetail(pn.viewable.Viewer):
         if "json" in raw:
             yield pn.Row(
                 pn.widgets.JSONEditor(
-                    value=self.pipeline.encode(encoder="dict"),
+                    value=self.pipeline.to_dict(),
                     mode="view",
                     width=600
                 )
@@ -94,7 +94,7 @@ class PipelineDetail(pn.viewable.Viewer):
                 "state", "task_id", "task_name", "task_args", "task_kwargs",
                 "task_request", "task_excpetion", "task_traceback", "task_einfo", "task_self.pipeline"
             ]
-            values = self.pipeline.encode(encoder="dict")["status"]
+            values = self.pipeline.to_dict()["status"]
 
             status_df = pd.DataFrame(
                 values,

@@ -37,7 +37,7 @@ async def test_run_pipeline(mock_app,
     p = Pipeline(
         name="example00",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
                                runner="kedro.runner.SequentialRunner",
@@ -49,7 +49,7 @@ async def test_run_pipeline(mock_app,
     )
 
     p = await mock_app.state.services.backend.create(p)
-    serial = p.serialize()
+    serial = p.to_kedro()
 
     result = run_pipeline.delay(
         id=str(p.id),
@@ -115,5 +115,3 @@ def test_run_pipeline_child_process_recreates_catalog():
             
             # Verify success was reported
             result_queue.put.assert_called_with({"status": "success"})
-
-

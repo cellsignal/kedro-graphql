@@ -97,7 +97,7 @@ class MongoBackend(BaseBackend):
         results = []
         async for r in raw:
             r["id"] = str(r["_id"])
-            p = Pipeline.decode(r)
+            p = Pipeline.from_dict(r)
             results.append(p)
         return results
 
@@ -113,7 +113,7 @@ class MongoBackend(BaseBackend):
 
         if r:
             r["id"] = str(r["_id"])
-            p = Pipeline.decode(r)
+            p = Pipeline.from_dict(r)
             return p
         else:
             return None
@@ -122,12 +122,12 @@ class MongoBackend(BaseBackend):
         """Save a pipeline"""
         collection = self._get_collection()
 
-        values = pipeline.encode()
+        values = pipeline.to_dict()
         values.pop("id")  # we dont have an id yet, we will get it after insert
         created = await collection.insert_one(values)
         created = await collection.find_one({"_id": created.inserted_id})
         created["id"] = str(created["_id"])
-        p = Pipeline.decode(created)
+        p = Pipeline.from_dict(created)
         return p
 
     async def update(self, pipeline: Pipeline = None):
@@ -136,7 +136,7 @@ class MongoBackend(BaseBackend):
 
         id = ObjectId(pipeline.id)
         filter = {'_id': id}
-        values = pipeline.encode()
+        values = pipeline.to_dict()
         values.pop("id")  # we dont want to update the id
         newvalues = {"$set": values}
         await collection.update_one(filter, newvalues)

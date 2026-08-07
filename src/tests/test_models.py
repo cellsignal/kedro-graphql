@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from omegaconf import OmegaConf
@@ -7,16 +8,18 @@ from omegaconf import OmegaConf
 from kedro_graphql.models import (
     DataSet,
     DataSetInput,
+    DataSetPartitions,
     Parameter,
     ParameterInput,
+    ParameterType,
     Pipeline,
     PipelineInput,
     Pipelines,
     State,
     TagInput,
+    parameter_inputs_from_mapping,
 )
 from .utilities import kedro_graphql_config
-from pathlib import Path
 
 
 class TestDataSet:
@@ -24,23 +27,25 @@ class TestDataSet:
     config = kedro_graphql_config()
 
     def test_serialize(self):
-        params = {"name": "text_in",
-                  "config": json.dumps({"type": "text.TextDataset",
-                                        "filepath": "/tmp/test_in.csv",
-                                        "load_args": {"delimiter": "\t"},
-                                        "save_args": {"delimiter": "\t"}})
-                  }
-
-        expected = {"text_in": {
-            "type": "text.TextDataset",
-            "filepath": "/tmp/test_in.csv",
-            "load_args": {
-                "delimiter": "\t"
-            },
-            "save_args": {
-                "delimiter": "\t"
-            }
+        params = {
+            "name": "text_in",
+            "config": json.dumps(
+                {
+                    "type": "text.TextDataset",
+                    "filepath": "/tmp/test_in.csv",
+                    "load_args": {"delimiter": "\t"},
+                    "save_args": {"delimiter": "\t"},
+                }
+            ),
         }
+
+        expected = {
+            "text_in": {
+                "type": "text.TextDataset",
+                "filepath": "/tmp/test_in.csv",
+                "load_args": {"delimiter": "\t"},
+                "save_args": {"delimiter": "\t"},
+            }
         }
 
         d = DataSet(**params)
@@ -51,7 +56,7 @@ class TestDataSet:
     def test_does_exist_with_config(self, mock_text_in):
         params = {
             "name": "text_in",
-            "config": f'{{"type": "text.TextDataset", "filepath": "{str(mock_text_in)}"}}'
+            "config": f'{{"type": "text.TextDataset", "filepath": "{str(mock_text_in)}"}}',
         }
 
         d = DataSet(**params)
@@ -60,19 +65,24 @@ class TestDataSet:
     def test_does_not_exist_with_config(self):
         params = {
             "name": "text_in",
-            "config": '{"type": "text.TextDataset", "filepath": "/tmp/does_not_exist.csv"}'
+            "config": '{"type": "text.TextDataset", "filepath": "/tmp/does_not_exist.csv"}',
         }
 
         d = DataSet(**params)
         assert d.exists() == False
 
     def test_partitions(self):
-        d = DataSet(name="test_partitioned_dataset", config=json.dumps(
-            {"type": "partitions.PartitionedDataset",
-             "path": str(Path("src/tests/data/partitioned_dataset/").resolve()),
-             "filename_suffix": ".txt",
-             "dataset": {"type": "text.TextDataset"}}
-        ))
+        d = DataSet(
+            name="test_partitioned_dataset",
+            config=json.dumps(
+                {
+                    "type": "partitions.PartitionedDataset",
+                    "path": str(Path("src/tests/data/partitioned_dataset/").resolve()),
+                    "filename_suffix": ".txt",
+                    "dataset": {"type": "text.TextDataset"},
+                }
+            ),
+        )
 
         assert d.partitions() == ["part-0001", "part-0002"]
 
@@ -84,87 +94,70 @@ class TestParameterInput:
             "a": "b",
             "c": 0,
             "d": True,
-            "e": 0.1, }
+            "e": 0.1,
+        }
 
         incorrect = {**correct, "f": [1, 2]}
 
-        params_input_list = ParameterInput.create(correct)
+        params_input_list = parameter_inputs_from_mapping(correct)
 
         assert len(params_input_list) == 4
         assert any(p.name == "a" and p.value == "b" for p in params_input_list)
+        assert (
+            next(p for p in params_input_list if p.name == "c").type
+            is ParameterType.INTEGER
+        )
+        assert (
+            next(p for p in params_input_list if p.name == "d").type
+            is ParameterType.BOOLEAN
+        )
 
         with pytest.raises(ValueError):
-            ParameterInput.create(incorrect)
+            parameter_inputs_from_mapping(incorrect)
 
 
 class TestParameter:
 
     def test_serialize_string(self):
-        params = {
-            "name": "delimiter",
-                    "value": "\t",
-                    "type": "string"
-        }
+        params = {"name": "delimiter", "value": "\t", "type": "string"}
 
-        expected = {
-            "delimiter": "\t"
-        }
+        expected = {"delimiter": "\t"}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
     def test_serialize_int(self):
-        params = {
-            "name": "delimiter",
-                    "value": "1",
-                    "type": "integer"
-        }
+        params = {"name": "delimiter", "value": "1", "type": "integer"}
 
-        expected = {
-            "delimiter": 1
-        }
+        expected = {"delimiter": 1}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
     def test_serialize_int_exception(self):
-        params = {
-            "name": "delimiter",
-                    "value": "0.1",
-                    "type": "integer"
-        }
+        params = {"name": "delimiter", "value": "0.1", "type": "integer"}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         try:
             output = p.serialize()
         except ValueError as e:
             assert True
 
     def test_serialize_float(self):
-        params = {
-            "name": "delimiter",
-                    "value": "0.1",
-                    "type": "float"
-        }
+        params = {"name": "delimiter", "value": "0.1", "type": "float"}
 
-        expected = {
-            "delimiter": 0.1
-        }
+        expected = {"delimiter": 0.1}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
     def test_serialize_float_exception(self):
-        params = {
-            "name": "delimiter",
-                    "value": "hello",
-                    "type": "float"
-        }
+        params = {"name": "delimiter", "value": "hello", "type": "float"}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         try:
             output = p.serialize()
         except ValueError as e:
@@ -172,71 +165,43 @@ class TestParameter:
 
     def test_serialize_bool(self):
 
-        params = {
-            "name": "delimiter",
-                    "value": "true",
-                    "type": "boolean"
-        }
+        params = {"name": "delimiter", "value": "true", "type": "boolean"}
 
-        expected = {
-            "delimiter": True
-        }
+        expected = {"delimiter": True}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
-        params = {
-            "name": "delimiter",
-                    "value": "True",
-                    "type": "boolean"
-        }
+        params = {"name": "delimiter", "value": "True", "type": "boolean"}
 
-        expected = {
-            "delimiter": True
-        }
+        expected = {"delimiter": True}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
-        params = {
-            "name": "delimiter",
-                    "value": "false",
-                    "type": "boolean"
-        }
+        params = {"name": "delimiter", "value": "false", "type": "boolean"}
 
-        expected = {
-            "delimiter": False
-        }
+        expected = {"delimiter": False}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
-        params = {
-            "name": "delimiter",
-                    "value": "False",
-                    "type": "boolean"
-        }
+        params = {"name": "delimiter", "value": "False", "type": "boolean"}
 
-        expected = {
-            "delimiter": False
-        }
+        expected = {"delimiter": False}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         output = p.serialize()
         assert output == expected
 
     def test_serialize_bool_exception(self):
 
-        params = {
-            "name": "delimiter",
-                    "value": "rue",
-                    "type": "boolean"
-        }
+        params = {"name": "delimiter", "value": "rue", "type": "boolean"}
 
-        p = Parameter(**params)
+        p = Parameter.from_dict(params)
         try:
             output = p.serialize()
         except ValueError as e:
@@ -247,71 +212,78 @@ class TestParameter:
         Tests serialized Parameter objects with dotlist notation names can be converted to OmegaConf
         which is used to construct the DataCatalog with the add_feed_dict method in tasks.py.
         """
-        parameter_inputs = [{"name": "example", "value": "hello", "type": "string"},
-                            {"name": "duration", "value": "0.1", "type": "float"},
-                            {"name": "model_options.model_params.learning_date",
-                                "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.training_date",
-                                "value": "2023-11-01", "type": "string"},
-                            {"name": "model_options.model_params.data_ratio",
-                                "value": "14", "type": "float"},
-                            {"name": "data_options.step_size",
-                                "value": "123123", "type": "float"},
-                            ]
+        parameter_inputs = [
+            {"name": "example", "value": "hello", "type": "string"},
+            {"name": "duration", "value": "0.1", "type": "float"},
+            {
+                "name": "model_options.model_params.learning_date",
+                "value": "2023-11-01",
+                "type": "string",
+            },
+            {
+                "name": "model_options.model_params.training_date",
+                "value": "2023-11-01",
+                "type": "string",
+            },
+            {
+                "name": "model_options.model_params.data_ratio",
+                "value": "14",
+                "type": "float",
+            },
+            {"name": "data_options.step_size", "value": "123123", "type": "float"},
+        ]
 
-        parameters = [Parameter.decode(p) for p in parameter_inputs]
+        parameters = [Parameter.from_dict(p) for p in parameter_inputs]
 
         serialized_parameters = {}
 
         for p in parameters:
             serialized_parameters.update(p.serialize())
 
-        parameters_dotlist = [f"{key}={value}" for key,
-                              value in serialized_parameters.items()]
+        parameters_dotlist = [
+            f"{key}={value}" for key, value in serialized_parameters.items()
+        ]
         conf_parameters = OmegaConf.from_dotlist(parameters_dotlist)
         kedro_parameters = {"parameters": conf_parameters}
 
         assert kedro_parameters == {
-            'parameters': {
-                'example': 'hello',
-                'duration': 0.1,
-                'model_options': {
-                    'model_params': {
-                        'learning_date': '2023-11-01',
-                        'training_date': '2023-11-01',
-                        'data_ratio': 14
+            "parameters": {
+                "example": "hello",
+                "duration": 0.1,
+                "model_options": {
+                    "model_params": {
+                        "learning_date": "2023-11-01",
+                        "training_date": "2023-11-01",
+                        "data_ratio": 14,
                     }
                 },
-                'data_options': {
-                    'step_size': 123123
-                }
+                "data_options": {"step_size": 123123},
             }
         }
 
-        params_dotlist = [f"params:{key}={value}" for key,
-                          value in serialized_parameters.items()]
+        params_dotlist = [
+            f"params:{key}={value}" for key, value in serialized_parameters.items()
+        ]
         kedro_params = OmegaConf.from_dotlist(params_dotlist)
 
         assert kedro_params == {
-            'params:example': 'hello',
-            'params:duration': 0.1,
-            'params:model_options': {
-                'model_params': {
-                    'learning_date': '2023-11-01',
-                    'training_date': '2023-11-01',
-                    'data_ratio': 14
+            "params:example": "hello",
+            "params:duration": 0.1,
+            "params:model_options": {
+                "model_params": {
+                    "learning_date": "2023-11-01",
+                    "training_date": "2023-11-01",
+                    "data_ratio": 14,
                 }
             },
-            'params:data_options': {
-                'step_size': 123123
-            }
+            "params:data_options": {"step_size": 123123},
         }
 
     def test_pipeline_encode_as_input(self, mock_pipeline_staged):
         """
-        Tests the Pipeline.encode(encoder="input") method returns a PipelineInput object
+        Tests the Pipeline.to_input() method returns a PipelineInput object
         """
-        result = mock_pipeline_staged.encode(encoder="input")
+        result = mock_pipeline_staged.to_input()
         assert isinstance(result, PipelineInput)
         assert result.name == mock_pipeline_staged.name
         assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
@@ -327,18 +299,22 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
         "createdAt": "2026-08-07T12:00:00",
         "hooks": ["logging"],
         "nodes": [{"name": "first", "inputs": ["in"], "outputs": ["out"], "tags": []}],
-        "dataCatalog": [{"name": "in", "config": "{}", "tags": [{"key": "owner", "value": "data"}]}],
+        "dataCatalog": [
+            {"name": "in", "config": "{}", "tags": [{"key": "owner", "value": "data"}]}
+        ],
         "parameters": [{"name": "count", "value": "1", "type": "INTEGER"}],
-        "status": [{
-            "state": "READY",
-            "session": "session-id",
-            "filteredNodes": ["first"],
-            "abortRequestedAt": "2026-08-07T12:01:00",
-        }],
+        "status": [
+            {
+                "state": "READY",
+                "session": "session-id",
+                "filteredNodes": ["first"],
+                "abortRequestedAt": "2026-08-07T12:01:00",
+            }
+        ],
         "tags": [{"key": "owner", "value": "platform"}],
     }
 
-    pipeline = Pipeline.decode(payload)
+    pipeline = Pipeline.from_dict(payload)
 
     assert pipeline.created_at == datetime(2026, 8, 7, 12)
     assert pipeline.hooks == ["logging"]
@@ -351,16 +327,18 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
     assert not hasattr(pipeline, "_id")
 
     pipeline_input = PipelineInput(name="example", hooks=["logging"])
-    assert Pipeline.decode(pipeline_input).hooks == ["logging"]
+    assert Pipeline.from_input(pipeline_input).hooks == ["logging"]
 
 
 def test_pipelines_decode_normalizes_page_and_pipeline_keys():
-    pipelines = Pipelines.decode({
-        "readPipelines": {
-            "pageMeta": {"nextCursor": "cursor"},
-            "pipelines": [{"name": "example", "createdAt": "2026-08-07T12:00:00"}],
+    pipelines = Pipelines.from_graphql(
+        {
+            "readPipelines": {
+                "pageMeta": {"nextCursor": "cursor"},
+                "pipelines": [{"name": "example", "createdAt": "2026-08-07T12:00:00"}],
+            }
         }
-    })
+    )
 
     assert pipelines.page_meta.next_cursor == "cursor"
     assert pipelines.pipelines[0].created_at == datetime(2026, 8, 7, 12)
@@ -374,26 +352,25 @@ class TestDataSetInput:
         """
         dataset = DataSetInput(
             name="text_in",
-            config=json.dumps({
-                "type": "text.TextDataset",
-                "filepath": "/tmp/test_in.csv",
-                "load_args": {"delimiter": "\t"},
-                "save_args": {"delimiter": "\t"}
-            })
+            config=json.dumps(
+                {
+                    "type": "text.TextDataset",
+                    "filepath": "/tmp/test_in.csv",
+                    "load_args": {"delimiter": "\t"},
+                    "save_args": {"delimiter": "\t"},
+                }
+            ),
         )
 
-        result = dataset.encode(encoder="graphql")
+        result = dataset.to_graphql()
         assert isinstance(result, dict)
         assert result["name"] == dataset.name
         assert result["config"] == dataset.config
 
     def test_encode_list_partitions(self):
-        dataset = DataSetInput(
-            name="my_partitioned_dataset",
-            list_partitions=True
-        )
+        dataset = DataSetInput(name="my_partitioned_dataset", list_partitions=True)
 
-        result = dataset.encode(encoder="graphql")
+        result = dataset.to_graphql()
         assert isinstance(result, dict)
         assert result["name"] == dataset.name
         assert result["listPartitions"] is True
@@ -402,8 +379,20 @@ class TestDataSetInput:
 def test_pipeline_input_encodes_nested_dataset_fields_for_graphql():
     result = PipelineInput(
         name="example",
-        data_catalog=[{"name": "dataset", "list_partitions": True}],
-    ).encode(encoder="graphql")
+        data_catalog=[DataSetInput(name="dataset", list_partitions=True)],
+    ).to_graphql()
 
     assert result["dataCatalog"][0]["listPartitions"] is True
     assert "list_partitions" not in result["dataCatalog"][0]
+
+
+def test_collection_defaults_are_independent_and_null_payloads_are_normalized():
+    first = PipelineInput(name="first")
+    second = PipelineInput(name="second")
+    first.tags.append(TagInput(key="owner", value="platform"))
+
+    pipeline = Pipeline.from_dict({"name": "example", "tags": None, "nodes": None})
+
+    assert second.tags == []
+    assert pipeline.tags == []
+    assert pipeline.nodes == []

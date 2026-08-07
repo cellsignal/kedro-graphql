@@ -104,12 +104,12 @@ def mock_pipeline_argo(mock_app, s3_object, s3_client):
         name="example00",
         inputs=[DataSet(**i) for i in inputs],
         outputs=[DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         task_name=str(run_pipeline),
     )
 
-    serial = p.serialize()
+    serial = p.to_kedro()
 
     result = run_pipeline.apply_async(kwargs={"name": "example00",
                                               "inputs": serial["inputs"],

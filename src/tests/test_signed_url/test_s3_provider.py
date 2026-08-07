@@ -45,34 +45,34 @@ class TestS3Provider:
              "dataset": {"type": "text.TextDataset"}}
         ))
 
-    def test_read(self, mock_s3_client, mock_info_context, mock_dataset):
+    def test_read(self, mock_s3_client, mock_info, mock_dataset):
         """Test reading a single file from a TextDataset"""
 
         output = S3Provider.read(
-            mock_info_context, mock_dataset, expires_in_sec=10)
+            mock_info, mock_dataset, expires_in_sec=10)
 
         assert isinstance(output, SignedUrl)
 
         assert output.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
 
-    def test_read_partitions(self, mock_s3_client, mock_info_context, mock_partitioned_dataset):
+    def test_read_partitions(self, mock_s3_client, mock_info, mock_partitioned_dataset):
         """Test reading multiple partitions from a PartitionedDataset"""
 
         output = S3Provider.read(
-            mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
+            mock_info, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
         assert isinstance(output, SignedUrls)
         for url in output.urls:
             assert url.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
 
-    def test_create(self, mock_s3_client, mock_info_context, mock_dataset):
+    def test_create(self, mock_s3_client, mock_info, mock_dataset):
         """Test creating a single signed URL for uploading a TextDataset"""
 
         output = S3Provider.create(
-            mock_info_context, mock_dataset, expires_in_sec=10)
+            mock_info, mock_dataset, expires_in_sec=10)
 
         assert isinstance(output, SignedUrl)
 
-        assert output == SignedUrl.decode({
+        assert output == SignedUrl.from_graphql({
             "url": "https://your-bucket-name.s3.amazonaws.com/",
             "file": "file.txt",
             "fields": [
@@ -82,17 +82,17 @@ class TestS3Provider:
                 {"name": "signature", "value": "YOUR_SIGNATURE"},
                 {"name": "Content-Type", "value": "application/octet-stream"}
             ]
-        }, decoder="graphql")
+        })
 
-    def test_create_partitions(self, mock_s3_client, mock_info_context, mock_partitioned_dataset):
+    def test_create_partitions(self, mock_s3_client, mock_info, mock_partitioned_dataset):
         """Test creating signed URLs for the upload of specific partitions in a PartitionedDataset"""
 
         output = S3Provider.create(
-            mock_info_context, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
+            mock_info, mock_partitioned_dataset, expires_in_sec=10, partitions=["part-0001", "part-0002"])
         assert isinstance(output, SignedUrls)
 
         expected = SignedUrls(urls=[
-            SignedUrl.decode({
+            SignedUrl.from_graphql({
                 "url": "https://your-bucket-name.s3.amazonaws.com/",
                 "file": "part-0001.txt",
                 "fields": [
@@ -102,8 +102,8 @@ class TestS3Provider:
                     {"name": "signature", "value": "YOUR_SIGNATURE"},
                     {"name": "Content-Type", "value": "application/octet-stream"}
                 ]
-            }, decoder="graphql"),
-            SignedUrl.decode({
+            }),
+            SignedUrl.from_graphql({
                 "url": "https://your-bucket-name.s3.amazonaws.com/",
                 "file": "part-0002.txt",
                 "fields": [
@@ -113,7 +113,7 @@ class TestS3Provider:
                     {"name": "signature", "value": "YOUR_SIGNATURE"},
                     {"name": "Content-Type", "value": "application/octet-stream"}
                 ]
-            }, decoder="graphql")
+            })
         ])
 
         for index, item in enumerate(output.urls):

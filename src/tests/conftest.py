@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 import tempfile
 import redis
@@ -25,7 +26,6 @@ from kedro_graphql.client import KedroGraphqlClient
 from kedro_graphql.context import GraphQLContext
 from multiprocessing import Process
 import uvicorn
-from pathlib import Path
 from kedro_graphql.project import load_project_metadata
 import multiprocessing as mp
 import tempfile
@@ -178,8 +178,14 @@ def mock_info_context(mock_app):
         app = mock_app
         headers = {}
 
-    with patch("strawberry.types.Info.context", GraphQLContext(Request())) as m:
-        yield m
+    context = GraphQLContext(Request())
+    with patch("strawberry.types.Info.context", context):
+        yield context
+
+
+@pytest.fixture(scope="session")
+def mock_info(mock_info_context):
+    return SimpleNamespace(context=mock_info_context)
 
 
 # refer to https://docs.pytest.org/en/7.1.x/how-to/tmp_path.html for info on tmp_path fixture
@@ -254,7 +260,7 @@ def mock_pipeline(mock_celery_session_app,
     p = Pipeline(
         name="example00",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
                                runner=mock_app.state.services.config.runner,
@@ -266,7 +272,7 @@ def mock_pipeline(mock_celery_session_app,
     p.created_at = datetime.now()
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.serialize()
+    serial = p.to_kedro()
 
     result = run_pipeline.apply_async(kwargs={"id": str(p.id),
                                               "name": "example00",
@@ -295,7 +301,7 @@ def mock_pipeline_staged(mock_app):
     p = Pipeline(
         name="example00",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
                                runner=mock_app.state.services.config.runner,
@@ -323,7 +329,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
     p = Pipeline(
         name="example00",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
                                runner=mock_app.state.services.config.runner,
@@ -335,7 +341,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
     p.created_at = datetime.now()
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.serialize()
+    serial = p.to_kedro()
 
     result = run_pipeline.apply_async(kwargs={"id": str(p.id),
                                               "name": "example00",
@@ -364,7 +370,7 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
     p = Pipeline(
         name="example00",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags]
     )
 
@@ -404,7 +410,7 @@ def mock_example01(mock_app, mock_timestamped_partitioned_dir, mock_text_in):
     p = Pipeline(
         name="example01",
         data_catalog=[DataSet(**i) for i in inputs] + [DataSet(**o) for o in outputs],
-        parameters=[Parameter(**p) for p in parameters],
+        parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
                                runner=mock_app.state.services.config.runner,

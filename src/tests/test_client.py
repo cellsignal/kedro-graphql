@@ -1,5 +1,13 @@
 import pytest
-from kedro_graphql.models import DataSetInput, PipelineInput, Pipeline, TagInput, SignedUrl, SignedUrls
+from kedro_graphql.models import (
+    DataSetInput,
+    DataSetPartitions,
+    PipelineInput,
+    Pipeline,
+    TagInput,
+    SignedUrl,
+    SignedUrls,
+)
 import json
 from celery.states import ALL_STATES
 from kedro_graphql.schema import encode_cursor
@@ -12,17 +20,25 @@ async def mock_create_pipeline(mock_client, mock_text_in, mock_text_out):
     input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
     output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
 
-    pipeline_input = PipelineInput(**{
-        "name": "example00",
-        "state": "READY",
-        "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                         {"name": "text_out", "config": json.dumps(output_dict)}],
-        "parameters": [{"name": "example", "value": "hello"},
-                       {"name": "duration", "value": "0", "type": "FLOAT"}],
-        "tags": [{"key": "author", "value": "opensean"},
-                 {"key": "package", "value": "kedro-graphql"}]
-    })
-    expected = Pipeline.decode(pipeline_input)
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example00",
+            "state": "READY",
+            "data_catalog": [
+                {"name": "text_in", "config": json.dumps(input_dict)},
+                {"name": "text_out", "config": json.dumps(output_dict)},
+            ],
+            "parameters": [
+                {"name": "example", "value": "hello"},
+                {"name": "duration", "value": "0", "type": "FLOAT"},
+            ],
+            "tags": [
+                {"key": "author", "value": "opensean"},
+                {"key": "package", "value": "kedro-graphql"},
+            ],
+        }
+    )
+    expected = Pipeline.from_input(pipeline_input)
     pipeline = await mock_client.create_pipeline(pipeline_input)
     return pipeline_input, expected, pipeline
 
@@ -33,18 +49,26 @@ async def mock_create_pipeline_staged(mock_client, mock_text_in, mock_text_out):
     input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
     output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
 
-    pipeline_input = PipelineInput(**{
-        "name": "example00",
-        "state": "STAGED",
-        "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                         {"name": "text_out", "config": json.dumps(output_dict)}],
-        "parameters": [{"name": "example", "value": "hello"},
-                       {"name": "duration", "value": "0", "type": "FLOAT"}],
-        "tags": [{"key": "author", "value": "opensean"},
-                 {"key": "package", "value": "kedro-graphql"}]
-    })
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example00",
+            "state": "STAGED",
+            "data_catalog": [
+                {"name": "text_in", "config": json.dumps(input_dict)},
+                {"name": "text_out", "config": json.dumps(output_dict)},
+            ],
+            "parameters": [
+                {"name": "example", "value": "hello"},
+                {"name": "duration", "value": "0", "type": "FLOAT"},
+            ],
+            "tags": [
+                {"key": "author", "value": "opensean"},
+                {"key": "package", "value": "kedro-graphql"},
+            ],
+        }
+    )
 
-    expected = Pipeline.decode(pipeline_input)
+    expected = Pipeline.from_input(pipeline_input)
     pipeline = await mock_client.create_pipeline(pipeline_input)
     return pipeline_input, expected, pipeline
 
@@ -53,23 +77,31 @@ async def mock_create_pipeline_staged(mock_client, mock_text_in, mock_text_out):
 async def mock_create_pipeline_staged_with_partitions(mock_client):
 
     config_str = json.dumps(
-        {"type": "partitions.PartitionedDataset",
-         "path": "/tmp/my-bucket/path/to/partitioned_dataset",
-         "filename_suffix": ".txt",
-         "dataset": {"type": "text.TextDataset"}}
+        {
+            "type": "partitions.PartitionedDataset",
+            "path": "/tmp/my-bucket/path/to/partitioned_dataset",
+            "filename_suffix": ".txt",
+            "dataset": {"type": "text.TextDataset"},
+        }
     )
 
-    pipeline_input = PipelineInput(**{
-        "name": "example00",
-        "state": "STAGED",
-        "data_catalog": [{"name": "text_in", "config": config_str}],
-        "parameters": [{"name": "example", "value": "hello"},
-                       {"name": "duration", "value": "0", "type": "FLOAT"}],
-        "tags": [{"key": "author", "value": "opensean"},
-                 {"key": "package", "value": "kedro-graphql"}]
-    })
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example00",
+            "state": "STAGED",
+            "data_catalog": [{"name": "text_in", "config": config_str}],
+            "parameters": [
+                {"name": "example", "value": "hello"},
+                {"name": "duration", "value": "0", "type": "FLOAT"},
+            ],
+            "tags": [
+                {"key": "author", "value": "opensean"},
+                {"key": "package", "value": "kedro-graphql"},
+            ],
+        }
+    )
 
-    expected = Pipeline.decode(pipeline_input)
+    expected = Pipeline.from_input(pipeline_input)
     pipeline = await mock_client.create_pipeline(pipeline_input)
     return pipeline_input, expected, pipeline
 
@@ -80,19 +112,27 @@ async def mock_create_pipeline_staged_unique(mock_client, mock_text_in, mock_tex
     input_dict = {"type": "text.TextDataset", "filepath": str(mock_text_in)}
     output_dict = {"type": "text.TextDataset", "filepath": str(mock_text_out)}
 
-    pipeline_input = PipelineInput(**{
-        "name": "example00",
-        "state": "STAGED",
-        "data_catalog": [{"name": "text_in", "config": json.dumps(input_dict)},
-                         {"name": "text_out", "config": json.dumps(output_dict)}],
-        "parameters": [{"name": "example", "value": "hello"},
-                       {"name": "duration", "value": "0", "type": "FLOAT"}],
-        "tags": [{"key": "author", "value": "opensean"},
-                 {"key": "package", "value": "kedro-graphql"},
-                 {"key": "unique", "value": "unique"}]
-    })
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example00",
+            "state": "STAGED",
+            "data_catalog": [
+                {"name": "text_in", "config": json.dumps(input_dict)},
+                {"name": "text_out", "config": json.dumps(output_dict)},
+            ],
+            "parameters": [
+                {"name": "example", "value": "hello"},
+                {"name": "duration", "value": "0", "type": "FLOAT"},
+            ],
+            "tags": [
+                {"key": "author", "value": "opensean"},
+                {"key": "package", "value": "kedro-graphql"},
+                {"key": "unique", "value": "unique"},
+            ],
+        }
+    )
 
-    expected = Pipeline.decode(pipeline_input)
+    expected = Pipeline.from_input(pipeline_input)
     pipeline = await mock_client.create_pipeline(pipeline_input)
     return pipeline_input, expected, pipeline
 
@@ -120,14 +160,18 @@ class TestKedroGraphqlClient:
         assert r.tags == expected.tags
 
     @pytest.mark.asyncio
-    async def test_read_pipelines(self, mock_create_pipeline_staged_unique, mock_client):
+    async def test_read_pipelines(
+        self, mock_create_pipeline_staged_unique, mock_client
+    ):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged_unique
         limit = 1
-        filter = "{\"tags.key\": \"unique\", \"tags.value\": \"unique\"}"
+        filter = '{"tags.key": "unique", "tags.value": "unique"}'
         cursor = encode_cursor(pipeline.id)
-        sort = "[(\"created_at\", -1)]"
-        r = await mock_client.read_pipelines(filter=filter, limit=limit, cursor=cursor, sort=sort)
+        sort = '[("created_at", -1)]'
+        r = await mock_client.read_pipelines(
+            filter=filter, limit=limit, cursor=cursor, sort=sort
+        )
         assert r.pipelines[0].name == expected.name
         assert r.pipelines[0].data_catalog == expected.data_catalog
         assert r.pipelines[0].parameters == expected.parameters
@@ -138,7 +182,9 @@ class TestKedroGraphqlClient:
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged
         pipeline_input.tags.append(TagInput(key="test-update", value="updated"))
-        r = await mock_client.update_pipeline(id=pipeline.id, pipeline_input=pipeline_input)
+        r = await mock_client.update_pipeline(
+            id=pipeline.id, pipeline_input=pipeline_input
+        )
         assert r.tags[-1].key == "test-update"
         assert r.tags[-1].value == "updated"
 
@@ -153,7 +199,11 @@ class TestKedroGraphqlClient:
     async def test_read_datasets(self, mock_create_pipeline_staged, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged
-        r = await mock_client.read_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")], expires_in_sec=3600)
+        r = await mock_client.read_datasets(
+            id=pipeline.id,
+            datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")],
+            expires_in_sec=3600,
+        )
         assert isinstance(r, list)
         assert len(r) == 2
         assert isinstance(r[0], SignedUrl)
@@ -166,14 +216,16 @@ class TestKedroGraphqlClient:
                     {
                         "__typename": "DataSet",
                         "name": "my_partitioned_dataset",
-                        "config": json.dumps({
-                            "type": "partitions.PartitionedDataset",
-                            "path": "/tmp/my-bucket/path/to/partitioned_dataset",
-                            "filename_suffix": ".txt",
-                            "dataset": {"type": "text.TextDataset"}
-                        }),
+                        "config": json.dumps(
+                            {
+                                "type": "partitions.PartitionedDataset",
+                                "path": "/tmp/my-bucket/path/to/partitioned_dataset",
+                                "filename_suffix": ".txt",
+                                "dataset": {"type": "text.TextDataset"},
+                            }
+                        ),
                         "tags": None,
-                        "partitions": ["part-0001", "part-0002"]
+                        "partitions": ["part-0001", "part-0002"],
                     }
                 ]
             }
@@ -181,43 +233,63 @@ class TestKedroGraphqlClient:
         mock_client.execute_query = _mock_execute_query
         r = await mock_client.read_datasets(
             id="test-id",
-            datasets=[DataSetInput(name="my_partitioned_dataset", list_partitions=True)],
+            datasets=[
+                DataSetInput(name="my_partitioned_dataset", list_partitions=True)
+            ],
             expires_in_sec=3600,
         )
         assert isinstance(r, list)
         assert len(r) == 1
-        assert isinstance(r[0], dict)
-        assert r[0]["name"] == "my_partitioned_dataset"
-        assert r[0]["partitions"] == ["part-0001", "part-0002"]
+        assert isinstance(r[0], DataSetPartitions)
+        assert r[0].name == "my_partitioned_dataset"
+        assert r[0].partitions == ["part-0001", "part-0002"]
 
     @pytest.mark.asyncio
     async def test_create_datasets(self, mock_create_pipeline_staged, mock_client):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged
-        r = await mock_client.create_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")], expires_in_sec=3600)
+        r = await mock_client.create_datasets(
+            id=pipeline.id,
+            datasets=[DataSetInput(name="text_in"), DataSetInput(name="text_out")],
+            expires_in_sec=3600,
+        )
         assert isinstance(r, list)
         assert len(r) == 2
         assert isinstance(r[0], SignedUrl)
 
     @pytest.mark.asyncio
-    async def test_create_datasets_with_partitions(self, mock_create_pipeline_staged_with_partitions, mock_client):
+    async def test_create_datasets_with_partitions(
+        self, mock_create_pipeline_staged_with_partitions, mock_client
+    ):
 
         pipeline_input, expected, pipeline = mock_create_pipeline_staged_with_partitions
-        r = await mock_client.create_datasets(id=pipeline.id, datasets=[DataSetInput(name="text_in", partitions=["partition1", "partition2"])], expires_in_sec=3600)
+        r = await mock_client.create_datasets(
+            id=pipeline.id,
+            datasets=[
+                DataSetInput(name="text_in", partitions=["partition1", "partition2"])
+            ],
+            expires_in_sec=3600,
+        )
         assert isinstance(r, list)
         assert len(r) == 1
         assert isinstance(r[0], SignedUrls)
         assert isinstance(r[0].urls[0], SignedUrl)
 
     @pytest.mark.asyncio
-    async def test_pipeline_events(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
+    async def test_pipeline_events(
+        self,
+        mock_celery_session_app,
+        celery_session_worker,
+        mock_create_pipeline,
+        mock_client,
+    ):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 
         # Only consume a limited number of events to avoid hanging
         event_count = 0
         max_events = 5  # Only consume first 5 events then break
-        
+
         async for result in mock_client.pipeline_events(id=pipeline.id):
             assert result.status in ALL_STATES
             event_count += 1
@@ -225,14 +297,20 @@ class TestKedroGraphqlClient:
                 break
 
     @pytest.mark.asyncio
-    async def test_pipeline_logs(self, mock_celery_session_app, celery_session_worker, mock_create_pipeline, mock_client):
+    async def test_pipeline_logs(
+        self,
+        mock_celery_session_app,
+        celery_session_worker,
+        mock_create_pipeline,
+        mock_client,
+    ):
 
         pipeline_input, expected, pipeline = mock_create_pipeline
 
         # Only consume a limited number of log messages to avoid hanging
         log_count = 0
         max_logs = 5  # Only consume first 5 log messages then break
-        
+
         async for result in mock_client.pipeline_logs(id=pipeline.id):
             assert result.id == pipeline.id
             log_count += 1
