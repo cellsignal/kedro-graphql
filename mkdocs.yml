@@ -51,4 +51,5 @@ nav:
   - Architecture:
       - Overview: architecture.md
       - Application startup refactor: application_startup_refactor.md
+      - Model typing refactor: model_typing_refactor.md
   - Reference: pydoc.md
