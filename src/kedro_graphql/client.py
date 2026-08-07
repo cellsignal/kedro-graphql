@@ -2,16 +2,13 @@ from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 from gql.transport.websockets import WebsocketsTransport
 from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage, DataSetInput, SignedUrl, SignedUrls
-from kedro_graphql.config import load_config
+from kedro_graphql.config import KedroGraphQLConfig, load_config
 import backoff
 from gql.transport.exceptions import TransportQueryError
 from typing import Optional, List
 import logging
 
 logger = logging.getLogger("kedro-graphql")
-CONFIG = load_config()
-logger.debug("configuration loaded by {s}".format(s=__name__))
-
 PIPELINE_GQL = """{
                     id
                     parent
@@ -66,7 +63,7 @@ PIPELINE_GQL = """{
 
 class KedroGraphqlClient():
 
-    def __init__(self, uri_graphql=None, uri_ws=None, pipeline_gql=None, headers={}, cookies=None):
+    def __init__(self, uri_graphql=None, uri_ws=None, pipeline_gql=None, headers=None, cookies=None, config: KedroGraphQLConfig | None = None):
         """
         Kwargs:
             uri_graphql (str): uri to api [default: http://localhost:5000/graphql]
@@ -74,8 +71,10 @@ class KedroGraphqlClient():
             pipeline_gql (str): pipeline graphql query [default: kedro_graphql.client.PIPELINE_GQL]
 
         """
-        self.uri_graphql = uri_graphql or CONFIG["KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL"]
-        self.uri_ws = uri_ws or CONFIG["KEDRO_GRAPHQL_CLIENT_URI_WS"]
+        config = config or load_config()
+        headers = headers or {}
+        self.uri_graphql = uri_graphql or config.client_uri_graphql
+        self.uri_ws = uri_ws or config.client_uri_ws
         if cookies:
             self._cookies = "; ".join(
                 [f"{key}={value}" for key, value in cookies.items()])

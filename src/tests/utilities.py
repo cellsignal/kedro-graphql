@@ -2,19 +2,17 @@ from kedro_graphql.config import load_config
 
 
 def kedro_graphql_config():
-
-    config = load_config()
-
-    # enable events endpoint
-    config["KEDRO_GRAPHQL_EVENTS_CONFIG"] = {"event00": {
-        "source": "example.com", "type": "com.example.event"}}
-
-    # use "test_pipelines" as the collection name for testing
-    config["KEDRO_GRAPHQL_MONGO_DB_COLLECTION"] = "test_pipelines"
-    config["KEDRO_GRAPHQL_MONGO_DB_NAME"] = "test_pipelines"
-
-    # Use an isolated Redis DB for tests so test runs do not pollute local/dev keys.
-    config["KEDRO_GRAPHQL_BROKER"] = "redis://localhost:6379/15"
-    config["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"] = "redis://localhost:6379/15"
-
-    return config
+    return load_config().model_copy(
+        update={
+            "events_config": {
+                "event00": {
+                    "source": "example.com",
+                    "type": "com.example.event",
+                }
+            },
+            "mongo_db_collection": "test_pipelines",
+            "mongo_db_name": "test_pipelines",
+            "broker": "redis://localhost:6379/15",
+            "celery_result_backend": "redis://localhost:6379/15",
+        }
+    )

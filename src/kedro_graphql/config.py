@@ -1,171 +1,140 @@
+import json
 import os
 import tempfile
+from pathlib import Path
+from typing import Any, Mapping
 
-from dotenv import dotenv_values
-import json
 import yaml
-from importlib import import_module
-from .logs.logger import logger
-import copy
+from dotenv import dotenv_values
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-defaults = {
-    "KEDRO_GRAPHQL_APP": "kedro_graphql.asgi.KedroGraphQL",
-    "KEDRO_GRAPHQL_APP_DESCRIPTION": "A tool for serving kedro projects as a GraphQL API",
-    "KEDRO_GRAPHQL_APP_TITLE": "Kedro GraphQL API",
-    "KEDRO_GRAPHQL_ALWAYS_HOOKS": [],
-    "KEDRO_GRAPHQL_BACKEND": "kedro_graphql.backends.mongodb.MongoBackend",
-    "KEDRO_GRAPHQL_BROKER": "redis://localhost",
-    "KEDRO_GRAPHQL_CELERY_RESULT_BACKEND": "redis://localhost",
-    "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL": 5,
-    "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD": 60,
-    "KEDRO_GRAPHQL_CLIENT_URI_GRAPHQL": "http://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_CLIENT_URI_WS": "ws://localhost:5000/graphql",
-    "KEDRO_GRAPHQL_CONF_SOURCE": None,
-    "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [],
-    "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [],
-    "KEDRO_GRAPHQL_DEPRECATIONS_DOCS": None,
-    "KEDRO_GRAPHQL_ENV": "local",
-    "KEDRO_GRAPHQL_EVENTS_CONFIG": None,
-    "KEDRO_GRAPHQL_IMPORTS": ["kedro_graphql.plugins.plugins"],
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS": ["./data", "/var", "/tmp"],
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM": "HS256",
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY": "my-secret-key",
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL": "http://localhost:5000",
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS": ["./data"],
-    "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB": 10,
-    "KEDRO_GRAPHQL_LOG_PATH_PREFIX": None,
-    "KEDRO_GRAPHQL_LOG_TMP_DIR": tempfile.TemporaryDirectory().name,
-    "KEDRO_GRAPHQL_MONGO_DB_COLLECTION": "pipelines",
-    "KEDRO_GRAPHQL_MONGO_DB_NAME": "pipelines",
-    "KEDRO_GRAPHQL_MONGO_URI": "mongodb://root:example@localhost:27017/",
-    "KEDRO_GRAPHQL_PERMISSIONS": "kedro_graphql.permissions.IsAuthenticatedAlways",
-    "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP": {
-        # "KEDRO_GRAPHQL_PERMISSIONS": "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail",
-        "EXTERNAL_GROUP_NAME": "admin"
-    },
-    "KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP": {
-        "admin": ["create_pipeline",
-                  "read_pipeline",
-                  "read_pipelines",
-                  "update_pipeline",
-                  "delete_pipeline",
-                  "read_pipeline_template",
-                  "read_pipeline_templates",
-                  "create_dataset",
-                  "read_dataset",
-                  "subscribe_to_events",
-                  "subscribe_to_logs",
-                  "create_event"]
-    },
-    "KEDRO_GRAPHQL_PROJECT_VERSION": "None",
-    "KEDRO_GRAPHQL_ROOT_PATH": "",
-    "KEDRO_GRAPHQL_RUNNER": "kedro.runner.SequentialRunner",
-    # "KEDRO_GRAPHQL_RUNNER": "kedro_graphql.runner.argo.ArgoWorkflowsRunner",
-    "KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC": 43200,
-    "KEDRO_GRAPHQL_SIGNED_URL_PROVIDER": "kedro_graphql.signed_url.s3_provider.S3Provider",
-}
+def _alias(name: str) -> str:
+    return f"KEDRO_GRAPHQL_{name.upper()}"
 
 
-def load_api_spec():
-    """Load API configuration from yaml file."""
-    # load the UI yaml specification
-    spec = os.environ.get("KEDRO_GRAPHQL_API_SPEC", None)
-    if spec:
-        with open(spec) as stream:
-            try:
-                conf = yaml.safe_load(stream)
-            except yaml.YAMLError as exc:
-                logger.error(str(exc))
-                return {}
+class KedroGraphQLConfig(BaseModel):
+    """Validated configuration shared by the API and worker."""
 
-        # import additinal modules to enable plugin discovery
-        # e.g. @gql_form, @gql_data, etc...
-        imports = conf["config"]["imports"]
-        if isinstance(imports, str):
-            # Handle comma-separated string
-            imports = [i.strip() for i in imports.split(',') if i.strip()]
-        elif isinstance(imports, list):
-            # Already a list, just ensure strings are stripped
-            imports = [i.strip() for i in imports if i.strip()]
+    model_config = ConfigDict(alias_generator=_alias, populate_by_name=True, extra="forbid")
 
-        for i in imports:
-            import_module(i)
+    app: str = "kedro_graphql.asgi.create_app"
+    app_description: str = "A tool for serving kedro projects as a GraphQL API"
+    app_title: str = "Kedro GraphQL API"
+    always_hooks: list[str] = Field(default_factory=list)
+    backend: str = "kedro_graphql.backends.mongodb.MongoBackend"
+    broker: str = "redis://localhost"
+    celery_result_backend: str = "redis://localhost"
+    celery_abort_polling_interval: float = 5
+    celery_abort_grace_period: float = 60
+    client_uri_graphql: str = "http://localhost:5000/graphql"
+    client_uri_ws: str = "ws://localhost:5000/graphql"
+    conf_source: str | None = None
+    dataset_filepath_masks: list[dict[str, str]] = Field(default_factory=list)
+    dataset_filepath_allowed_roots: list[str] = Field(default_factory=list)
+    deprecations_docs: str | None = None
+    env: str = "local"
+    events_config: dict[str, dict[str, Any]] | None = None
+    imports: list[str] = Field(default_factory=lambda: ["kedro_graphql.plugins.plugins"])
+    local_file_provider_download_allowed_roots: list[str] = Field(
+        default_factory=lambda: ["./data", "/var", "/tmp"]
+    )
+    local_file_provider_jwt_algorithm: str = "HS256"
+    local_file_provider_jwt_secret_key: str = "my-secret-key"
+    local_file_provider_server_url: str = "http://localhost:5000"
+    local_file_provider_upload_allowed_roots: list[str] = Field(
+        default_factory=lambda: ["./data"]
+    )
+    local_file_provider_upload_max_file_size_mb: int = 10
+    log_path_prefix: str | None = None
+    log_tmp_dir: str = str(Path(tempfile.gettempdir()) / "kedro-graphql")
+    mongo_db_collection: str = "pipelines"
+    mongo_db_name: str = "pipelines"
+    mongo_uri: str = "mongodb://root:example@localhost:27017/"
+    permissions: str = "kedro_graphql.permissions.IsAuthenticatedAlways"
+    permissions_group_to_role_map: dict[str, str] = Field(
+        default_factory=lambda: {"EXTERNAL_GROUP_NAME": "admin"}
+    )
+    permissions_role_to_action_map: dict[str, list[str]] = Field(
+        default_factory=lambda: {
+            "admin": [
+                "create_pipeline",
+                "read_pipeline",
+                "read_pipelines",
+                "update_pipeline",
+                "delete_pipeline",
+                "read_pipeline_template",
+                "read_pipeline_templates",
+                "create_dataset",
+                "read_dataset",
+                "subscribe_to_events",
+                "subscribe_to_logs",
+                "create_event",
+            ]
+        }
+    )
+    project_name: str | None = Field(default=None, alias="KEDRO_PROJECT_NAME")
+    project_version: str = "None"
+    root_path: str = ""
+    runner: str = "kedro.runner.SequentialRunner"
+    signed_url_max_expires_in_sec: int = 43200
+    signed_url_provider: str = "kedro_graphql.signed_url.s3_provider.S3Provider"
 
-        config = {"_".join(["KEDRO_GRAPHQL", k.upper()]): v for k,
-                  v in conf["config"].items()}
+    @field_validator(
+        "always_hooks",
+        "imports",
+        "local_file_provider_download_allowed_roots",
+        "local_file_provider_upload_allowed_roots",
+        mode="before",
+    )
+    @classmethod
+    def _parse_list(cls, value):
+        if not isinstance(value, str):
+            return value
+        if not value.strip():
+            return []
+        if value.lstrip().startswith("["):
+            return json.loads(value)
+        return [item.strip() for item in value.split(",") if item.strip()]
 
-        return config
-    else:
-        logger.debug("No API spec file found. Using default configuration.")
+    @field_validator(
+        "events_config",
+        "dataset_filepath_masks",
+        "dataset_filepath_allowed_roots",
+        "permissions_group_to_role_map",
+        "permissions_role_to_action_map",
+        mode="before",
+    )
+    @classmethod
+    def _parse_json(cls, value):
+        return json.loads(value) if isinstance(value, str) else value
+
+
+def load_api_spec(path: str | Path | None = None) -> dict[str, Any]:
+    spec = path or os.environ.get("KEDRO_GRAPHQL_API_SPEC")
+    if not spec:
         return {}
+    with Path(spec).open() as stream:
+        document = yaml.safe_load(stream) or {}
+    return {_alias(key): value for key, value in document.get("config", {}).items()}
 
 
-cli_config = {}  # placeholder for CLI config
+def load_config(
+    cli_config: Mapping[str, Any] | None = None,
+    api_spec: str | Path | None = None,
+) -> KedroGraphQLConfig:
+    """Load and validate configuration using the documented precedence order."""
 
-
-def env_var_parser(config):
-    # Parse JSON strings for complex data types
-    json_fields = [
-        "KEDRO_GRAPHQL_EVENTS_CONFIG",
-        "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP",
-        "KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP",
-        "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS",
-        "KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS",
-    ]
-
-    # Fields that can be either JSON arrays, comma-separated strings, or lists
-    list_fields = [
-        "KEDRO_GRAPHQL_ALWAYS_HOOKS",
-        "KEDRO_GRAPHQL_IMPORTS",
-        "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS",
-        "KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS",
-    ]
-
-    for field in json_fields:
-        if config.get(field, None) and isinstance(config[field], str):
-            try:
-                config[field] = json.loads(config[field])
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse JSON for {field}: {config[field]}")
-
-    # Handle list fields. Can be string (comma-separated) or list or JSON array
-    for field in list_fields:
-        if field in config:
-            value = config[field]
-            if isinstance(value, str):
-                if value.strip():
-                    # Try to parse as JSON first
-                    try:
-                        config[field] = json.loads(value)
-                    except json.JSONDecodeError:
-                        # If not JSON, treat as comma-separated string
-                        config[field] = [i.strip()
-                                         for i in value.split(',') if i.strip()]
-                else:
-                    # Empty string should become empty list
-                    config[field] = []
-    return config
-
-
-def load_config(cli_config=cli_config):
-    """Load configuration from the environment variables and API spec.
-
-    Configuration precedence (highest to lowest):
-    1. YAML API spec
-    2. CLI flags
-    3. Environment variables
-    4. .env file
-    5. Defaults
-    """
-
-    config = {
-        **copy.deepcopy(defaults),  # defaults (lowest precedence)
-        **dotenv_values(".env"),  # .env file
-        **os.environ,  # environment variables
-        **cli_config,  # CLI flags (higher precedence than env vars)
-        **load_api_spec(),  # YAML API spec (highest precedence)
+    aliases = {
+        field.alias or _alias(name)
+        for name, field in KedroGraphQLConfig.model_fields.items()
     }
-    config = env_var_parser(config)  # special parsing for any environment variables
-
-    return config
+    dotenv = {key: value for key, value in dotenv_values(".env").items() if key in aliases}
+    environment = {key: value for key, value in os.environ.items() if key in aliases}
+    values = {
+        **dotenv,
+        **environment,
+        **(cli_config or {}),
+        **load_api_spec(api_spec),
+    }
+    return KedroGraphQLConfig.model_validate(values)

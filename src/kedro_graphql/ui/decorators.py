@@ -1,4 +1,5 @@
 from importlib import import_module
+from kedro_graphql.config import KedroGraphQLConfig
 from kedro_graphql.logs.logger import logger
 
 UI_PLUGINS = {"FORMS": {},
@@ -7,12 +8,12 @@ UI_PLUGINS = {"FORMS": {},
               }
 
 
-def discover_plugins(config):
+def discover_plugins(config: KedroGraphQLConfig):
     """Discover and import plugins based on the configuration.
     Args:
         config (dict): Configuration dictionary containing the imports.
     """
-    for i in config["KEDRO_GRAPHQL_IMPORTS"]:
+    for i in config.imports:
         import_module(i)
 
 

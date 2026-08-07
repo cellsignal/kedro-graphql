@@ -12,7 +12,6 @@ from bson.objectid import ObjectId
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES, READY_STATES
 from fastapi.encoders import jsonable_encoder
-from kedro.framework.project import pipelines
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
@@ -25,7 +24,6 @@ from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
 from . import __version__ as kedro_graphql_version
-from .config import load_config
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
@@ -53,19 +51,24 @@ from .pipeline_config import (
 )
 from .runners import get_runner_class
 from .tasks import run_pipeline
-from .permissions import get_permissions
-from .signed_url.base import SignedUrlProvider
+from .permissions import AppPermission, permission_class
 from .utils import generate_unique_paths
 
-CONFIG = load_config()
-logger.debug("configuration loaded by {s}".format(s=__name__))
 
-PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
-logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
+def _services(info):
+    return info.context.request.app.state.services
 
 
-def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
-    full_pipeline = app.kedro_pipelines[p.name]
+def _config(info):
+    return _services(info).config
+
+
+def _permission_class(info):
+    return permission_class(info)
+
+
+def _normalize_pipeline(p, metadata, slices, only_missing, runner, validate=False):
+    full_pipeline = metadata.pipelines[p.name]
     selected_pipeline = filter_pipeline(full_pipeline, slices)
     p.describe = selected_pipeline.describe()
     p.nodes = [
@@ -104,12 +107,12 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     return p
 
 
-def _effective_hooks(app, hooks):
+def _effective_hooks(services, hooks):
     hooks = hooks or []
-    unknown = sorted(set(hooks) - app.available_hooks)
+    unknown = sorted(set(hooks) - services.available_hooks)
     if unknown:
         raise InvalidPipeline(f"Unavailable pipeline hooks: {unknown}")
-    return list(dict.fromkeys([*app.always_hooks, *hooks]))
+    return list(dict.fromkeys([*services.config.always_hooks, *hooks]))
 
 
 def encode_cursor(id: int) -> str:
@@ -174,12 +177,12 @@ class PipelineExtension(FieldExtension):
         if isinstance(pipeline, Pipeline):
             # mask filepaths before returning
             return PipelineSanitizer.mask_filepaths(
-                pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+                pipeline, _config(info).dataset_filepath_masks)
         elif isinstance(pipeline, Pipelines):
             pipelines = []
             for p in pipeline.pipelines:
                 pipelines.append(PipelineSanitizer.mask_filepaths(
-                    p, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"]))
+                    p, _config(info).dataset_filepath_masks))
             pipeline.pipelines = pipelines
             return pipeline
 
@@ -205,12 +208,12 @@ class PipelineExtension(FieldExtension):
         if isinstance(pipeline, Pipeline):
             # mask filepaths before returning
             return PipelineSanitizer.mask_filepaths(
-                pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+                pipeline, _config(info).dataset_filepath_masks)
         elif isinstance(pipeline, Pipelines):
             pipelines = []
             for p in pipeline.pipelines:
                 pipelines.append(PipelineSanitizer.mask_filepaths(
-                    p, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"]))
+                    p, _config(info).dataset_filepath_masks))
             pipeline.pipelines = pipelines
             return pipeline
 
@@ -247,16 +250,16 @@ class PipelineInputExtension(FieldExtension):
         pipeline_input = kwargs["pipeline"]
 
         kwargs["pipeline"] = PipelineSanitizer.unmask_filepaths(
-            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+            pipeline_input, _config(info).dataset_filepath_masks)
 
         PipelineSanitizer.sanitize_filepaths(
-            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS"])
+            pipeline_input, _config(info).dataset_filepath_allowed_roots)
 
         # call original resolver
         pipeline = next_(source, info, **kwargs)
         # mask filepaths again before returning
         return PipelineSanitizer.mask_filepaths(
-            pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+            pipeline, _config(info).dataset_filepath_masks)
 
     async def resolve_async(
         self, next_: Callable[..., Any], source: Any, info: strawberry.Info, **kwargs
@@ -282,16 +285,16 @@ class PipelineInputExtension(FieldExtension):
         pipeline_input = kwargs["pipeline"]
 
         kwargs["pipeline"] = PipelineSanitizer.unmask_filepaths(
-            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+            pipeline_input, _config(info).dataset_filepath_masks)
 
         PipelineSanitizer.sanitize_filepaths(
-            pipeline_input, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS"])
+            pipeline_input, _config(info).dataset_filepath_allowed_roots)
 
         # call original resolver
         pipeline = await next_(source, info, **kwargs)
         # mask filepaths again before returning
         return PipelineSanitizer.mask_filepaths(
-            pipeline, CONFIG["KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS"])
+            pipeline, _config(info).dataset_filepath_masks)
 
 
 class PipelineSanitizer:
@@ -375,16 +378,16 @@ class PipelineSanitizer:
 
 @strawberry.type
 class Query:
-    @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_template")])])
+    @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
-        for p in info.context["request"].app.kedro_pipelines_index:
+        for p in _services(info).metadata.templates:
             if str(p.id) == id:
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
+                    f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
         raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
 
-    @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline_templates")])])
+    @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
         if cursor is not None:
             # decode the user ID from the given cursor.
@@ -394,7 +397,7 @@ class Query:
             pipe_id = ObjectId("100000000000000000000000")
 
         # filter the pipeline template data, going through the next set of results.
-        filtered_data = [pipe for pipe in info.context["request"].app.kedro_pipelines_index
+        filtered_data = [pipe for pipe in _services(info).metadata.templates
                          if pipe.id.generation_time >= pipe_id.generation_time]
 
         # slice the relevant pipeline template data (Here, we also slice an
@@ -410,26 +413,26 @@ class Query:
             # don't have the next cursor.
             next_cursor = None
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline_templates, limit={limit}, cursor={cursor}")
+            f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline_templates, limit={limit}, cursor={cursor}")
         return PipelineTemplates(
             pipeline_templates=sliced_pipes, page_meta=PageMeta(
                 next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipeline")]), PipelineExtension()])
+    @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline")]), PipelineExtension()])
     async def read_pipeline(self, id: str, info: Info) -> Pipeline:
         try:
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipeline, id={id}")
+            f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline, id={id}")
         return p
 
-    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_pipelines")]), PipelineExtension()])
+    @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipelines")]), PipelineExtension()])
     async def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
         if cursor is not None:
@@ -438,7 +441,7 @@ class Query:
         else:
             pipe_id = "000000000000000000000000"  # unix epoch Jan 1, 1970 as objectId
 
-        results = await info.context["request"].app.backend.list(
+        results = await _services(info).backend.list(
             cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
         if len(results) > limit:
 
@@ -451,13 +454,13 @@ class Query:
             next_cursor = None
 
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_pipelines, filter={filter}, limit={limit}, sort={sort}, cursor={cursor}")
+            f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipelines, filter={filter}, limit={limit}, sort={sort}, cursor={cursor}")
         return Pipelines(
             pipelines=results, page_meta=PageMeta(next_cursor=next_cursor)
         )
 
-    @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="read_dataset")])])
-    async def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | DataSet | None]:
+    @strawberry.field(description="Read a dataset with a signed URL", extensions=[PermissionExtension(permissions=[AppPermission(action="read_dataset")])])
+    async def read_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: Optional[int] = None) -> List[SignedUrl | SignedUrls | DataSet | None]:
         """
         Get a signed URL for downloading a dataset.
 
@@ -475,12 +478,13 @@ class Query:
             TypeError: If the signed URL provider does not inherit from SignedUrlProvider.
         """
 
-        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+        expires_in_sec = expires_in_sec or _config(info).signed_url_max_expires_in_sec
+        if expires_in_sec > _config(info).signed_url_max_expires_in_sec:
             raise ValueError(
-                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
+                f"expires_in_sec cannot be greater than {_config(info).signed_url_max_expires_in_sec} seconds ({_config(info).signed_url_max_expires_in_sec // 3600} hours)")
 
         urls = []
-        p = await info.context["request"].app.backend.read(id=id)
+        p = await _services(info).backend.read(id=id)
 
         catalog = {d.name: d for d in p.data_catalog}
 
@@ -494,21 +498,14 @@ class Query:
 
             if d.list_partitions:
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=list_partitions, dataset={dataset.name}")
+                    f"user={_permission_class(info).get_user_info(info)['email']}, action=list_partitions, dataset={dataset.name}")
                 urls.append(dataset)
                 continue
 
-            module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
-                ".", 1)
-            module = import_module(module_path)
-            cls = getattr(module, class_name)
-
-            if not issubclass(cls, SignedUrlProvider):
-                raise TypeError(
-                    f"{class_name} must inherit from SignedUrlProvider")
+            cls = _services(info).signed_url_provider
 
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
+                f"user={_permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, expires_in_sec={expires_in_sec}")
             urls.append(cls.read(info, dataset, expires_in_sec, d.partitions))
 
         return urls
@@ -516,25 +513,24 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")]), PipelineInputExtension()])
+    @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")]), PipelineInputExtension()])
     async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
 
-        if pipeline.name not in pipelines.keys():
+        if pipeline.name not in _services(info).metadata.pipelines:
             raise InvalidPipeline(
                 f"Pipeline {pipeline.name} does not exist in the project.")
 
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
-        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
+        p.hooks = _effective_hooks(_services(info), pipeline.hooks)
 
-        runner = d.get(
-            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        runner = d.get("runner") or _config(info).runner
         p = _normalize_pipeline(
             p,
-            info.context["request"].app,
+            _services(info).metadata,
             d.get("slices"),
             d.get("only_missing", False),
             runner,
@@ -550,10 +546,10 @@ class Mutation:
         p.created_at = started_at
 
         # Get kedro project, kedro-graphql, and pipeline versions
-        p.project_version = CONFIG.get("KEDRO_PROJECT_VERSION", None)
+        p.project_version = _config(info).project_version
         p.kedro_graphql_version = kedro_graphql_version
         p.pipeline_version = None
-        package_name = CONFIG.get("KEDRO_PROJECT_NAME", None)
+        package_name = _config(info).project_name
         if package_name:
             try:
                 module = import_module(
@@ -573,13 +569,13 @@ class Mutation:
             if dry_run:
                 return p
             logger.info(f'Staging pipeline {p.name}')
-            p = await info.context["request"].app.backend.create(p)
+            p = await _services(info).backend.create(p)
             if unique_paths:
                 p = generate_unique_paths(p, unique_paths)
-                p = await info.context["request"].app.backend.update(p)
+                p = await _services(info).backend.update(p)
 
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
+                f"user={_permission_class(info).get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
             return p
         else:
             p.status.append(PipelineStatus(state=State.READY,
@@ -593,10 +589,10 @@ class Mutation:
             if dry_run:
                 return p
 
-            p = await info.context["request"].app.backend.create(p)
+            p = await _services(info).backend.create(p)
             if unique_paths:
                 p = generate_unique_paths(p, unique_paths)
-                p = await info.context["request"].app.backend.update(p)
+                p = await _services(info).backend.update(p)
 
             result = run_pipeline.delay(
                 id=str(p.id),
@@ -610,14 +606,14 @@ class Mutation:
             )
 
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
+                f"user={_permission_class(info).get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
             return p
 
-    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")]), PipelineInputExtension()])
+    @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="update_pipeline")]), PipelineInputExtension()])
     async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
 
         try:
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -645,20 +641,19 @@ class Mutation:
                 return p
             AbortableAsyncResult(
                 p.status[-1].task_id,
-                app=info.context["request"].app.celery_app
+                app=_services(info).celery
             ).abort()
             p.status[-1].state = State.ABORTING
             p.status[-1].abort_requested_at = datetime.now()
-            p = await info.context["request"].app.backend.update(p)
+            p = await _services(info).backend.update(p)
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
+                f"user={_permission_class(info).get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
             return p
 
-        runner = pipeline_input_dict.get(
-            "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
+        runner = pipeline_input_dict.get("runner") or _config(info).runner
         submitted = _normalize_pipeline(
             Pipeline.decode(pipeline_input_dict),
-            info.context["request"].app,
+            _services(info).metadata,
             pipeline_input_dict.get("slices"),
             pipeline_input_dict.get("only_missing", False),
             runner,
@@ -670,7 +665,7 @@ class Mutation:
         p.data_catalog = submitted.data_catalog
         p.tags = submitted.tags
         p.parent = pipeline_input_dict.get("parent")
-        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
+        p.hooks = _effective_hooks(_services(info), pipeline.hooks)
 
         if unique_paths:
             p = generate_unique_paths(p, unique_paths)
@@ -701,7 +696,7 @@ class Mutation:
                 return p
 
             # Update pipeline in backend before running task
-            p = await info.context["request"].app.backend.update(p)
+            p = await _services(info).backend.update(p)
 
             serial = p.encode(encoder="kedro")
 
@@ -717,7 +712,7 @@ class Mutation:
             )
 
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
+                f"user={_permission_class(info).get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
 
         # If PipelineInput is STAGED and pipeline is not already running or staged
         elif requested_state == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
@@ -731,28 +726,28 @@ class Mutation:
             logger.info(f'Staging pipeline {p.name}')
         if dry_run:
             return p
-        p = await info.context["request"].app.backend.update(p)
+        p = await _services(info).backend.update(p)
         logger.info(
-            f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
+            f"user={_permission_class(info).get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
 
         return p
 
-    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="delete_pipeline")]), PipelineExtension()])
+    @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="delete_pipeline")]), PipelineExtension()])
     async def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
         try:
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        await info.context["request"].app.backend.delete(id=id)
+        await _services(info).backend.delete(id=id)
         logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
         return p
 
-    @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_dataset")])])
-    async def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: int = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]) -> List[SignedUrl | SignedUrls | None]:
+    @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[AppPermission(action="create_dataset")])])
+    async def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: Optional[int] = None) -> List[SignedUrl | SignedUrls | None]:
         """
         Get a signed URL for uploading a dataset.
 
@@ -770,11 +765,12 @@ class Mutation:
             DataSetConfigError: If the dataset configuration is invalid or cannot be parsed.
             TypeError: If the signed URL provider does not inherit from SignedUrlProvider.
         """
-        if expires_in_sec > CONFIG["KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC"]:
+        expires_in_sec = expires_in_sec or _config(info).signed_url_max_expires_in_sec
+        if expires_in_sec > _config(info).signed_url_max_expires_in_sec:
             raise ValueError(
-                f"expires_in_sec cannot be greater than {CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC']} seconds ({CONFIG['KEDRO_GRAPHQL_SIGNED_URL_MAX_EXPIRES_IN_SEC'] // 3600} hours)")
+                f"expires_in_sec cannot be greater than {_config(info).signed_url_max_expires_in_sec} seconds ({_config(info).signed_url_max_expires_in_sec // 3600} hours)")
         urls = []
-        p = await info.context["request"].app.backend.read(id=id)
+        p = await _services(info).backend.read(id=id)
 
         if p.status[-1].state.value != "STAGED":
             raise ValueError(
@@ -790,16 +786,9 @@ class Mutation:
                 urls.append(None)
                 continue
             else:
-                module_path, class_name = CONFIG["KEDRO_GRAPHQL_SIGNED_URL_PROVIDER"].rsplit(
-                    ".", 1)
-                module = import_module(module_path)
-                cls = getattr(module, class_name)
-
-                if not issubclass(cls, SignedUrlProvider):
-                    raise TypeError(
-                        f"{class_name} must inherit from SignedUrlProvider")
+                cls = _services(info).signed_url_provider
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, expires_in_sec={expires_in_sec}")
+                    f"user={_permission_class(info).get_user_info(info)['email']}, action=create_dataset, expires_in_sec={expires_in_sec}")
                 url = cls.create(info, dataset, expires_in_sec,
                                  dataset_input.partitions)
                 urls.append(url)
@@ -808,12 +797,12 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
-    @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_events")])])
+    @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[AppPermission(action="subscribe_to_events")])])
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent]:
         """Subscribe to pipeline events.
         """
         try:
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -823,10 +812,10 @@ class Subscription:
         while (not p.status[-1].task_id):
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
 
         if p and p.status[-1].state.value not in READY_STATES:
-            async for e in PipelineEventMonitor(app=info.context["request"].app.celery_app, task_id=p.status[-1].task_id).start(interval=interval):
+            async for e in PipelineEventMonitor(app=_services(info).celery, task_id=p.status[-1].task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
         else:
@@ -840,11 +829,11 @@ class Subscription:
                 traceback=p.status[-1].task_traceback
             )
 
-    @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="subscribe_to_logs")])])
+    @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[AppPermission(action="subscribe_to_logs")])])
     async def pipeline_logs(self, id: str, info: Info) -> AsyncGenerator[PipelineLogMessage, None]:
         """Subscribe to pipeline logs."""
         try:
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
             if p is None:
                 raise InvalidPipeline(
                     f"Pipeline {id} does not exist in the project.")
@@ -854,10 +843,10 @@ class Subscription:
         while (not p.status[-1].task_id):
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
-            p = await info.context["request"].app.backend.read(id=id)
+            p = await _services(info).backend.read(id=id)
 
         if p:
-            stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=info.context["request"].app.config["KEDRO_GRAPHQL_BROKER"])
+            stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=_config(info).broker)
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)

@@ -7,10 +7,9 @@ import tempfile
 import redis
 
 import pytest
-from kedro.framework.session import KedroSession
 from kedro.framework.startup import bootstrap_project
 
-from kedro_graphql.asgi import KedroGraphQL
+from kedro_graphql.asgi import create_app
 from kedro_graphql.models import (
     DataSet,
     Parameter,
@@ -22,13 +21,12 @@ from kedro_graphql.models import (
 from kedro_graphql.tasks import run_pipeline
 from kedro_graphql.utils import run_sync
 from fastapi.middleware.cors import CORSMiddleware
-from kedro.framework.session import KedroSession
-from kedro.framework.startup import bootstrap_project
 from kedro_graphql.client import KedroGraphqlClient
+from kedro_graphql.context import GraphQLContext
 from multiprocessing import Process
 import uvicorn
 from pathlib import Path
-from kedro_graphql.asgi import KedroGraphQL
+from kedro_graphql.project import load_project_metadata
 import multiprocessing as mp
 import tempfile
 import pytest_asyncio
@@ -40,9 +38,9 @@ if mp.get_start_method(allow_none=True) != "spawn":
 
 
 @pytest.fixture(scope="session")
-def kedro_session():
+def project_metadata():
     bootstrap_project(Path.cwd())
-    return KedroSession.create()
+    return load_project_metadata(Path.cwd(), kedro_graphql_config())
 
 
 def start_server(port=5000, config={}):
@@ -50,10 +48,11 @@ def start_server(port=5000, config={}):
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
             bootstrap_project(Path.cwd())
-            session = KedroSession.create()
-            app = KedroGraphQL(kedro_session=session, config=config)
-            app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
-            app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
+            metadata = load_project_metadata(Path.cwd(), config)
+            config = config.model_copy(
+                update={"log_path_prefix": tmp, "log_tmp_dir": tmp2}
+            )
+            app = create_app(config, metadata)
             # print("Starting Kedro GraphQL server with config: ", app.config)
             app.add_middleware(
                 CORSMiddleware,
@@ -81,14 +80,10 @@ def mock_server():
 @pytest.fixture(scope="session")
 def mock_server_5001():
     config = kedro_graphql_config()
-    config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedRBAC"
-    config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
-        "test_group": "admin"
-    }
-    # set env variables so other modules will load config correctly
-    os.environ["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = json.dumps(
-        config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
-    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = config["KEDRO_GRAPHQL_PERMISSIONS"]
+    config = config.model_copy(update={
+        "permissions": "kedro_graphql.permissions.IsAuthenticatedXForwardedRBAC",
+        "permissions_group_to_role_map": {"test_group": "admin"},
+    })
 
     proc = Process(target=start_server, args=(), kwargs={
                    "port": 5001,
@@ -101,14 +96,10 @@ def mock_server_5001():
 @pytest.fixture(scope="session")
 def mock_server_5002():
     config = kedro_graphql_config()
-    config["KEDRO_GRAPHQL_PERMISSIONS"] = "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail"
-    config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = {
-        "test_group": "admin"
-    }
-    # set env variables so other modules will load config correctly
-    os.environ["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"] = json.dumps(
-        config["KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP"])
-    os.environ["KEDRO_GRAPHQL_PERMISSIONS"] = config["KEDRO_GRAPHQL_PERMISSIONS"]
+    config = config.model_copy(update={
+        "permissions": "kedro_graphql.permissions.IsAuthenticatedXForwardedEmail",
+        "permissions_group_to_role_map": {"test_group": "admin"},
+    })
 
     proc = Process(target=start_server, args=(), kwargs={
                    "port": 5002,
@@ -128,15 +119,17 @@ async def mock_client(mock_server):
 
 
 @pytest.fixture(scope="session")
-def mock_app(kedro_session):
+def mock_app(project_metadata):
     config = kedro_graphql_config()
     with tempfile.TemporaryDirectory() as tmp:
         with tempfile.TemporaryDirectory() as tmp2:
-            app = KedroGraphQL(kedro_session=kedro_session, config=config)
-            app.config["KEDRO_GRAPHQL_LOG_PATH_PREFIX"] = tmp
-            app.config["KEDRO_GRAPHQL_LOG_TMP_DIR"] = tmp2
-            app.config["KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL"] = 1
-            app.config["KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD"] = 5
+            config = config.model_copy(update={
+                "log_path_prefix": tmp,
+                "log_tmp_dir": tmp2,
+                "celery_abort_polling_interval": 1,
+                "celery_abort_grace_period": 5,
+            })
+            app = create_app(config, project_metadata)
 
             yield app
 
@@ -168,9 +161,8 @@ def cleanup_test_redis():
 
 @pytest.fixture(scope='session')
 def mock_celery_session_app(mock_app, mock_info_context, celery_session_app):
-    celery_session_app.kedro_graphql_backend = mock_app.backend
-    celery_session_app.kedro_graphql_schema = mock_app.schema
-    celery_session_app.kedro_graphql_config = mock_app.config
+    celery_session_app.kedro_graphql_backend = mock_app.state.services.backend
+    celery_session_app.kedro_graphql_config = mock_app.state.services.config
     return celery_session_app
 
 
@@ -186,7 +178,7 @@ def mock_info_context(mock_app):
         app = mock_app
         headers = {}
 
-    with patch("strawberry.types.Info.context", {"request": Request()}) as m:
+    with patch("strawberry.types.Info.context", GraphQLContext(Request())) as m:
         yield m
 
 
@@ -265,14 +257,14 @@ def mock_pipeline(mock_celery_session_app,
         parameters=[Parameter(**p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
-                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                               session=mock_app.kedro_session.session_id,
+                               runner=mock_app.state.services.config.runner,
+                               session="test-session",
                                started_at=datetime.now(),
                                task_name=str(run_pipeline))]
     )
 
     p.created_at = datetime.now()
-    p = run_sync(mock_app.backend.create(p))
+    p = run_sync(mock_app.state.services.backend.create(p))
 
     serial = p.serialize()
 
@@ -280,12 +272,12 @@ def mock_pipeline(mock_celery_session_app,
                                               "name": "example00",
                                               "data_catalog": serial["data_catalog"],
                                               "parameters": serial["parameters"],
-                                              "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]},
+                                              "runner": mock_app.state.services.config.runner},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p.status[-1].task_id = result.id
-    p = run_sync(mock_app.backend.update(p))
+    p = run_sync(mock_app.state.services.backend.update(p))
     return p
 
 
@@ -306,14 +298,14 @@ def mock_pipeline_staged(mock_app):
         parameters=[Parameter(**p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
-                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                               session=mock_app.kedro_session.session_id,
+                               runner=mock_app.state.services.config.runner,
+                               session="test-session",
                                started_at=datetime.now(),
                                task_name=str(run_pipeline))]
     )
 
     p.created_at = datetime.now()
-    p = run_sync(mock_app.backend.create(p))
+    p = run_sync(mock_app.state.services.backend.create(p))
     return p
 
 
@@ -334,14 +326,14 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
         parameters=[Parameter(**p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.READY,
-                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                               session=mock_app.kedro_session.session_id,
+                               runner=mock_app.state.services.config.runner,
+                               session="test-session",
                                started_at=datetime.now(),
                                task_name=str(run_pipeline))]
     )
 
     p.created_at = datetime.now()
-    p = run_sync(mock_app.backend.create(p))
+    p = run_sync(mock_app.state.services.backend.create(p))
 
     serial = p.serialize()
 
@@ -349,12 +341,12 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
                                               "name": "example00",
                                               "data_catalog": serial["data_catalog"],
                                               "parameters": serial["parameters"],
-                                              "runner": mock_app.config["KEDRO_GRAPHQL_RUNNER"]},
+                                              "runner": mock_app.state.services.config.runner},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
     p.status[-1].task_id = result.id
-    p = run_sync(mock_app.backend.update(p))
+    p = run_sync(mock_app.state.services.backend.update(p))
     return p
 
 
@@ -377,8 +369,8 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
     )
 
     p.status.append(PipelineStatus(state=State.READY,
-                                   runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                                   session=mock_app.kedro_session.session_id,
+                                   runner=mock_app.state.services.config.runner,
+                                   session="test-session",
                                    started_at=datetime.now(),
                                    task_name=str(run_pipeline)))
 
@@ -415,14 +407,14 @@ def mock_example01(mock_app, mock_timestamped_partitioned_dir, mock_text_in):
         parameters=[Parameter(**p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
-                               runner=mock_app.config["KEDRO_GRAPHQL_RUNNER"],
-                               session=mock_app.kedro_session.session_id,
+                               runner=mock_app.state.services.config.runner,
+                               session="test-session",
                                started_at=datetime.now(),
                                task_name=str(run_pipeline))]
     )
 
     p.created_at = datetime.now()
-    p = run_sync(mock_app.backend.create(p))
+    p = run_sync(mock_app.state.services.backend.create(p))
     return p
 
 
@@ -433,7 +425,7 @@ def delete_pipeline_collection(mock_app):
     # Will be executed after the last test
 
     async def _drop():
-        db = mock_app.backend._get_collection().database
-        await db[mock_app.config["KEDRO_GRAPHQL_MONGO_DB_NAME"]].drop()
+        db = mock_app.state.services.backend._get_collection().database
+        await db[mock_app.state.services.config.mongo_db_name].drop()
 
     run_sync(_drop())

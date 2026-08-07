@@ -5,7 +5,7 @@ from kedro_graphql.models import State
 
 @pytest.mark.asyncio
 async def test_backend_create(mock_app, mock_pipeline_no_task):
-    p = await mock_app.backend.create(mock_pipeline_no_task)
+    p = await mock_app.state.services.backend.create(mock_pipeline_no_task)
     assert p.id is not None
     p.id = None
     assert p == mock_pipeline_no_task
@@ -13,15 +13,15 @@ async def test_backend_create(mock_app, mock_pipeline_no_task):
 
 @pytest.mark.asyncio
 async def test_backend_update(mock_app, mock_pipeline_no_task):
-    p = await mock_app.backend.create(mock_pipeline_no_task)
+    p = await mock_app.state.services.backend.create(mock_pipeline_no_task)
     p.name = "example01"
-    p = await mock_app.backend.update(p)
+    p = await mock_app.state.services.backend.update(p)
     assert p.name == "example01"
 
 
 @pytest.mark.asyncio
 async def test_backend_update_status(mock_app, mock_pipeline_no_task):
-    p = await mock_app.backend.create(mock_pipeline_no_task)
+    p = await mock_app.state.services.backend.create(mock_pipeline_no_task)
     p.status[-1].state = State.STARTED
-    p = await mock_app.backend.update(p)
+    p = await mock_app.state.services.backend.update(p)
     assert p.status[-1].state == State.STARTED

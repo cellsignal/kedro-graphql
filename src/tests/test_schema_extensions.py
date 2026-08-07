@@ -20,8 +20,11 @@ class TestSchemaExtensions:
         c = json.loads(mock_pipeline.data_catalog[0].config)
         prefix = "/" + c["filepath"].split("/", 2)[1] + "/"
 
-        mocker.patch.dict("kedro_graphql.schema.CONFIG", {"KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [
-            {"prefix": prefix, "mask": "/REDACTED/"}]})
+        mocker.patch.object(
+            mock_app.state.services.config,
+            "dataset_filepath_masks",
+            [{"prefix": prefix, "mask": "/REDACTED/"}],
+        )
 
         query = """
                     query readPipeline($id: String!) {
@@ -29,7 +32,7 @@ class TestSchemaExtensions:
                     }
                 """
 
-        resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
+        resp = await mock_app.state.services.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
         assert resp.errors is None
         p = Pipeline.decode(resp.data["readPipeline"])
         for d in p.data_catalog:
@@ -50,15 +53,18 @@ class TestSchemaExtensions:
         pipeline's data catalog against allowed roots.
         """
 
-        mocker.patch.dict("kedro_graphql.schema.CONFIG", {
-                          "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": ["./data/"], })
+        mocker.patch.object(
+            mock_app.state.services.config,
+            "dataset_filepath_allowed_roots",
+            ["./data/"],
+        )
 
         query = """
             mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
               createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) """ + PIPELINE_GQL + """
             }
         """
-        resp = await mock_app.schema.execute(query,
+        resp = await mock_app.state.services.schema.execute(query,
                                              variable_values={"pipeline": {
                                                  "name": "example00",
                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -87,18 +93,23 @@ class TestSchemaExtensions:
         backend with unmasked filepaths.
         """
         prefix = "/" + str(mock_text_in).split("/", 2)[1] + "/"
-        mocker.patch.dict("kedro_graphql.schema.CONFIG", {
-                          "KEDRO_GRAPHQL_DATASET_FILEPATH_ALLOWED_ROOTS": [prefix], })
-
-        mocker.patch.dict("kedro_graphql.schema.CONFIG", {"KEDRO_GRAPHQL_DATASET_FILEPATH_MASKS": [
-            {"prefix": prefix, "mask": "/REDACTED/"}]})
+        mocker.patch.object(
+            mock_app.state.services.config,
+            "dataset_filepath_allowed_roots",
+            [prefix],
+        )
+        mocker.patch.object(
+            mock_app.state.services.config,
+            "dataset_filepath_masks",
+            [{"prefix": prefix, "mask": "/REDACTED/"}],
+        )
 
         query = """
             mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!]) {
               createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths) """ + PIPELINE_GQL + """
             }
         """
-        resp = await mock_app.schema.execute(query,
+        resp = await mock_app.state.services.schema.execute(query,
                                              variable_values={"pipeline": {
                                                  "name": "example00",
                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in).replace("/tmp/", "/REDACTED/")})},
@@ -122,7 +133,7 @@ class TestSchemaExtensions:
                 assert not c["filepath"].startswith(prefix)
 
         # check backend to make sure filepaths are unmasked
-        pipeline = await mock_app.backend.read(id=p.id)
+        pipeline = await mock_app.state.services.backend.read(id=p.id)
         for d in pipeline.data_catalog:
             c = json.loads(d.config)
             if c.get("filepath"):

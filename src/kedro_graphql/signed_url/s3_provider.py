@@ -2,8 +2,7 @@ from typing import List
 from kedro.io import AbstractDataset
 from strawberry.types import Info
 from .base import SignedUrlProvider
-from ..config import load_config
-from .. permissions import get_permissions
+from ..permissions import permission_class
 from .local_file_provider import LocalFileProvider
 from ..utils import parse_s3_filepath
 from ..models import DataSet, SignedUrl, SignedUrls, SignedUrlField
@@ -11,13 +10,6 @@ from ..exceptions import DataSetConfigError, DataSetError
 import boto3
 from botocore.exceptions import ClientError
 from ..logs.logger import logger
-
-CONFIG = load_config()
-logger.debug("configuration loaded by {s}".format(s=__name__))
-
-PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
-logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
-
 
 class S3Provider(SignedUrlProvider):
     """
@@ -103,7 +95,7 @@ class S3Provider(SignedUrlProvider):
             protocol, path = dataset.parse_path()
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.read(info, dataset, expires_in_sec, partitions)
 
@@ -124,7 +116,7 @@ class S3Provider(SignedUrlProvider):
                 signed_urls = []
                 for file in files:
                     logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={file}, protocol=s3, expires_in_sec={expires_in_sec}")
+                        f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={file}, protocol=s3, expires_in_sec={expires_in_sec}")
 
                     signed = S3Provider.presigned_url(
                         file, expires_in_sec)
@@ -140,7 +132,7 @@ class S3Provider(SignedUrlProvider):
             protocol, filepath = dataset.parse_filepath()
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.read(info, dataset, expires_in_sec, partitions)
 
@@ -151,7 +143,7 @@ class S3Provider(SignedUrlProvider):
             else:
 
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=s3, expires_in_sec={expires_in_sec}")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=s3, expires_in_sec={expires_in_sec}")
                 return S3Provider.presigned_url(
                     filepath, expires_in_sec)
 
@@ -188,7 +180,7 @@ class S3Provider(SignedUrlProvider):
             protocol, path = dataset.parse_path()
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={path}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.create(info, dataset, expires_in_sec, partitions)
 
@@ -209,7 +201,7 @@ class S3Provider(SignedUrlProvider):
                 signed_urls = []
                 for file in files:
                     logger.info(
-                        f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={file}, protocol=s3, expires_in_sec={expires_in_sec}")
+                        f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={file}, protocol=s3, expires_in_sec={expires_in_sec}")
 
                     signed = S3Provider.presigned_post(
                         file, expires_in_sec)
@@ -225,7 +217,7 @@ class S3Provider(SignedUrlProvider):
 
             if protocol == "file":
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, using LocalFileProvider")
 
                 return LocalFileProvider.create(info, dataset, expires_in_sec, partitions)
 
@@ -235,6 +227,6 @@ class S3Provider(SignedUrlProvider):
                     "Invalid dataset configuration. Must have 'filepath' with 's3' protocol")
             else:
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath=s3://{filepath}, protocol=s3, expires_in_sec={expires_in_sec}")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath=s3://{filepath}, protocol=s3, expires_in_sec={expires_in_sec}")
 
                 return S3Provider.presigned_post(filepath, expires_in_sec)

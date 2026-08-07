@@ -1,46 +1,35 @@
-The base application is a strawberry + FastAPI instance.  One can leverage the
-additional features FastAPI offers by defining a custom application class.
+# Extend the application
 
-This example adds a [CORSMiddleware](https://fastapi.tiangolo.com/tutorial/cors/#use-corsmiddleware).
+The configured application is a factory that receives validated configuration and
+the Kedro project metadata snapshot. A custom factory can add normal FastAPI routes
+or middleware to the default application.
 
 ```python
-## src/kedro_graphql/example/app.py
 from fastapi.middleware.cors import CORSMiddleware
-from kedro_graphql.asgi import KedroGraphQL
+
+from kedro_graphql.asgi import create_app as create_default_app
+from kedro_graphql.config import KedroGraphQLConfig
+from kedro_graphql.project import ProjectMetadata
 
 
-
-class MyApp(KedroGraphQL):
-
-    def __init__(self): 
-        super(MyApp, self).__init__()
-
-        origins = [
-            "http://localhost",
-            "http://localhost:8080",
-        ]
-        
-        self.add_middleware(
-            CORSMiddleware,
-            allow_origins=origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-        print("added CORSMiddleware")
-
+def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata):
+    app = create_default_app(config, metadata)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost", "http://localhost:8080"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    return app
 ```
 
-When starting the api server specify the import path using the
-```--app``` flag.
+Select it with the CLI:
 
 ```bash
-kedro gql --app "my_kedro_project.app.MyApp"
-## example output
-added CORSMiddleware
-INFO:     Started server process [7032]
-INFO:     Waiting for application startup.
-Connected to the MongoDB database!
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:5000 (Press CTRL+C to quit)
+kedro gql --app "my_kedro_project.app.create_app"
 ```
+
+The factory signature is `create_app(config: KedroGraphQLConfig, metadata:
+ProjectMetadata) -> FastAPI`. Pipeline execution sessions are created by workers;
+the web application does not own a `KedroSession`.

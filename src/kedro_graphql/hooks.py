@@ -7,12 +7,7 @@ from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
 from kedro_graphql.logs.logger import logger
 
-from .config import load_config
 from .exceptions import InvalidPipeline
-
-CONFIG = load_config()
-
-logger.debug("configuration loaded by {s}".format(s=__name__))
 
 
 def available_hook_names() -> set[str]:
@@ -80,8 +75,8 @@ class DataLoggingHooks:
         d["run_params"] = run_params
         catalog.save("gql_meta", d)
 
-    def save_logs(self, catalog: CatalogProtocol, session_id: str, celery_task_id: str):
-        log_dir = os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], celery_task_id)
+    def save_logs(self, catalog: CatalogProtocol, run_params: dict[str, Any]):
+        log_dir = os.path.join(run_params["log_tmp_dir"], run_params["celery_task_id"])
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:
@@ -90,13 +85,12 @@ class DataLoggingHooks:
                 with open(log_path, "r") as file:
                     logs = file.read()
                 d = catalog._get_dataset("gql_logs")
-                d.save({f"logs/{session_id}/{log_file}": logs})
+                d.save({f"logs/{run_params['session_id']}/{log_file}": logs})
 
     @hook_impl
     def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
         # Clear previous logs before pipeline run
-        log_dir = os.path.join(
-            CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], run_params["celery_task_id"])
+        log_dir = os.path.join(run_params["log_tmp_dir"], run_params["celery_task_id"])
         log_files = ["info.log", "errors.log"]
 
         for log_file in log_files:
@@ -104,7 +98,7 @@ class DataLoggingHooks:
             if os.path.exists(log_path):
                 open(log_path, 'w').close()
 
-        if CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX'):
+        if run_params.get("log_path_prefix"):
             self.save_meta(run_params, catalog)
 
     @hook_impl
@@ -112,15 +106,13 @@ class DataLoggingHooks:
             self, run_params: dict[str, Any],
             run_result: dict[str, Any],
             pipeline: Pipeline, catalog: CatalogProtocol):
-        if CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX'):
-            self.save_logs(
-                catalog, run_params["session_id"], run_params["celery_task_id"])
+        if run_params.get("log_path_prefix"):
+            self.save_logs(catalog, run_params)
 
     @hook_impl
     def on_pipeline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        if CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX'):
-            self.save_logs(
-                catalog, run_params["session_id"], run_params["celery_task_id"])
+        if run_params.get("log_path_prefix"):
+            self.save_logs(catalog, run_params)
 
 
 validation_hooks = DataValidationHooks()

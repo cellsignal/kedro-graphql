@@ -1,10 +1,15 @@
 from importlib import import_module
 
+from ..config import KedroGraphQLConfig
 
-def init_backend(config):
-    backend_module, backend_class = config["KEDRO_GRAPHQL_BACKEND"].rsplit(".", 1)
-    backend_kwargs = {"uri": config.get("KEDRO_GRAPHQL_MONGO_URI"), "db": config.get(
-        "KEDRO_GRAPHQL_MONGO_DB_NAME"), "collection": config.get("KEDRO_GRAPHQL_MONGO_DB_COLLECTION")}
+
+def init_backend(config: KedroGraphQLConfig):
+    backend_module, backend_class = config.backend.rsplit(".", 1)
+    backend_kwargs = {
+        "uri": config.mongo_uri,
+        "db": config.mongo_db_name,
+        "collection": config.mongo_db_collection,
+    }
     backend_module = import_module(backend_module)
     backend = getattr(backend_module, backend_class)
     return backend(**backend_kwargs)

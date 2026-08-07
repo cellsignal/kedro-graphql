@@ -20,21 +20,8 @@ from pathlib import Path
 from kedro_graphql.exceptions import DataSetConfigError
 # from strawberry.permission import PermissionExtension
 
-from .config import load_config
 from .logs.logger import logger
 from .pipeline_config import normalize_pipeline_config
-# from .permissions import get_permissions
-
-
-CONFIG = load_config()
-# logger.debug("configuration loaded by {s}".format(s=__name__))
-##
-# PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
-# logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
-
-
-def mark_deprecated(default=None):
-    return strawberry.field(default=default, deprecation_reason="see " + str(CONFIG["KEDRO_GRAPHQL_DEPRECATIONS_DOCS"]))
 
 
 @strawberry.type

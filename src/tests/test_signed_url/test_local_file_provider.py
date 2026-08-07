@@ -37,8 +37,8 @@ class TestLocalFileProvider:
             mock_info_context, mock_dataset, expires_in_sec=10)
         token = output.get_field_value("token")
 
-        payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                             algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+        payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
+                             algorithms=[self.config.local_file_provider_jwt_algorithm])
 
         assert isinstance(payload, dict)
 
@@ -57,8 +57,8 @@ class TestLocalFileProvider:
             assert isinstance(item, SignedUrl)
             token = item.get_field_value("token")
 
-            payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                                 algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+            payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
+                                 algorithms=[self.config.local_file_provider_jwt_algorithm])
 
             assert isinstance(payload, dict)
             assert "filepath" in payload
@@ -75,8 +75,8 @@ class TestLocalFileProvider:
         query_params = parse_qs(parsed_url.query)
         token = query_params.get("token", [None])[0]
 
-        payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                             algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+        payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
+                             algorithms=[self.config.local_file_provider_jwt_algorithm])
 
         assert isinstance(payload, dict)
 
@@ -96,8 +96,8 @@ class TestLocalFileProvider:
         for url in output.urls:
             token = urlparse(url.url).query.split("token=")[1]
 
-            payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                                 algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+            payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
+                                 algorithms=[self.config.local_file_provider_jwt_algorithm])
 
             assert isinstance(payload, dict)
             assert "filepath" in payload
@@ -119,8 +119,8 @@ class TestLocalFileProvider:
         for url in output.urls:
             token = urlparse(url.url).query.split("token=")[1]
 
-            payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                                 algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
+            payload = jwt.decode(token, self.config.local_file_provider_jwt_secret_key,
+                                 algorithms=[self.config.local_file_provider_jwt_algorithm])
 
             assert isinstance(payload, dict)
             assert "filepath" in payload
