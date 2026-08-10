@@ -22,12 +22,11 @@ from .context import GraphQLContext
 from .decorators import TYPE_PLUGINS, discover_plugins
 from .hooks import available_hook_names, hook_manager_for
 from .logs.logger import logger
-from .models import ParameterInput, Pipeline, PipelineInput
+from .pipeline_service import submit_event_pipeline
 from .permissions import get_permissions
 from .project import ProjectMetadata
 from .schema import build_schema
 from .signed_url.base import SignedUrlProvider
-from .utils import build_graphql_query
 
 
 @dataclass(frozen=True)
@@ -125,37 +124,16 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
                 and event_config["type"] == event_type
             ]
             created_pipelines = []
+            caller = permission_class(action="create_event").get_user_info(
+                Info(request)
+            )
             for name in names:
-                pipeline_input = PipelineInput.from_event(
-                    name=name, event=event, state="STAGED"
+                created = await submit_event_pipeline(
+                    request.app.state.services,
+                    name,
+                    event,
+                    caller,
                 )
-                response = await schema.execute(
-                    build_graphql_query(
-                        "createPipelineReturnFull", fragments=["FullPipeline"]
-                    ),
-                    variable_values={
-                        "pipeline": pipeline_input.to_graphql()
-                    },
-                    context_value=GraphQLContext(request),
-                )
-                staged = Pipeline.from_dict(response.data["createPipeline"])
-                pipeline_input.state = "READY"
-                pipeline_input.parameters.append(
-                    ParameterInput(
-                        name="id", value=str(staged.id), type="STRING"
-                    )
-                )
-                response = await schema.execute(
-                    build_graphql_query(
-                        "updatePipelineReturnFull", fragments=["FullPipeline"]
-                    ),
-                    variable_values={
-                        "id": staged.id,
-                        "pipeline": pipeline_input.to_graphql(),
-                    },
-                    context_value=GraphQLContext(request),
-                )
-                created = Pipeline.from_dict(response.data["updatePipeline"])
                 created_pipelines.append(created.to_dict())
             return created_pipelines
 

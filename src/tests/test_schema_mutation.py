@@ -208,7 +208,7 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "create", new_callable=AsyncMock) as create, \
-             patch("kedro_graphql.schema.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={"pipeline": {
@@ -270,7 +270,7 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "update", new_callable=AsyncMock) as update, \
-             patch("kedro_graphql.schema.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={

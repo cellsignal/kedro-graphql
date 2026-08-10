@@ -1,12 +1,9 @@
 import asyncio
-import gql
 import json
 import os
 import threading
 from functools import reduce
-from graphql.language import print_ast
-from importlib_resources import files
-from typing import Any, Awaitable, Optional, TypeVar
+from typing import Any, Awaitable, TypeVar
 from .models import Pipeline
 from urllib.parse import urlparse
 from .logs.logger import logger
@@ -58,43 +55,6 @@ def run_sync(coro: Awaitable[T]) -> T:
             thread.start()
             _async_loops[pid] = loop
     return asyncio.run_coroutine_threadsafe(coro, loop).result()
-
-
-def build_graphql_query(
-    query_name: str, fragments: Optional[list] = None, query_file="queries.gql"
-) -> str:
-
-    query_path = files("kedro_graphql.static").joinpath(query_file)
-
-    # ensure it exists
-    if not query_path.exists():
-        raise FileNotFoundError(
-            f"Query file {query_file} not found. Ensure it exists in kedro_graphql.static"
-        )
-
-    with open(query_path, "r") as f:
-        document = gql.gql(f.read())  # Parse the entire document
-
-    outstr = ""
-
-    # # Iterate through definitions and extract named operations
-    for definition in document.definitions:
-        if hasattr(definition, "name") and definition.name.value == query_name:
-            outstr += print_ast(definition) + "\n"
-
-    if not outstr:
-        raise ValueError(f"Query {query_name} not found in {query_file}")
-
-    if fragments:
-        count = 0
-        for definition in document.definitions:
-            if hasattr(definition, "name") and definition.name.value in fragments:
-                outstr += print_ast(definition) + "\n"
-                count += 1
-        if count != len(fragments):
-            raise ValueError(f"Not all fragments {fragments} found in {query_file}")
-
-    return outstr
 
 
 def merge(a, b, path=None):
