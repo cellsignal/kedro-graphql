@@ -32,6 +32,7 @@ from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
     DataSetInput,
+    Node,
     PageMeta,
     Pipeline,
     PipelineEvent,
@@ -65,6 +66,12 @@ logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_
 
 def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     full_pipeline = app.kedro_pipelines[p.name]
+    selected_pipeline = filter_pipeline(full_pipeline, slices)
+    p.describe = selected_pipeline.describe()
+    p.nodes = [
+        Node(name=node.name, inputs=node.inputs, outputs=node.outputs, tags=node.tags)
+        for node in selected_pipeline.nodes
+    ]
     submitted_catalog = {
         dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
     }
@@ -87,7 +94,6 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
     ]
 
     if validate and not only_missing:
-        selected_pipeline = filter_pipeline(full_pipeline, slices)
         runner_class = get_runner_class(runner)
         validate_pipeline_config(
             selected_pipeline,
@@ -96,6 +102,14 @@ def _normalize_pipeline(p, app, slices, only_missing, runner, validate=False):
             getattr(runner_class, "supports_memory_datasets", True),
         )
     return p
+
+
+def _effective_hooks(app, hooks):
+    hooks = hooks or []
+    unknown = sorted(set(hooks) - app.available_hooks)
+    if unknown:
+        raise InvalidPipeline(f"Unavailable pipeline hooks: {unknown}")
+    return list(dict.fromkeys([*app.always_hooks, *hooks]))
 
 
 def encode_cursor(id: int) -> str:
@@ -503,7 +517,7 @@ class Query:
 @strawberry.type
 class Mutation:
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="create_pipeline")]), PipelineInputExtension()])
-    async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
+    async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
         """
         - is validation against template needed, e.g. check DataSet type or at least check dataset names
         """
@@ -514,8 +528,7 @@ class Mutation:
 
         d = jsonable_encoder(pipeline)
         p = Pipeline.decode(d)
-        p.describe = info.context["request"].app.kedro_pipelines[p.name].describe()
-        p.nodes = info.context["request"].app.kedro_pipelines[p.name].nodes
+        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
 
         runner = d.get(
             "runner") or info.context["request"].app.config["KEDRO_GRAPHQL_RUNNER"]
@@ -557,6 +570,8 @@ class Mutation:
                                            finished_at=None,
                                            task_id=None,
                                            task_name=None))
+            if dry_run:
+                return p
             logger.info(f'Staging pipeline {p.name}')
             p = await info.context["request"].app.backend.create(p)
             if unique_paths:
@@ -575,6 +590,9 @@ class Mutation:
                                            task_id=None,
                                            task_name=str(run_pipeline)))
 
+            if dry_run:
+                return p
+
             p = await info.context["request"].app.backend.create(p)
             if unique_paths:
                 p = generate_unique_paths(p, unique_paths)
@@ -587,7 +605,8 @@ class Mutation:
                 data_catalog=serial["data_catalog"],
                 runner=runner,
                 slices=d.get("slices", None),
-                only_missing=d.get("only_missing", False)
+                only_missing=d.get("only_missing", False),
+                hooks=p.hooks,
             )
 
             logger.info(
@@ -595,7 +614,7 @@ class Mutation:
             return p
 
     @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[PERMISSIONS_CLASS(action="update_pipeline")]), PipelineInputExtension()])
-    async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None) -> Pipeline:
+    async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
 
         try:
             p = await info.context["request"].app.backend.read(id=id)
@@ -620,6 +639,10 @@ class Mutation:
             if not p.status[-1].task_id:
                 raise InvalidPipeline(
                     f"Pipeline {id} is running but has no task_id; abort is not possible.")
+            if dry_run:
+                p.status[-1].state = State.ABORTING
+                p.status[-1].abort_requested_at = datetime.now()
+                return p
             AbortableAsyncResult(
                 p.status[-1].task_id,
                 app=info.context["request"].app.celery_app
@@ -647,6 +670,10 @@ class Mutation:
         p.data_catalog = submitted.data_catalog
         p.tags = submitted.tags
         p.parent = pipeline_input_dict.get("parent")
+        p.hooks = _effective_hooks(info.context["request"].app, pipeline.hooks)
+
+        if unique_paths:
+            p = generate_unique_paths(p, unique_paths)
 
         # If PipelineInput is READY and pipeline is not already running
         if requested_state == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
@@ -670,8 +697,8 @@ class Mutation:
                                               task_id=None,
                                               task_name=str(run_pipeline))
 
-            if unique_paths:
-                p = generate_unique_paths(p, unique_paths)
+            if dry_run:
+                return p
 
             # Update pipeline in backend before running task
             p = await info.context["request"].app.backend.update(p)
@@ -685,7 +712,8 @@ class Mutation:
                 data_catalog=serial["data_catalog"],
                 runner=runner,
                 slices=pipeline_input_dict.get("slices", None),
-                only_missing=pipeline_input_dict.get("only_missing", False)
+                only_missing=pipeline_input_dict.get("only_missing", False),
+                hooks=p.hooks,
             )
 
             logger.info(
@@ -701,8 +729,8 @@ class Mutation:
                                            task_id=None,
                                            task_name=None))
             logger.info(f'Staging pipeline {p.name}')
-        if unique_paths:
-            p = generate_unique_paths(p, unique_paths)
+        if dry_run:
+            return p
         p = await info.context["request"].app.backend.update(p)
         logger.info(
             f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")

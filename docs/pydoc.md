@@ -95,7 +95,6 @@
     * [create](#models.PipelineInput.create)
   * [Pipeline](#models.Pipeline)
     * [decode](#models.Pipeline.decode)
-    * [decode\_pipeline\_input](#models.Pipeline.decode_pipeline_input)
   * [Pipelines](#models.Pipelines)
     * [decode](#models.Pipelines.decode)
   * [PipelineEvent](#models.PipelineEvent)
@@ -1649,21 +1648,10 @@ class Pipeline()
 
 ```python
 @classmethod
-def decode(cls, payload, decoder=None)
+def decode(cls, payload)
 ```
 
-Factory method to create a new Pipeline from a dictionary or graphql api response.
-
-<a id="models.Pipeline.decode_pipeline_input"></a>
-
-#### decode\_pipeline\_input
-
-```python
-@classmethod
-def decode_pipeline_input(cls, payload)
-```
-
-Factory method to create a new Pipeline from a PipelineInput object.
+Create a Pipeline from a PipelineInput or API/storage dictionary.
 
 <a id="models.Pipelines"></a>
 
@@ -1680,10 +1668,10 @@ class Pipelines()
 
 ```python
 @classmethod
-def decode(cls, payload, decoder=None)
+def decode(cls, payload)
 ```
 
-Factory method to create a new Pipelines from a graphql api response.
+Create Pipelines from a paginated API response.
 
 <a id="models.PipelineEvent"></a>
 
@@ -3746,4 +3734,3 @@ Generate a signed URL S3 to upload a file.
 - `"signature"` - "your-signature"
   }
   }
-

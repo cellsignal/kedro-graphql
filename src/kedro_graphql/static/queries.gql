@@ -2,6 +2,7 @@ fragment FullPipeline on Pipeline {
   id
   parent
   name
+  hooks
   describe
   dataCatalog {
     name
@@ -70,4 +71,3 @@ query readPipelineReturnFull($id: String!) {
     ...FullPipeline
   }
 }
-

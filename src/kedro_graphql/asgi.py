@@ -9,6 +9,7 @@ from cloudevents.pydantic.v1 import CloudEvent
 from contextlib import asynccontextmanager
 
 from .logs.logger import logger
+from .hooks import available_hook_names, hook_manager_for
 from .backends import init_backend
 from .celeryapp import celery_app
 from .decorators import RESOLVER_PLUGINS, TYPE_PLUGINS, discover_plugins
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 class KedroGraphQL(FastAPI):
 
-    def __init__(self, kedro_session=None, config=CONFIG, lifespan_handler=None):
+    def __init__(self, kedro_session=None, config=CONFIG, lifespan_handler=None, always_hooks=None):
         super(KedroGraphQL, self).__init__(
             title=config["KEDRO_GRAPHQL_APP_TITLE"],
             description=config["KEDRO_GRAPHQL_APP_DESCRIPTION"],
@@ -46,7 +47,22 @@ class KedroGraphQL(FastAPI):
         )
 
         self.kedro_session = kedro_session
-        self.kedro_context = self.kedro_session.load_context()
+        self.available_hooks = available_hook_names()
+        self.always_hooks = list(dict.fromkeys(
+            config["KEDRO_GRAPHQL_ALWAYS_HOOKS"] if always_hooks is None else always_hooks
+        ))
+        unknown_hooks = sorted(set(self.always_hooks) - self.available_hooks)
+        if unknown_hooks:
+            raise ValueError(f"Unavailable always hooks: {unknown_hooks}")
+        hook_manager_for(self.always_hooks)
+
+        native_hook_manager = self.kedro_session._hook_manager
+        # Loading the API context must not invoke settings.HOOKS or auto-discovered plugins.
+        self.kedro_session._hook_manager = hook_manager_for([])
+        try:
+            self.kedro_context = self.kedro_session.load_context()
+        finally:
+            self.kedro_session._hook_manager = native_hook_manager
         self.kedro_catalog = self.kedro_context.config_loader["catalog"]
         self.kedro_parameters = self.kedro_context.config_loader["parameters"]
         from kedro.framework.project import pipelines
@@ -164,9 +180,7 @@ class KedroGraphQL(FastAPI):
                         context_value={"request": request},
                     )
 
-                    staged = Pipeline.decode(
-                        resp.data["createPipeline"], decoder="graphql"
-                    )
+                    staged = Pipeline.decode(resp.data["createPipeline"])
 
                     pipeline_input.state = "READY"
 
@@ -187,9 +201,7 @@ class KedroGraphQL(FastAPI):
                         context_value={"request": request},
                     )
 
-                    created = Pipeline.decode(
-                        resp.data["updatePipeline"], decoder="graphql"
-                    )
+                    created = Pipeline.decode(resp.data["updatePipeline"])
                     created_pipelines.append(created.encode(encoder="dict"))
 
                     logger.info(
