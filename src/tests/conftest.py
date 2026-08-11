@@ -178,8 +178,11 @@ def mock_info_context(mock_app):
         app = mock_app
         headers = {}
 
-    with patch("strawberry.types.Info.context", GraphQLContext(Request())) as m:
-        yield m
+    class Info:
+        context = GraphQLContext(Request())
+
+    with patch("strawberry.types.Info.context", Info.context):
+        yield Info()
 
 
 # refer to https://docs.pytest.org/en/7.1.x/how-to/tmp_path.html for info on tmp_path fixture
