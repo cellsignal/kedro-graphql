@@ -82,6 +82,10 @@ ui = [
 readme = {file = "README.md", content-type = "text/markdown"}
 version = {attr = "kedro_graphql.__version__"}
 
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["kedro_graphql*"]
+
 [tool.kedro]
 package_name = "kedro_graphql"
 project_name = "kedro-graphql"
