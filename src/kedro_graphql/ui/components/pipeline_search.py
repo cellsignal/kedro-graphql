@@ -196,7 +196,7 @@ class PipelineSearch(pn.viewable.Viewer):
         else:
             pipelines = self.search_model.result.pipelines
 
-            df = pd.DataFrame.from_records([p.encode(encoder="dict") for p in pipelines])
+            df = pd.DataFrame.from_records([p.to_dict() for p in pipelines])
 
             # flatten tags into seperate columns
             tags = []

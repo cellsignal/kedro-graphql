@@ -1,12 +1,25 @@
+from collections.abc import AsyncIterator, Mapping, Sequence
+from typing import Any
+
+import backoff
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
-from gql.transport.websockets import WebsocketsTransport
-from kedro_graphql.models import PipelineInput, Pipeline, Pipelines, PipelineEvent, PipelineLogMessage, DataSetInput, SignedUrl, SignedUrls
-from kedro_graphql.config import KedroGraphQLConfig, load_config
-import backoff
 from gql.transport.exceptions import TransportQueryError
-from typing import Optional, List
+from gql.transport.websockets import WebsocketsTransport
 import logging
+
+from kedro_graphql.config import KedroGraphQLConfig, load_config
+from kedro_graphql.models import (
+    DataSetInput,
+    DataSetPartitions,
+    Pipeline,
+    PipelineEvent,
+    PipelineInput,
+    PipelineLogMessage,
+    Pipelines,
+    SignedUrl,
+    SignedUrls,
+)
 
 logger = logging.getLogger("kedro-graphql")
 PIPELINE_GQL = """{
@@ -61,9 +74,17 @@ PIPELINE_GQL = """{
                   }"""
 
 
-class KedroGraphqlClient():
+class KedroGraphqlClient:
 
-    def __init__(self, uri_graphql=None, uri_ws=None, pipeline_gql=None, headers=None, cookies=None, config: KedroGraphQLConfig | None = None):
+    def __init__(
+        self,
+        uri_graphql: str | None = None,
+        uri_ws: str | None = None,
+        pipeline_gql: str | None = None,
+        headers: Mapping[str, str] | None = None,
+        cookies: Mapping[str, str] | None = None,
+        config: KedroGraphQLConfig | None = None,
+    ) -> None:
         """
         Kwargs:
             uri_graphql (str): uri to api [default: http://localhost:5000/graphql]
@@ -72,29 +93,30 @@ class KedroGraphqlClient():
 
         """
         config = config or load_config()
-        headers = headers or {}
+        request_headers = dict(headers or {})
         self.uri_graphql = uri_graphql or config.client_uri_graphql
         self.uri_ws = uri_ws or config.client_uri_ws
         if cookies:
-            self._cookies = "; ".join(
-                [f"{key}={value}" for key, value in cookies.items()])
-            self._cookies = {"Cookie": self._cookies}
+            cookie_header = "; ".join(
+                f"{key}={value}" for key, value in cookies.items()
+            )
+            self._cookies = {"Cookie": cookie_header}
         else:
             self._cookies = {}
 
-        self._headers = headers
+        self._headers = request_headers
         self._headers.update(self._cookies)
 
         self._aio_transport = AIOHTTPTransport(
-            url=self.uri_graphql, headers=headers)
+            url=self.uri_graphql, headers=self._headers
+        )
 
         self._aio_client = Client(transport=self._aio_transport)
-        self._aio_session = None
+        self._aio_session: Any | None = None
         self.pipeline_gql = pipeline_gql or PIPELINE_GQL
 
-    async def _get_aio_session(self):
-        """Get or create an aio session.
-        """
+    async def _get_aio_session(self) -> Any:
+        """Get or create an aio session."""
         if not self._aio_session:
             logger.info("connecting aio session")
             self._aio_session = await self._aio_client.connect_async(reconnecting=True)
@@ -102,14 +124,17 @@ class KedroGraphqlClient():
         else:
             return self._aio_session
 
-    async def close_sessions(self):
-        """Close any open aio and web sessions.
-        """
+    async def close_sessions(self) -> None:
+        """Close any open aio and web sessions."""
         if self._aio_session:
             logger.info("closing aio session")
             await self._aio_client.close_async()
 
-    async def execute_query(self, query: str, variable_values: Optional[dict] = None):
+    async def execute_query(
+        self,
+        query: str,
+        variable_values: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Make a query to the GraphQL API.
 
         Kwargs:
@@ -124,7 +149,12 @@ class KedroGraphqlClient():
         result = await session.execute(gql(query), variable_values=variable_values)
         return result
 
-    async def create_pipeline(self, pipeline_input: PipelineInput = None, unique_paths: List[str] = None, dry_run: bool = False):
+    async def create_pipeline(
+        self,
+        pipeline_input: PipelineInput,
+        unique_paths: list[str] | None = None,
+        dry_run: bool = False,
+    ) -> Pipeline:
         """Create a pipeline
 
         Kwargs:
@@ -134,16 +164,27 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = """
+        query = (
+            """
             mutation createPipeline($pipeline: PipelineInput!, $uniquePaths: [String!], $dryRun: Boolean!) {
-              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """ + self.pipeline_gql + """
+              createPipeline(pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """
+            + self.pipeline_gql
+            + """
             }
         """
+        )
 
-        result = await self.execute_query(query, variable_values={"pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths, "dryRun": dry_run})
-        return Pipeline.decode(result["createPipeline"])
+        result = await self.execute_query(
+            query,
+            variable_values={
+                "pipeline": pipeline_input.to_graphql(),
+                "uniquePaths": unique_paths,
+                "dryRun": dry_run,
+            },
+        )
+        return Pipeline.from_dict(result["createPipeline"])
 
-    async def read_pipeline(self, id: str = None):
+    async def read_pipeline(self, id: str) -> Pipeline:
         """Read a pipeline.
         Kwargs:
             id (str): pipeline id
@@ -151,16 +192,26 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = """
+        query = (
+            """
             query readPipeline($id: String!) {
-              readPipeline(id: $id) """ + self.pipeline_gql + """
+              readPipeline(id: $id) """
+            + self.pipeline_gql
+            + """
             }
         """
+        )
 
         result = await self.execute_query(query, variable_values={"id": str(id)})
-        return Pipeline.decode(result["readPipeline"])
+        return Pipeline.from_dict(result["readPipeline"])
 
-    async def read_pipelines(self, limit: int = 10, cursor: str = None, filter: str = "", sort: str = ""):
+    async def read_pipelines(
+        self,
+        limit: int = 10,
+        cursor: str | None = None,
+        filter: str = "",
+        sort: str = "",
+    ) -> Pipelines:
         """Read pipelines.
 
         Kwargs:
@@ -171,21 +222,39 @@ class KedroGraphqlClient():
         Returns:
             Pipelines (list): an list of pipeline objects
         """
-        query = """
+        query = (
+            """
             query readPipelines($limit: Int!, $cursor: String, $filter: String, $sort: String) {
               readPipelines(limit: $limit, cursor: $cursor, filter: $filter, sort: $sort) { 
                 pageMeta {
                   nextCursor
                 }
-                pipelines """ + self.pipeline_gql + """
+                pipelines """
+            + self.pipeline_gql
+            + """
               }
             }
         """
+        )
 
-        result = await self.execute_query(query, variable_values={"limit": limit, "cursor": cursor, "filter": filter, "sort": sort})
-        return Pipelines.decode(result)
+        result = await self.execute_query(
+            query,
+            variable_values={
+                "limit": limit,
+                "cursor": cursor,
+                "filter": filter,
+                "sort": sort,
+            },
+        )
+        return Pipelines.from_graphql(result)
 
-    async def update_pipeline(self, id: str = None, pipeline_input: PipelineInput = None, unique_paths: List[str] = None, dry_run: bool = False):
+    async def update_pipeline(
+        self,
+        id: str,
+        pipeline_input: PipelineInput,
+        unique_paths: list[str] | None = None,
+        dry_run: bool = False,
+    ) -> Pipeline:
         """Update a pipeline
 
         Kwargs:
@@ -196,16 +265,28 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object
         """
-        query = """
+        query = (
+            """
             mutation updatePipeline($id: String!, $pipeline: PipelineInput!, $uniquePaths: [String!], $dryRun: Boolean!) {
-              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """ + self.pipeline_gql + """
+              updatePipeline(id: $id, pipeline: $pipeline, uniquePaths: $uniquePaths, dryRun: $dryRun) """
+            + self.pipeline_gql
+            + """
             }
         """
+        )
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "pipeline": pipeline_input.encode(encoder="graphql"), "uniquePaths": unique_paths, "dryRun": dry_run})
-        return Pipeline.decode(result["updatePipeline"])
+        result = await self.execute_query(
+            query,
+            variable_values={
+                "id": str(id),
+                "pipeline": pipeline_input.to_graphql(),
+                "uniquePaths": unique_paths,
+                "dryRun": dry_run,
+            },
+        )
+        return Pipeline.from_dict(result["updatePipeline"])
 
-    async def delete_pipeline(self, id: str = None):
+    async def delete_pipeline(self, id: str) -> Pipeline:
         """Delete a pipeline.
 
         Kwargs:
@@ -214,16 +295,25 @@ class KedroGraphqlClient():
         Returns:
             Pipeline: pipeline object that was deleted.
         """
-        query = """
+        query = (
+            """
             mutation deletePipeline($id: String!) {
-              deletePipeline(id: $id) """ + self.pipeline_gql + """ 
+              deletePipeline(id: $id) """
+            + self.pipeline_gql
+            + """
             }
         """
+        )
 
         result = await self.execute_query(query, variable_values={"id": str(id)})
-        return Pipeline.decode(result["deletePipeline"])
+        return Pipeline.from_dict(result["deletePipeline"])
 
-    async def read_datasets(self, id: str = None, datasets: list[DataSetInput] = None, expires_in_sec: int = 43200):
+    async def read_datasets(
+        self,
+        id: str,
+        datasets: Sequence[DataSetInput],
+        expires_in_sec: int = 43200,
+    ) -> list[SignedUrl | SignedUrls | DataSetPartitions]:
         """Read a dataset.
         Kwargs:
             id (str): pipeline id
@@ -231,7 +321,7 @@ class KedroGraphqlClient():
             expires_in_sec (int): number of seconds the signed URL should be valid for
 
         Returns:
-            [SignedUrl | SignedUrls | dict]: signed URL objects, or DataSet dictionaries when list_partitions is requested
+            Signed URL objects, or typed partition results when list_partitions is requested.
         """
         query = """
             query readDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
@@ -268,25 +358,37 @@ class KedroGraphqlClient():
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
-        urls = []
-        for d in result["readDatasets"]:
-            if d["__typename"] == "SignedUrl":
-                d.pop("__typename")
-                urls.append(SignedUrl.decode(d, decoder="graphql"))
-            elif d["__typename"] == "SignedUrls":
-                d.pop("__typename")
-                urls.append(SignedUrls.decode(d, decoder="graphql"))
-            elif d["__typename"] == "DataSet":
-                d.pop("__typename")
-                urls.append(d)
+        result = await self.execute_query(
+            query,
+            variable_values={
+                "id": str(id),
+                "datasets": [dataset.to_graphql() for dataset in datasets],
+                "expires_in_sec": expires_in_sec,
+            },
+        )
+        values: list[SignedUrl | SignedUrls | DataSetPartitions] = []
+        for item in result["readDatasets"]:
+            typename = item["__typename"]
+            payload = {key: value for key, value in item.items() if key != "__typename"}
+            if typename == "SignedUrl":
+                values.append(SignedUrl.from_graphql(payload))
+            elif typename == "SignedUrls":
+                values.append(SignedUrls.from_graphql(payload))
+            elif typename == "DataSet":
+                values.append(DataSetPartitions.from_graphql(payload))
             else:
                 raise TypeError(
-                    f"Unexpected type {d['__typename']} returned from readDatasets")
+                    f"Unexpected type {typename} returned from readDatasets"
+                )
 
-        return urls
+        return values
 
-    async def create_datasets(self, id: str = None, datasets: list[DataSetInput] = None, expires_in_sec: int = 43200):
+    async def create_datasets(
+        self,
+        id: str,
+        datasets: Sequence[DataSetInput],
+        expires_in_sec: int = 43200,
+    ) -> list[SignedUrl | SignedUrls]:
         """create a dataset.
         Kwargs:
             id (str): pipeline id
@@ -294,7 +396,7 @@ class KedroGraphqlClient():
             expires_in_sec (int): number of seconds the signed URL should be valid for
 
         Returns:
-            [str]: array of signed URLs for creating the datasets
+            Signed URL objects for creating the datasets.
         """
         query = """
             mutation createDatasets($id: String!, $datasets: [DataSetInput!]!, $expires_in_sec: Int!) {
@@ -322,23 +424,36 @@ class KedroGraphqlClient():
             }
         """
 
-        result = await self.execute_query(query, variable_values={"id": str(id), "datasets": [d.encode(encoder="graphql") for d in datasets], "expires_in_sec": expires_in_sec})
-        urls = []
-        for d in result["createDatasets"]:
-            if d["__typename"] == "SignedUrl":
-                d.pop("__typename")
-                urls.append(SignedUrl.decode(d, decoder="graphql"))
-            elif d["__typename"] == "SignedUrls":
-                d.pop("__typename")
-                urls.append(SignedUrls.decode(d, decoder="graphql"))
+        result = await self.execute_query(
+            query,
+            variable_values={
+                "id": str(id),
+                "datasets": [dataset.to_graphql() for dataset in datasets],
+                "expires_in_sec": expires_in_sec,
+            },
+        )
+        urls: list[SignedUrl | SignedUrls] = []
+        for item in result["createDatasets"]:
+            typename = item["__typename"]
+            payload = {key: value for key, value in item.items() if key != "__typename"}
+            if typename == "SignedUrl":
+                urls.append(SignedUrl.from_graphql(payload))
+            elif typename == "SignedUrls":
+                urls.append(SignedUrls.from_graphql(payload))
             else:
                 raise TypeError(
-                    f"Unexpected type {d['__typename']} returned from createDatasets")
+                    f"Unexpected type {typename} returned from createDatasets"
+                )
 
         return urls
 
-    @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))
-    async def pipeline_events(self, id: str = None):
+    @backoff.on_exception(
+        backoff.expo,
+        Exception,
+        max_time=60,
+        giveup=lambda e: isinstance(e, TransportQueryError),
+    )
+    async def pipeline_events(self, id: str) -> AsyncIterator[PipelineEvent]:
         """Subscribe to pipeline events.
 
         Kwargs:
@@ -350,8 +465,7 @@ class KedroGraphqlClient():
         async with Client(
             transport=WebsocketsTransport(url=self.uri_ws, headers=self._headers),
         ) as session:
-            query = gql(
-                """
+            query = gql("""
                 subscription pipelineEvents($id: String!) {
                   pipeline(id: $id) {
                     id
@@ -362,14 +476,20 @@ class KedroGraphqlClient():
                     traceback
                   }
                 }
-            """
-            )
+            """)
             logger.info("started pipeline events subscription")
-            async for result in session.subscribe(query, variable_values={"id": str(id)}):
-                yield PipelineEvent.decode(result, decoder="graphql")
+            async for result in session.subscribe(
+                query, variable_values={"id": str(id)}
+            ):
+                yield PipelineEvent.from_graphql(result)
 
-    @backoff.on_exception(backoff.expo, Exception, max_time=60, giveup=lambda e: isinstance(e, TransportQueryError))
-    async def pipeline_logs(self, id: str = None):
+    @backoff.on_exception(
+        backoff.expo,
+        Exception,
+        max_time=60,
+        giveup=lambda e: isinstance(e, TransportQueryError),
+    )
+    async def pipeline_logs(self, id: str) -> AsyncIterator[PipelineLogMessage]:
         """Subscribe to pipeline logs.
 
         Kwargs:
@@ -382,8 +502,7 @@ class KedroGraphqlClient():
             transport=WebsocketsTransport(url=self.uri_ws, headers=self._headers),
         ) as session:
 
-            query = gql(
-                """
+            query = gql("""
                 subscription pipelineLogs($id: String!) {
                   pipelineLogs(id: $id) {
                     id
@@ -393,8 +512,9 @@ class KedroGraphqlClient():
                     time
                   }
                 }
-            """
-            )
+            """)
             logger.info("started pipeline logs subscription")
-            async for result in session.subscribe(query, variable_values={"id": str(id)}):
-                yield PipelineLogMessage.decode(result, decoder="graphql")
+            async for result in session.subscribe(
+                query, variable_values={"id": str(id)}
+            ):
+                yield PipelineLogMessage.from_graphql(result)

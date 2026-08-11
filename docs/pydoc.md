@@ -22,44 +22,6 @@
   * [DataLoggingHooks](#hooks.DataLoggingHooks)
 * [\_\_init\_\_](#__init__)
 * [settings](#settings)
-* [models](#models)
-  * [Parameter](#models.Parameter)
-    * [decode](#models.Parameter.decode)
-    * [serialize](#models.Parameter.serialize)
-  * [CredentialSetInput](#models.CredentialSetInput)
-    * [serialize](#models.CredentialSetInput.serialize)
-  * [CredentialInput](#models.CredentialInput)
-    * [serialize](#models.CredentialInput.serialize)
-  * [CredentialNestedInput](#models.CredentialNestedInput)
-    * [serialize](#models.CredentialNestedInput.serialize)
-  * [DataSet](#models.DataSet)
-    * [serialize](#models.DataSet.serialize)
-    * [decode](#models.DataSet.decode)
-    * [parse\_config](#models.DataSet.parse_config)
-    * [parse\_filepath](#models.DataSet.parse_filepath)
-    * [parse\_path](#models.DataSet.parse_path)
-  * [DataCatalogInput](#models.DataCatalogInput)
-    * [create](#models.DataCatalogInput.create)
-  * [PipelineTemplates](#models.PipelineTemplates)
-    * [\_build\_pipeline\_index](#models.PipelineTemplates._build_pipeline_index)
-  * [PipelineSlice](#models.PipelineSlice)
-    * [args](#models.PipelineSlice.args)
-  * [PipelineInput](#models.PipelineInput)
-    * [create](#models.PipelineInput.create)
-    * [from\_event](#models.PipelineInput.from_event)
-  * [Pipeline](#models.Pipeline)
-    * [decode](#models.Pipeline.decode)
-  * [Pipelines](#models.Pipelines)
-    * [decode](#models.Pipelines.decode)
-  * [PipelineEvent](#models.PipelineEvent)
-    * [decode](#models.PipelineEvent.decode)
-  * [PipelineLogMessage](#models.PipelineLogMessage)
-    * [decode](#models.PipelineLogMessage.decode)
-  * [SignedUrl](#models.SignedUrl)
-    * [decode](#models.SignedUrl.decode)
-    * [get\_field\_value](#models.SignedUrl.get_field_value)
-  * [SignedUrls](#models.SignedUrls)
-    * [decode](#models.SignedUrls.decode)
 * [pipeline\_config](#pipeline_config)
   * [normalize\_pipeline\_config](#pipeline_config.normalize_pipeline_config)
   * [filter\_pipeline](#pipeline_config.filter_pipeline)
@@ -100,6 +62,7 @@
   * [load\_config](#config.load_config)
 * [asgi](#asgi)
   * [create\_app](#asgi.create_app)
+* [models](#models)
 * [project](#project)
   * [load\_project\_metadata](#project.load_project_metadata)
 * [celeryapp](#celeryapp)
@@ -562,485 +525,6 @@ kedro-graphql
 Project settings. There is no need to edit this file unless you want to change values
 from the Kedro defaults. For further information, including these default values, see
 https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html.
-
-<a id="models"></a>
-
-# Module models
-
-<a id="models.Parameter"></a>
-
-## Parameter Objects
-
-```python
-@strawberry.type
-class Parameter()
-```
-
-<a id="models.Parameter.decode"></a>
-
-#### decode
-
-```python
-@staticmethod
-def decode(input_dict) -> dict
-```
-
-Returns a Parameter object from a dictionary.
-
-<a id="models.Parameter.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialSetInput"></a>
-
-## CredentialSetInput Objects
-
-```python
-@strawberry.input
-class CredentialSetInput()
-```
-
-<a id="models.CredentialSetInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialInput"></a>
-
-## CredentialInput Objects
-
-```python
-@strawberry.input
-class CredentialInput()
-```
-
-<a id="models.CredentialInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.CredentialNestedInput"></a>
-
-## CredentialNestedInput Objects
-
-```python
-@strawberry.input
-class CredentialNestedInput()
-```
-
-<a id="models.CredentialNestedInput.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.DataSet"></a>
-
-## DataSet Objects
-
-```python
-@strawberry.type
-class DataSet()
-```
-
-<a id="models.DataSet.serialize"></a>
-
-#### serialize
-
-```python
-def serialize() -> dict
-```
-
-Returns serializable dict in format compatible with kedro.
-
-<a id="models.DataSet.decode"></a>
-
-#### decode
-
-```python
-@staticmethod
-def decode(payload)
-```
-
-Return a new DataSet from a dictionary.
-
-**Arguments**:
-
-- `payload` _dict_ - dict representing DataSet e.g.
-
-  {
-- `"name"` - "text_in",
-- `"config"` - '{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}',
-- `"tags":[{"key"` - "owner name", "value": "harinlee0803"},{"key": "owner email", "value": "test@example.com"}]
-  }
-
-<a id="models.DataSet.parse_config"></a>
-
-#### parse\_config
-
-```python
-def parse_config() -> dict
-```
-
-Return the config as a dictionary.
-
-Example usage:
-
-from kedro_graphql.models import DataSet
-
-d = DataSet(name="text_in", config='{"filepath": "./data/01_raw/text_in.txt", "type": "text.TextDataSet", "save_args": [{"name": "say", "value": "hello"}], "load_args": [{"name": "say", "value": "hello"}]}')
-
-print(d.parse_config())
-
-{'filepath': './data/01_raw/text_in.txt',
-'type': 'text.TextDataSet',
-'save_args': [{'name': 'say', 'value': 'hello'}],
-'load_args': [{'name': 'say', 'value': 'hello'}]}
-
-<a id="models.DataSet.parse_filepath"></a>
-
-#### parse\_filepath
-
-```python
-def parse_filepath() -> tuple[str, str]
-```
-
-Parse the filepath from the dataset configuration.
-
-**Arguments**:
-
-- `config` _dict_ - The dataset configuration.
-
-
-**Returns**:
-
-  tuple[str, str]: (protocol, the file path).
-
-<a id="models.DataSet.parse_path"></a>
-
-#### parse\_path
-
-```python
-def parse_path() -> tuple[str, str]
-```
-
-Parse the path from the dataset configuration.
-
-**Arguments**:
-
-- `config` _dict_ - The dataset configuration.
-
-
-**Returns**:
-
-  tuple[str, str]: (protocol, the file path).
-
-<a id="models.DataCatalogInput"></a>
-
-## DataCatalogInput Objects
-
-```python
-@strawberry.input
-class DataCatalogInput()
-```
-
-<a id="models.DataCatalogInput.create"></a>
-
-#### create
-
-```python
-@staticmethod
-def create(config)
-```
-
-context.config_loader["catalog"]
-
-{'text_in': {'type': 'text.TextDataSet',
-'filepath': './data/01_raw/text_in.txt'},
-'text_out': {'type': 'text.TextDataSet',
-'filepath': './data/02_intermediate/text_out.txt'}}
-
-Example usage:
-
-from kedro_graphql.models import DataCatalogInput
-
-catalog = DataCatalogInput.create(context.config_loader["catalog"])
-
-print(catalog)
-
-[DataSetInput(name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None),
-DataSetInput(name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}', type=None, filepath=None, save_args=None, load_args=None, credentials=None)]
-
-<a id="models.PipelineTemplates"></a>
-
-## PipelineTemplates Objects
-
-```python
-@strawberry.type
-class PipelineTemplates()
-```
-
-<a id="models.PipelineTemplates._build_pipeline_index"></a>
-
-#### \_build\_pipeline\_index
-
-```python
-@staticmethod
-def _build_pipeline_index(kedro_pipelines, kedro_catalog, kedro_parameters)
-```
-
-
-
-<a id="models.PipelineSlice"></a>
-
-## PipelineSlice Objects
-
-```python
-@strawberry.input(description="Slice a pipeline.")
-class PipelineSlice()
-```
-
-<a id="models.PipelineSlice.args"></a>
-
-#### args: `List[str]`
-
-e.g. ["node1", "node2"]
-
-<a id="models.PipelineInput"></a>
-
-## PipelineInput Objects
-
-```python
-@strawberry.input(description="PipelineInput")
-class PipelineInput()
-```
-
-<a id="models.PipelineInput.create"></a>
-
-#### create
-
-```python
-@staticmethod
-def create(name=None,
-           data_catalog=None,
-           parameters=None,
-           tags=None,
-           hooks=None)
-```
-
-Example usage:
-
-from kedro_graphql.models import PipelineInput
-from fastapi.encoders import jsonable_encoder
-
-p = PipelineInput(name = "example00",
-data_catalog = context.config_loader["catalog"],
-parameters = context.config_loader["parameters"],
-tags = [{""owner":"person"}])
-
-print(p)
-
-PipelineInput(name='example00',
-parameters=[
-ParameterInput(name='example',
-value='hello',
-type=<ParameterType.STRING: 'string'>),
-ParameterInput(name='duration', value='1', type=<ParameterType.STRING: 'string'>)
-],
-data_catalog=[
-DataSetInput(
-name='text_in', config='{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'),
-DataSetInput(
-name='text_out', config='{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}')
-],
-tags=[TagInput(key='owner', value='sean')])
-
-print(jsonable_encoder(p))
-
-## this can be used as the PipelineInput parameter when calleing the pipeline mutation via the API
-{'name': 'example00',
-'parameters': [{'name': 'example', 'value': 'hello', 'type': 'string'},
-{'name': 'duration', 'value': '1', 'type': 'string'}],
-'data_catalog': [{'name': 'text_in',
-'config': '{"type": "text.TextDataSet", "filepath": "./data/01_raw/text_in.txt"}'},
-{'name': 'text_out',
-'config': '{"type": "text.TextDataSet", "filepath": "./data/02_intermediate/text_out.txt"}'}],
-'tags': [{'key': 'owner', 'value': 'sean'}],
-'credentials': None,
-'credentials_nested': None}
-
-<a id="models.PipelineInput.from_event"></a>
-
-#### from\_event
-
-```python
-@classmethod
-def from_event(cls, name: str, state: PipelineInputStatus,
-               event: CloudEvent) -> "PipelineInput"
-```
-
-Factory method to create a new PipelineInput from a CloudEvent.
-Tags will be added for event metadata and the entire event will be added
-as a single parameter (json-serialized).
-
-<a id="models.Pipeline"></a>
-
-## Pipeline Objects
-
-```python
-@strawberry.type
-class Pipeline()
-```
-
-<a id="models.Pipeline.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload)
-```
-
-Create a Pipeline from a PipelineInput or API/storage dictionary.
-
-<a id="models.Pipelines"></a>
-
-## Pipelines Objects
-
-```python
-@strawberry.type
-class Pipelines()
-```
-
-<a id="models.Pipelines.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload)
-```
-
-Create Pipelines from a paginated API response.
-
-<a id="models.PipelineEvent"></a>
-
-## PipelineEvent Objects
-
-```python
-@strawberry.type
-class PipelineEvent()
-```
-
-<a id="models.PipelineEvent.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new PipelineEvent from a graphql api response.
-
-<a id="models.PipelineLogMessage"></a>
-
-## PipelineLogMessage Objects
-
-```python
-@strawberry.type
-class PipelineLogMessage()
-```
-
-<a id="models.PipelineLogMessage.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new PipelineLogMessage from a graphql api response.
-
-<a id="models.SignedUrl"></a>
-
-## SignedUrl Objects
-
-```python
-@strawberry.type
-class SignedUrl()
-```
-
-<a id="models.SignedUrl.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new SignedUrl from a graphql api response.
-
-<a id="models.SignedUrl.get_field_value"></a>
-
-#### get\_field\_value
-
-```python
-def get_field_value(name: str) -> str | None
-```
-
-Extract a field value from an array of SignedUrlFields.
-
-**Arguments**:
-
-- `name` _str_ - The name of the field to extract.
-
-
-**Returns**:
-
-  str | None: The value of the field, or None if not found.
-
-<a id="models.SignedUrls"></a>
-
-## SignedUrls Objects
-
-```python
-@strawberry.type
-class SignedUrls()
-```
-
-<a id="models.SignedUrls.decode"></a>
-
-#### decode
-
-```python
-@classmethod
-def decode(cls, payload, decoder=None)
-```
-
-Factory method to create a new SignedUrls from a graphql api response.
 
 <a id="pipeline_config"></a>
 
@@ -1695,6 +1179,10 @@ def create_app(config: KedroGraphQLConfig,
 
 Build the web application from validated configuration and project metadata.
 
+<a id="models"></a>
+
+# Module models
+
 <a id="project"></a>
 
 # Module project
@@ -1932,12 +1420,12 @@ class KedroGraphqlClient()
 #### \_\_init\_\_
 
 ```python
-def __init__(uri_graphql=None,
-             uri_ws=None,
-             pipeline_gql=None,
-             headers=None,
-             cookies=None,
-             config: KedroGraphQLConfig | None = None)
+def __init__(uri_graphql: str | None = None,
+             uri_ws: str | None = None,
+             pipeline_gql: str | None = None,
+             headers: Mapping[str, str] | None = None,
+             cookies: Mapping[str, str] | None = None,
+             config: KedroGraphQLConfig | None = None) -> None
 ```
 
 Kwargs:
@@ -1950,7 +1438,7 @@ pipeline_gql (str): pipeline graphql query [default: kedro_graphql.client.PIPELI
 #### \_get\_aio\_session
 
 ```python
-async def _get_aio_session()
+async def _get_aio_session() -> Any
 ```
 
 Get or create an aio session.
@@ -1960,7 +1448,7 @@ Get or create an aio session.
 #### close\_sessions
 
 ```python
-async def close_sessions()
+async def close_sessions() -> None
 ```
 
 Close any open aio and web sessions.
@@ -1970,7 +1458,9 @@ Close any open aio and web sessions.
 #### execute\_query
 
 ```python
-async def execute_query(query: str, variable_values: Optional[dict] = None)
+async def execute_query(
+        query: str,
+        variable_values: Mapping[str, Any] | None = None) -> dict[str, Any]
 ```
 
 Make a query to the GraphQL API.
@@ -1988,9 +1478,9 @@ variables (dict): GraphQL variables
 #### create\_pipeline
 
 ```python
-async def create_pipeline(pipeline_input: PipelineInput = None,
-                          unique_paths: List[str] = None,
-                          dry_run: bool = False)
+async def create_pipeline(pipeline_input: PipelineInput,
+                          unique_paths: list[str] | None = None,
+                          dry_run: bool = False) -> Pipeline
 ```
 
 Create a pipeline
@@ -2008,7 +1498,7 @@ dry_run (bool): validate and return the projected pipeline without saving or sub
 #### read\_pipeline
 
 ```python
-async def read_pipeline(id: str = None)
+async def read_pipeline(id: str) -> Pipeline
 ```
 
 Read a pipeline.
@@ -2025,9 +1515,9 @@ id (str): pipeline id
 
 ```python
 async def read_pipelines(limit: int = 10,
-                         cursor: str = None,
+                         cursor: str | None = None,
                          filter: str = "",
-                         sort: str = "")
+                         sort: str = "") -> Pipelines
 ```
 
 Read pipelines.
@@ -2046,10 +1536,10 @@ filter (str): a valid MongoDb document query filter https://www.mongodb.com/docs
 #### update\_pipeline
 
 ```python
-async def update_pipeline(id: str = None,
-                          pipeline_input: PipelineInput = None,
-                          unique_paths: List[str] = None,
-                          dry_run: bool = False)
+async def update_pipeline(id: str,
+                          pipeline_input: PipelineInput,
+                          unique_paths: list[str] | None = None,
+                          dry_run: bool = False) -> Pipeline
 ```
 
 Update a pipeline
@@ -2068,7 +1558,7 @@ dry_run (bool): validate and return the projected pipeline without saving or sub
 #### delete\_pipeline
 
 ```python
-async def delete_pipeline(id: str = None)
+async def delete_pipeline(id: str) -> Pipeline
 ```
 
 Delete a pipeline.
@@ -2085,9 +1575,11 @@ id (str): pipeline id
 #### read\_datasets
 
 ```python
-async def read_datasets(id: str = None,
-                        datasets: list[DataSetInput] = None,
-                        expires_in_sec: int = 43200)
+async def read_datasets(
+    id: str,
+    datasets: Sequence[DataSetInput],
+    expires_in_sec: int = 43200
+) -> list[SignedUrl | SignedUrls | DataSetPartitions]
 ```
 
 Read a dataset.
@@ -2098,16 +1590,17 @@ expires_in_sec (int): number of seconds the signed URL should be valid for
 
 **Returns**:
 
-  [SignedUrl | SignedUrls | dict]: signed URL objects, or DataSet dictionaries when list_partitions is requested
+  Signed URL objects, or typed partition results when list_partitions is requested.
 
 <a id="client.KedroGraphqlClient.create_datasets"></a>
 
 #### create\_datasets
 
 ```python
-async def create_datasets(id: str = None,
-                          datasets: list[DataSetInput] = None,
-                          expires_in_sec: int = 43200)
+async def create_datasets(
+        id: str,
+        datasets: Sequence[DataSetInput],
+        expires_in_sec: int = 43200) -> list[SignedUrl | SignedUrls]
 ```
 
 create a dataset.
@@ -2118,7 +1611,7 @@ expires_in_sec (int): number of seconds the signed URL should be valid for
 
 **Returns**:
 
-- `[str]` - array of signed URLs for creating the datasets
+  Signed URL objects for creating the datasets.
 
 <a id="client.KedroGraphqlClient.pipeline_events"></a>
 
@@ -2129,7 +1622,7 @@ expires_in_sec (int): number of seconds the signed URL should be valid for
                       Exception,
                       max_time=60,
                       giveup=lambda e: isinstance(e, TransportQueryError))
-async def pipeline_events(id: str = None)
+async def pipeline_events(id: str) -> AsyncIterator[PipelineEvent]
 ```
 
 Subscribe to pipeline events.
@@ -2150,7 +1643,7 @@ id (str): pipeline id
                       Exception,
                       max_time=60,
                       giveup=lambda e: isinstance(e, TransportQueryError))
-async def pipeline_logs(id: str = None)
+async def pipeline_logs(id: str) -> AsyncIterator[PipelineLogMessage]
 ```
 
 Subscribe to pipeline logs.
@@ -4562,7 +4055,7 @@ See https://github.com/holoviz/panel/issues/7979
 #### discover\_plugins
 
 ```python
-def discover_plugins(config)
+def discover_plugins(config: KedroGraphQLConfig)
 ```
 
 Discover and import plugins based on the configuration.

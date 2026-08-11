@@ -191,7 +191,7 @@ class PipelineRetry(pn.viewable.Viewer):
                         ParameterInput(
                             name=param.name,
                             value=param.value,
-                            type=param.type.name
+                            type=param.type
                         ) for param in self.pipeline.parameters
                     ] if self.pipeline.parameters else [],
                     data_catalog=[
@@ -226,7 +226,7 @@ class PipelineRetry(pn.viewable.Viewer):
                         ParameterInput(
                             name=param.name,
                             value=param.value,
-                            type=param.type.name
+                            type=param.type
                         ) for param in self.pipeline.parameters
                     ] if self.pipeline.parameters else [],
                     data_catalog=[

@@ -126,7 +126,7 @@ class KedroGraphqlTask(AbortableTask):
 
                 # Save metadata to S3
                 AbstractDataset.from_config(gql_meta.name, json.loads(
-                    gql_meta.config)).save(p.serialize())
+                    gql_meta.config)).save(p.to_kedro())
                 p = run_sync(self.db.update(p))
 
                 logger.info(
@@ -415,7 +415,7 @@ def run_pipeline(self,
         # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
         if getattr(self, "kedro_graphql_pipeline", None):
             logger.info("using data_catalog with gql_meta and gql_logs")
-            serial = self.kedro_graphql_pipeline.serialize()
+            serial = self.kedro_graphql_pipeline.to_kedro()
             catalog = {**serial["data_catalog"], **data_catalog}
         else:
             logger.info("using data_catalog parameter to build data catalog")

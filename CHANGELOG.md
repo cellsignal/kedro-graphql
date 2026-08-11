@@ -4,6 +4,7 @@
 
 Added:
 
+- Explicit model conversion methods (`from_dict`, `from_graphql`, `to_graphql`, `to_input`, and `to_kedro`) with typed client return values, including `DataSetPartitions`
 - `run_sync` helper in `utils` to execute async backend coroutines from synchronous contexts (e.g. Celery task handlers) on a dedicated, fork-safe per-process event loop; raises `RuntimeError` if called from a running event loop
 - Test for catalog recreation in child process to prevent fork-safety issues with S3 and MongoDB connections
 - `DataSetInput.list_partitions` flag to support partition discovery in `readDatasets`
@@ -20,6 +21,10 @@ Added:
 
 Changed:
 
+- GraphQL model collection fields are now non-null lists with empty-list defaults, and model enums remain enums throughout Python code instead of alternating between enum members and strings
+- Model conversion no longer uses configurable `encode`/`decode` callbacks; the explicit conversion methods now define each supported boundary
+- `DataSet.config` remains a JSON string but is now required on output models and validated as a JSON object when parsed
+- Removed unused credential input models and the unused model-layer `DataCatalogInput`; callers now use the concrete dataset conversion helpers directly
 - Application startup now uses `create_app(config, metadata)` with validated `KedroGraphQLConfig` and a direct Kedro configuration snapshot; the web process no longer owns a `KedroSession`
 - Celery workers now bootstrap only Kedro, the backend, and Celery instead of constructing the web application and GraphQL schema
 - `KEDRO_GRAPHQL_APP` now identifies an application factory rather than a `FastAPI` subclass

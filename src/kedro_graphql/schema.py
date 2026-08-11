@@ -78,7 +78,7 @@ def _normalize_pipeline(p, metadata, slices, only_missing, runner, validate=Fals
     submitted_catalog = {
         dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
     }
-    submitted_parameters = p.serialize()["parameters"]
+    submitted_parameters = p.to_kedro()["parameters"]
     catalog, parameters, sources = normalize_pipeline_config(
         full_pipeline, submitted_catalog, submitted_parameters
     )
@@ -397,8 +397,11 @@ class Query:
             pipe_id = ObjectId("100000000000000000000000")
 
         # filter the pipeline template data, going through the next set of results.
-        filtered_data = [pipe for pipe in _services(info).metadata.templates
-                         if pipe.id.generation_time >= pipe_id.generation_time]
+        filtered_data = [
+            pipe
+            for pipe in _services(info).metadata.templates
+            if ObjectId(pipe.id).generation_time >= pipe_id.generation_time
+        ]
 
         # slice the relevant pipeline template data (Here, we also slice an
         # additional pipe instance, to prepare the next cursor).
@@ -524,7 +527,7 @@ class Mutation:
                 f"Pipeline {pipeline.name} does not exist in the project.")
 
         d = jsonable_encoder(pipeline)
-        p = Pipeline.decode(d)
+        p = Pipeline.from_dict(d)
         p.hooks = _effective_hooks(_services(info), pipeline.hooks)
 
         runner = d.get("runner") or _config(info).runner
@@ -536,7 +539,7 @@ class Mutation:
             runner,
             validate=d["state"] == "READY",
         )
-        serial = p.encode(encoder="kedro")
+        serial = p.to_kedro()
         # credentials not supported yet
         # merge any credentials with inputs and outputs
         # credentials are intentionally not persisted
@@ -652,7 +655,7 @@ class Mutation:
 
         runner = pipeline_input_dict.get("runner") or _config(info).runner
         submitted = _normalize_pipeline(
-            Pipeline.decode(pipeline_input_dict),
+            Pipeline.from_dict(pipeline_input_dict),
             _services(info).metadata,
             pipeline_input_dict.get("slices"),
             pipeline_input_dict.get("only_missing", False),
@@ -698,7 +701,7 @@ class Mutation:
             # Update pipeline in backend before running task
             p = await _services(info).backend.update(p)
 
-            serial = p.encode(encoder="kedro")
+            serial = p.to_kedro()
 
             result = run_pipeline.delay(
                 id=str(p.id),
