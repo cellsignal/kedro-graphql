@@ -13,6 +13,25 @@ def get_permissions(permissions_cls) -> BasePermission:
     return module_class
 
 
+def permission_class(info: strawberry.Info):
+    return info.context.request.app.state.services.permission_class
+
+
+class AppPermission(BasePermission):
+    """Delegate a schema permission to the class selected at app startup."""
+
+    message = "User is not authenticated"
+    error_extensions = {"code": "UNAUTHORIZED"}
+
+    def __init__(self, action: str):
+        self.action = action
+
+    def has_permission(self, source, info: strawberry.Info, **kwargs) -> bool:
+        return permission_class(info)(action=self.action).has_permission(
+            source, info, **kwargs
+        )
+
+
 class IsAuthenticatedAction(BasePermission):
     """Base class for authentication permissions using actions.
     """
@@ -123,7 +142,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
         Returns:
             Optional[Any]: Dictionary with 'email' and 'user' keys, or None if not available.
         """
-        request: typing.Union[Request, WebSocket] = info.context["request"]
+        request: typing.Union[Request, WebSocket] = info.context.request
 
         email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
         user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
@@ -146,7 +165,7 @@ class IsAuthenticatedXForwardedEmail(IsAuthenticatedAction):
         Returns:
             bool: True if the user has permission, False otherwise.
         """
-        request: typing.Union[Request, WebSocket] = info.context["request"]
+        request: typing.Union[Request, WebSocket] = info.context.request
 
         email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
         user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
@@ -187,7 +206,7 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
         Returns:
             Optional[Any]: Dictionary with 'email', 'groups', and 'user' keys.
         """
-        request: typing.Union[Request, WebSocket] = info.context["request"]
+        request: typing.Union[Request, WebSocket] = info.context.request
 
         email = request.headers.get("X-Forwarded-Email") or request.headers.get("x-auth-request-email")
         user = request.headers.get("X-Forwarded-User") or request.headers.get("x-auth-request-user")
@@ -216,13 +235,11 @@ class IsAuthenticatedXForwardedRBAC(IsAuthenticatedAction):
         Returns:
             bool: True if the user has permission, False otherwise.
         """
-        request: typing.Union[Request, WebSocket] = info.context["request"]
+        request: typing.Union[Request, WebSocket] = info.context.request
 
-        group_to_role = info.context["request"].app.config.get(
-            "KEDRO_GRAPHQL_PERMISSIONS_GROUP_TO_ROLE_MAP", None)
-
-        role_to_action = info.context["request"].app.config.get(
-            "KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP", None)
+        config = info.context.request.app.state.services.config
+        group_to_role = config.permissions_group_to_role_map
+        role_to_action = config.permissions_role_to_action_map
 
         if not group_to_role:
             logger.warning(

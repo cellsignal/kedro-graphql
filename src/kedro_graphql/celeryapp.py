@@ -1,13 +1,15 @@
 from celery import Celery
 from celery import signals
 
+from .config import KedroGraphQLConfig
 
-def celery_app(config, backend, schema):
+
+def celery_app(config: KedroGraphQLConfig, backend):
     app = Celery()
 
     class Config:
-        broker_url = config["KEDRO_GRAPHQL_BROKER"]
-        result_backend = config["KEDRO_GRAPHQL_CELERY_RESULT_BACKEND"]
+        broker_url = config.broker
+        result_backend = config.celery_result_backend
         result_extended = True
         task_serializer = 'json'
         result_serializer = 'json'
@@ -21,7 +23,6 @@ def celery_app(config, backend, schema):
 
     app.config_from_object(Config)
     app.kedro_graphql_backend = backend
-    app.kedro_graphql_schema = schema
     app.kedro_graphql_config = config
     return app
 

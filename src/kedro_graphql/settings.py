@@ -3,7 +3,7 @@ from the Kedro defaults. For further information, including these default values
 https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html."""
 
 # Instantiated project hooks for native Kedro commands such as `kedro run`.
-# API pipeline runs use PipelineInput.hooks and KedroGraphQL(always_hooks=...).
+# API pipeline runs use PipelineInput.hooks and config.always_hooks.
 # from kedro_graphql.hooks import DataValidationHooks, DataLoggingHooks
 # HOOKS = (DataValidationHooks(), DataLoggingHooks())
 

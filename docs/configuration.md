@@ -2,7 +2,7 @@ The following table describes each configuration attribute available:
 
 | Attribute                              | Type | Default | Description                                                                                      |
 |-----------------------------------------|------|---------|--------------------------------------------------------------------------------------------------|
-| `app`                                  | string | `kedro_graphql.asgi.KedroGraphQL` | Python path to the ASGI application callable.                                                    |
+| `app`                                  | string | `kedro_graphql.asgi.create_app` | Python path to the application factory.                                                    |
 | `app_description`                      | string | `A tool for serving kedro projects as a GraphQL API` | Description of the Kedro GraphQL application.                                                    |
 | `app_title`                            | string | `Kedro GraphQL API` | Title of the Kedro GraphQL application.                                                          |
 | `backend`                              | string | `kedro_graphql.backends.mongodb.MongoBackend` | Python path to the backend class for data storage and retrieval.                                 |
@@ -127,7 +127,7 @@ The YAML API uses a snake case format without the `KEDRO_GRAPHQL_` prefix. In YA
 ```yaml
 ## Kedro GraphQL YAML API configuration file.
 config:
-  app: "kedro_graphql.asgi.KedroGraphQL"
+  app: "kedro_graphql.asgi.create_app"
   app_description: "A tool for serving kedro projects as a GraphQL API"
   app_title: "Kedro GraphQL"
   backend: "kedro_graphql.backends.mongodb.MongoBackend"
@@ -213,7 +213,7 @@ provide them as JSON strings.
 
 | configuration attribute                              | cli option                                       | example                                              |
 |----------------------------------------------------|--------------------------------------------------|------------------------------------------------------|
-| app                                                | --app                                            | kedro_graphql.asgi.KedroGraphQL                      |
+| app                                                | --app                                            | kedro_graphql.asgi.create_app                      |
 | app_title                                          | --app-title                                      | "My Custom Kedro GraphQL"                           |
 | app_description                                    | --app-description                                | "Custom description"                                 |
 | dataset_filepath_masks                             | --dataset-filepath-masks                         | `[{"prefix": "/tmp/", "mask": "/REDACTED/"}]`     |

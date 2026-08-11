@@ -21,7 +21,7 @@ class TestSchemaSubscriptions:
             }
     	  }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
@@ -46,7 +46,7 @@ class TestSchemaSubscriptions:
     	  }
         """
 
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
@@ -66,7 +66,7 @@ class TestSchemaSubscriptions:
     	  }
         """
 
-        sub2 = await mock_app.schema.subscribe(query2)
+        sub2 = await mock_app.state.services.schema.subscribe(query2)
 
         async for result in sub2:
             assert not result.errors
@@ -102,7 +102,7 @@ class TestSchemaSubscriptions:
             events = []
             start_time = time.time()
             
-            sub = await mock_app.schema.subscribe(query)
+            sub = await mock_app.state.services.schema.subscribe(query)
             async for result in sub:
                 assert not result.errors
                 events.append(result.data["pipeline"])
@@ -164,7 +164,7 @@ class TestSchemaSubscriptions:
             count = 0
             start_time = time.time()
             
-            sub = await mock_app.schema.subscribe(query)
+            sub = await mock_app.state.services.schema.subscribe(query)
             async for result in sub:
                 assert not result.errors
                 count += 1
@@ -228,7 +228,7 @@ class TestSchemaSubscriptions:
             messages = []
             start_time = time.time()
             
-            sub = await mock_app.schema.subscribe(query)
+            sub = await mock_app.state.services.schema.subscribe(query)
             async for result in sub:
                 assert not result.errors
                 messages.append(result.data["pipelineLogs"])
@@ -310,7 +310,7 @@ class TestSchemaSubscriptions:
               }
             """
             count = 0
-            sub = await mock_app.schema.subscribe(query)
+            sub = await mock_app.state.services.schema.subscribe(query)
             async for result in sub:
                 assert not result.errors
                 count += 1
@@ -368,7 +368,7 @@ class TestSchemaSubscriptions:
             messages = []
             start_time = time.time()
             
-            sub = await mock_app.schema.subscribe(query)
+            sub = await mock_app.state.services.schema.subscribe(query)
             async for result in sub:
                 assert not result.errors
                 messages.append(result.data["pipelineLogs"])

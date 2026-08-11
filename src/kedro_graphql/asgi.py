@@ -1,310 +1,230 @@
-from fastapi import FastAPI, Request, Depends, HTTPException, status, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse
-import jwt
 import shutil
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from strawberry.fastapi import GraphQLRouter
+
+import jwt
+import strawberry
+from celery import Celery
 from cloudevents.http import from_http, to_json
 from cloudevents.pydantic.v1 import CloudEvent
-from contextlib import asynccontextmanager
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
+from strawberry.fastapi import GraphQLRouter
+from strawberry.permission import BasePermission
 
-from .logs.logger import logger
-from .hooks import available_hook_names, hook_manager_for
 from .backends import init_backend
+from .backends.base import BaseBackend
 from .celeryapp import celery_app
-from .decorators import RESOLVER_PLUGINS, TYPE_PLUGINS, discover_plugins
-from .models import PipelineTemplates
-from .schema import build_schema
-from .config import load_config
+from .config import KedroGraphQLConfig
+from .context import GraphQLContext
+from .decorators import TYPE_PLUGINS, discover_plugins
+from .hooks import available_hook_names, hook_manager_for
+from .logs.logger import logger
+from .models import ParameterInput, Pipeline, PipelineInput
 from .permissions import get_permissions
-from starlette.requests import Request
-from kedro_graphql.utils import build_graphql_query
-from kedro_graphql.models import PipelineInput, Pipeline, ParameterInput
-
-CONFIG = load_config()
-logger.debug("configuration loaded by {s}".format(s=__name__))
-
-PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
+from .project import ProjectMetadata
+from .schema import build_schema
+from .signed_url.base import SignedUrlProvider
+from .utils import build_graphql_query
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await app.backend.startup()
-    yield
-    await app.backend.shutdown()
+@dataclass(frozen=True)
+class AppServices:
+    config: KedroGraphQLConfig
+    metadata: ProjectMetadata
+    backend: BaseBackend
+    celery: Celery
+    schema: strawberry.Schema
+    permission_class: type[BasePermission]
+    signed_url_provider: type[SignedUrlProvider]
+    available_hooks: set[str]
 
 
-class KedroGraphQL(FastAPI):
+def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI:
+    """Build the web application from validated configuration and project metadata."""
 
-    def __init__(self, kedro_session=None, config=CONFIG, lifespan_handler=None, always_hooks=None):
-        super(KedroGraphQL, self).__init__(
-            title=config["KEDRO_GRAPHQL_APP_TITLE"],
-            description=config["KEDRO_GRAPHQL_APP_DESCRIPTION"],
-            version=config["KEDRO_GRAPHQL_PROJECT_VERSION"],
-            docs_url="/docs",  # Swagger UI URL
-            root_path=config["KEDRO_GRAPHQL_ROOT_PATH"],
-            lifespan=lifespan_handler or lifespan
+    hooks = available_hook_names()
+    unknown_hooks = sorted(set(config.always_hooks) - hooks)
+    if unknown_hooks:
+        raise ValueError(f"Unavailable always hooks: {unknown_hooks}")
+    hook_manager_for(config.always_hooks)
+
+    discover_plugins(config)
+    schema = build_schema(TYPE_PLUGINS)
+    backend = init_backend(config)
+    celery = celery_app(config, backend)
+    permission_class = get_permissions(config.permissions)
+    module_name, provider_name = config.signed_url_provider.rsplit(".", 1)
+    signed_url_provider = getattr(import_module(module_name), provider_name)
+    if not issubclass(signed_url_provider, SignedUrlProvider):
+        raise TypeError(f"{provider_name} must inherit from SignedUrlProvider")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await backend.startup()
+        yield
+        await backend.shutdown()
+
+    app = FastAPI(
+        title=config.app_title,
+        description=config.app_description,
+        version=config.project_version,
+        docs_url="/docs",
+        root_path=config.root_path,
+        lifespan=lifespan,
+    )
+    app.state.services = AppServices(
+        config,
+        metadata,
+        backend,
+        celery,
+        schema,
+        permission_class,
+        signed_url_provider,
+        hooks,
+    )
+
+    def get_context() -> GraphQLContext:
+        return GraphQLContext()
+
+    graphql_app = GraphQLRouter(schema, context_getter=get_context)
+    app.include_router(graphql_app, prefix="/graphql")
+
+    class Info:
+        def __init__(self, request: Request):
+            self.context = GraphQLContext(request)
+
+    def authenticate(action: str):
+        def dependency(request: Request):
+            if not permission_class(action=action).has_permission(None, Info(request)):
+                raise HTTPException(
+                    detail="User is not authenticated",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            return True
+
+        return dependency
+
+    if config.events_config:
+
+        @app.post(
+            "/event/", dependencies=[Depends(authenticate("create_event"))]
+        )
+        async def event(request: Request):
+            body = await request.body()
+            event: CloudEvent = from_http(request.headers, body)
+            logger.info("Received event: %s", to_json(event))
+            source = event.get_attributes().get("source")
+            event_type = event.get_attributes().get("type")
+            names = [
+                name
+                for name, event_config in config.events_config.items()
+                if event_config["source"] == source
+                and event_config["type"] == event_type
+            ]
+            created_pipelines = []
+            for name in names:
+                pipeline_input = PipelineInput.from_event(
+                    name=name, event=event, state="STAGED"
+                )
+                response = await schema.execute(
+                    build_graphql_query(
+                        "createPipelineReturnFull", fragments=["FullPipeline"]
+                    ),
+                    variable_values={
+                        "pipeline": pipeline_input.encode(encoder="graphql")
+                    },
+                    context_value=GraphQLContext(request),
+                )
+                staged = Pipeline.decode(response.data["createPipeline"])
+                pipeline_input.state = "READY"
+                pipeline_input.parameters.append(
+                    ParameterInput(
+                        name="id", value=str(staged.id), type="STRING"
+                    )
+                )
+                response = await schema.execute(
+                    build_graphql_query(
+                        "updatePipelineReturnFull", fragments=["FullPipeline"]
+                    ),
+                    variable_values={
+                        "id": staged.id,
+                        "pipeline": pipeline_input.encode(encoder="graphql"),
+                    },
+                    context_value=GraphQLContext(request),
+                )
+                created = Pipeline.decode(response.data["updatePipeline"])
+                created_pipelines.append(created.encode(encoder="dict"))
+            return created_pipelines
+
+    @app.get(
+        "/download", dependencies=[Depends(authenticate("read_dataset"))]
+    )
+    def download(token: str):
+        try:
+            payload = jwt.decode(
+                token,
+                config.local_file_provider_jwt_secret_key,
+                algorithms=[config.local_file_provider_jwt_algorithm],
+            )
+            path = Path(payload["filepath"]).resolve()
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=403, detail="Token expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=403, detail="Invalid token")
+        roots = [
+            Path(root).resolve()
+            for root in config.local_file_provider_download_allowed_roots
+        ]
+        if not any(path.is_relative_to(root) for root in roots):
+            raise HTTPException(status_code=403, detail=f"Path {path} is not allowed")
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(
+            path,
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "Access-Control-Allow-Origin": "*",
+            },
         )
 
-        self.kedro_session = kedro_session
-        self.available_hooks = available_hook_names()
-        self.always_hooks = list(dict.fromkeys(
-            config["KEDRO_GRAPHQL_ALWAYS_HOOKS"] if always_hooks is None else always_hooks
-        ))
-        unknown_hooks = sorted(set(self.always_hooks) - self.available_hooks)
-        if unknown_hooks:
-            raise ValueError(f"Unavailable always hooks: {unknown_hooks}")
-        hook_manager_for(self.always_hooks)
-
-        native_hook_manager = self.kedro_session._hook_manager
-        # Loading the API context must not invoke settings.HOOKS or auto-discovered plugins.
-        self.kedro_session._hook_manager = hook_manager_for([])
+    @app.post(
+        "/upload", dependencies=[Depends(authenticate("create_dataset"))]
+    )
+    async def upload(token: str = Form(...), file: UploadFile = File(...)):
+        if (
+            file.size is not None
+            and file.size
+            > config.local_file_provider_upload_max_file_size_mb * 1024 * 1024
+        ):
+            raise HTTPException(status_code=400, detail="File size exceeds the maximum limit")
         try:
-            self.kedro_context = self.kedro_session.load_context()
-        finally:
-            self.kedro_session._hook_manager = native_hook_manager
-        self.kedro_catalog = self.kedro_context.config_loader["catalog"]
-        self.kedro_parameters = self.kedro_context.config_loader["parameters"]
-        from kedro.framework.project import pipelines
-        self.kedro_pipelines = pipelines
-        self.kedro_pipelines_index = PipelineTemplates._build_pipeline_index(
-            self.kedro_pipelines, self.kedro_catalog, self.kedro_parameters)
-
-        self.config = config
-
-        self.resolver_plugins = RESOLVER_PLUGINS
-        self.type_plugins = TYPE_PLUGINS
-
-        discover_plugins(self.config)
-        self.schema = build_schema(self.type_plugins)
-        self.backend = init_backend(self.config)
-        self.graphql_app = GraphQLRouter(self.schema)
-        self.include_router(self.graphql_app, prefix="/graphql")
-        self.add_api_websocket_route("/graphql", self.graphql_app)
-
-        self.celery_app = celery_app(self.config, self.backend, self.schema)
-
-        class Info:
-            """A simple class to hold the request context for permissions."""
-
-            def __init__(self, request: Request):
-                self.context = {"request": request}
-
-        @staticmethod
-        def authenticate_factory(action: str = None):
-            """Factory function to create an authentication dependency.
-
-            Kwargs:
-                action (str): The action for which the user needs to be authenticated.
-            Returns:
-                function: A function that checks if the user is authenticated.
-            """
-
-            def authenticate(request: Request):
-                """Dependency to authenticate the user based on permissions.
-                This function checks if the user is authenticated by verifying
-                the permissions class. If the user is not authenticated, it raises
-                an HTTPException with a 403 Forbidden status code.
-                This function is used as a dependency in the event endpoint to ensure
-                that only authenticated users can create events.
-
-                Args:
-                    request (Request): The incoming request.
-                Returns:
-                    bool: True if the user is authenticated, False otherwise.
-                Raises:
-                    HTTPException: If the user is not authenticated.
-                """
-
-                access = PERMISSIONS_CLASS(action=action).has_permission(
-                    None, Info(request))
-                if not access:
-                    raise HTTPException(detail="User is not authenticated",
-                                        status_code=status.HTTP_403_FORBIDDEN)
-                else:
-                    return access
-            return authenticate
-
-        if isinstance(self.config.get("KEDRO_GRAPHQL_EVENTS_CONFIG", None), dict):
-
-            @self.post(
-                "/event/",
-                dependencies=[Depends(authenticate_factory(action="create_event"))],
+            payload = jwt.decode(
+                token,
+                config.local_file_provider_jwt_secret_key,
+                algorithms=[config.local_file_provider_jwt_algorithm],
             )
-            async def event(request: Request):
-                """
-                Endpoint to handle cloudevents.
+            path = Path(payload["filepath"]).resolve()
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=403, detail="Token expired")
+        except jwt.InvalidTokenError:
+            raise HTTPException(status_code=403, detail="Invalid token")
+        roots = [
+            Path(root).resolve()
+            for root in config.local_file_provider_upload_allowed_roots
+        ]
+        if not any(path.is_relative_to(root) for root in roots):
+            raise HTTPException(status_code=403, detail=f"Path {path} is not allowed")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("wb") as output:
+                shutil.copyfileobj(file.file, output)
+        except OSError as error:
+            raise HTTPException(status_code=500, detail=f"Upload failed: {error}")
+        return {"status": "success", "path": str(path)}
 
-                Args:
-                request (Request): The incoming request containing the CloudEvent.
-                Returns:
-                dict: Result id of the event handling.
-                """
-                econf = self.config["KEDRO_GRAPHQL_EVENTS_CONFIG"]
-
-                body = await request.body()
-                event: CloudEvent = from_http(
-                    request.headers, body
-                )  # will raise if not a valid cloudevent
-
-                logger.info(f"Received event: {to_json(event)}")
-
-                # match event details to corresponding pipelines
-                source = event.get_attributes().get("source", None)
-                type = event.get_attributes().get("type", None)
-
-                pipeline_names = [
-                    k
-                    for k, v in econf.items()
-                    if v["source"] == source and v["type"] == type
-                ]
-
-                created_pipelines = []
-
-                for n in pipeline_names:
-
-                    pipeline_input = PipelineInput.from_event(
-                        name=n, event=event, state="STAGED"
-                    )
-
-                    q_create = build_graphql_query(
-                        "createPipelineReturnFull", fragments=["FullPipeline"]
-                    )
-
-                    # Need to STAGE to get a pipeline id to pass as parameter
-                    resp = await self.schema.execute(
-                        q_create,
-                        variable_values={
-                            "pipeline": pipeline_input.encode(encoder="graphql")
-                        },
-                        context_value={"request": request},
-                    )
-
-                    staged = Pipeline.decode(resp.data["createPipeline"])
-
-                    pipeline_input.state = "READY"
-
-                    pipeline_input.parameters.append(
-                        ParameterInput(name="id", value=str(staged.id), type="STRING")
-                    )
-
-                    q_update = build_graphql_query(
-                        "updatePipelineReturnFull", fragments=["FullPipeline"]
-                    )
-
-                    resp = await self.schema.execute(
-                        q_update,
-                        variable_values={
-                            "id": staged.id,
-                            "pipeline": pipeline_input.encode(encoder="graphql"),
-                        },
-                        context_value={"request": request},
-                    )
-
-                    created = Pipeline.decode(resp.data["updatePipeline"])
-                    created_pipelines.append(created.encode(encoder="dict"))
-
-                    logger.info(
-                        f"event " f"{event.get('id')} triggered pipeline {created.id}")
-
-                return created_pipelines
-
-        else:
-            logger.warning(
-                "KEDRO_GRAPHQL_EVENTS_CONFIG is not set or not a dictionary. "
-                "Event handling endpoint will not be available."
-            )
-
-        @self.get("/download", dependencies=[Depends(authenticate_factory(action="read_dataset"))])
-        def download(token: str):
-            """
-            Endpoint to download a file.
-
-            Args:
-                token (str): The JWT token for authentication.
-
-            Returns:
-                FileResponse: The file to download.
-            """
-            try:
-                payload = jwt.decode(
-                    token,
-                    self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                    algorithms=[
-                        self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]]
-                )
-                path = Path(payload["filepath"])
-            except jwt.ExpiredSignatureError:
-                raise HTTPException(status_code=403, detail="Token expired")
-            except jwt.InvalidTokenError:
-                raise HTTPException(status_code=403, detail="Invalid token")
-
-            ALLOWED_ROOTS = []
-
-            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS"]:
-                ALLOWED_ROOTS.append(Path(root).resolve())
-                # print(f"Allowed root: {Path(root).resolve()}")
-
-            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
-                )
-
-            if not path.exists() or not path.is_file():
-                raise HTTPException(status_code=404, detail="File not found")
-
-            return FileResponse(
-                path,
-                headers={"Cache-Control": "no-store", "Pragma": "no-cache", "Expires": "0",
-                         "Access-Control-Allow-Origin": "*"})
-
-        @self.post("/upload", dependencies=[Depends(authenticate_factory(action="create_dataset"))])
-        async def upload(token: str = Form(...), file: UploadFile = File(...)):
-            """
-            Endpoint to upload a file.
-
-            Args:
-                token (str): The JWT token for authentication.
-                file (UploadFile): The file to upload.
-
-            Returns:
-                dict: A success message and the file path.
-            """
-
-            if file.size > self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB"] * 1024 * 1024:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File size exceeds the maximum limit of {self.config['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_MAX_FILE_SIZE_MB']} MB"
-                )
-
-            try:
-                payload = jwt.decode(token, self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                                     algorithms=[self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"]])
-                path = Path(payload["filepath"]).resolve()
-                # print(f"Destination path: {path}")
-            except jwt.ExpiredSignatureError:
-                raise HTTPException(status_code=403, detail="Token expired")
-            except jwt.InvalidTokenError:
-                raise HTTPException(status_code=403, detail="Invalid token")
-
-            ALLOWED_ROOTS = []
-
-            for root in self.config["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS"]:
-                ALLOWED_ROOTS.append(Path(root).resolve())
-                # print(f"Allowed root: {Path(root).resolve()}")
-
-            if not any(path.is_relative_to(root) for root in ALLOWED_ROOTS):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Path {path} is not allowed. Allowed roots: {ALLOWED_ROOTS}"
-                )
-
-            try:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                with open(path, "wb") as out_file:
-                    shutil.copyfileobj(file.file, out_file)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
-
-            return {"status": "success", "path": str(path)}
+    return app

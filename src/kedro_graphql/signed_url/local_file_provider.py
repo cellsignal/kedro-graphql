@@ -8,16 +8,13 @@ from .base import SignedUrlProvider
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from pathlib import Path
-from ..permissions import get_permissions
+from ..permissions import permission_class
 from ..logs.logger import logger
-from ..config import load_config
+from ..config import KedroGraphQLConfig
 from ..exceptions import DataSetError
 
-CONFIG = load_config()
-logger.debug("configuration loaded by {s}".format(s=__name__))
-
-PERMISSIONS_CLASS = get_permissions(CONFIG.get("KEDRO_GRAPHQL_PERMISSIONS"))
-logger.info("{s} using permissions class: {d}".format(s=__name__, d=PERMISSIONS_CLASS))
+def _config(info: Info) -> KedroGraphQLConfig:
+    return info.context.request.app.state.services.config
 
 
 class LocalFileProvider(SignedUrlProvider):
@@ -26,7 +23,12 @@ class LocalFileProvider(SignedUrlProvider):
     """
 
     @staticmethod
-    def sign_url(filepath: str | Path, expires_in_sec: int, url: str) -> dict:
+    def sign_url(
+        filepath: str | Path,
+        expires_in_sec: int,
+        url: str,
+        config: KedroGraphQLConfig,
+    ) -> dict:
         """
         Generate a signed URL for a local file.
 
@@ -49,8 +51,11 @@ class LocalFileProvider(SignedUrlProvider):
             "iat": int(datetime.now().timestamp())
         }
 
-        token = jwt.encode(payload, CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_SECRET_KEY"],
-                           algorithm=CONFIG["KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_JWT_ALGORITHM"])
+        token = jwt.encode(
+            payload,
+            config.local_file_provider_jwt_secret_key,
+            algorithm=config.local_file_provider_jwt_algorithm,
+        )
 
         return SignedUrl(url=url, file=path.name, fields=[SignedUrlField(name="token", value=token)])
 
@@ -88,13 +93,13 @@ class LocalFileProvider(SignedUrlProvider):
             signed_urls = []
             for file in files:
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={file}, protocol=file, expires_in_sec={expires_in_sec}")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={file}, protocol=file, expires_in_sec={expires_in_sec}")
 
                 signed = LocalFileProvider.sign_url(
-                    file, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
+                    file, expires_in_sec, f"{_config(info).local_file_provider_server_url}/download", _config(info))
 
                 query = urlencode({"token": signed.get_field_value("token")})
-                signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
+                signed.url = f"{_config(info).local_file_provider_server_url}/download?{query}"
                 signed_urls.append(signed)
             return SignedUrls(urls=signed_urls)
 
@@ -106,12 +111,12 @@ class LocalFileProvider(SignedUrlProvider):
             filepath = Path(filepath)
 
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, expires_in_sec={expires_in_sec}")
+                f"user={permission_class(info).get_user_info(info)['email']}, action=read_dataset, dataset={dataset.name}, filepath={filepath}, protocol=file, expires_in_sec={expires_in_sec}")
             signed = LocalFileProvider.sign_url(
-                filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download")
+                filepath, expires_in_sec, f"{_config(info).local_file_provider_server_url}/download", _config(info))
 
             query = urlencode({"token": signed.get_field_value("token")})
-            signed.url = f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/download?{query}"
+            signed.url = f"{_config(info).local_file_provider_server_url}/download?{query}"
             return signed
 
     @staticmethod
@@ -144,10 +149,10 @@ class LocalFileProvider(SignedUrlProvider):
             for partition in partitions:
                 filepath = str(path / partition) + c.get("filename_suffix", "")
                 logger.info(
-                    f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={str(filepath)}, protocol=file, expires_in_sec={expires_in_sec}")
+                    f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={str(filepath)}, protocol=file, expires_in_sec={expires_in_sec}")
 
                 signed_urls.append(LocalFileProvider.sign_url(
-                    filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/upload"))
+                    filepath, expires_in_sec, f"{_config(info).local_file_provider_server_url}/upload", _config(info)))
 
             return SignedUrls(urls=signed_urls)
         elif c["type"] in ["partitions.IncrementalDataset"]:
@@ -157,6 +162,6 @@ class LocalFileProvider(SignedUrlProvider):
             protocol, filepath = dataset.parse_filepath()
             filepath = Path(filepath)
             logger.info(
-                f"user={PERMISSIONS_CLASS.get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={str(filepath)}, protocol=file, expires_in_sec={expires_in_sec}")
+                f"user={permission_class(info).get_user_info(info)['email']}, action=create_dataset, dataset={dataset.name}, filepath={str(filepath)}, protocol=file, expires_in_sec={expires_in_sec}")
 
-            return LocalFileProvider.sign_url(filepath, expires_in_sec, f"{CONFIG['KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_SERVER_URL']}/upload")
+            return LocalFileProvider.sign_url(filepath, expires_in_sec, f"{_config(info).local_file_provider_server_url}/upload", _config(info))

@@ -48,5 +48,7 @@ nav:
       - Dataset Uploads & Downloads: extend_signed_url_provider.md
       - Authentication & Authorization: extend_permissions.md
       - Application: extend_application.md
-  - Architecture: architecture.md
+  - Architecture:
+      - Overview: architecture.md
+      - Application startup refactor: application_startup_refactor.md
   - Reference: pydoc.md

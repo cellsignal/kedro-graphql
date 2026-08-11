@@ -30,7 +30,6 @@ from kedro_graphql.pipeline_config import (
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 from kedro_graphql.hooks import hook_manager_for
 
-# from .config import load_config
 from .models import DataSet, State
 from .client import PIPELINE_GQL
 
@@ -38,10 +37,6 @@ from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import from_json, to_json
 
 logger = logging.getLogger(__name__)
-# CONFIG = load_config()
-# logger.debug("configuration loaded by {s}".format(s=__name__))
-
-
 class KedroGraphqlTask(AbortableTask):
 
     _db = None
@@ -93,23 +88,16 @@ class KedroGraphqlTask(AbortableTask):
         run_sync(self.db.update(p))
 
         try:
-            # Create info and error handlers for the run
-            # os.makedirs(os.path.join(
-            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
             os.makedirs(os.path.join(
-                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id), exist_ok=True)
+                self.gql_config.log_tmp_dir, task_id), exist_ok=True)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            # info_handler = logging.FileHandler(os.path.join(
-            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
             info_handler = logging.FileHandler(os.path.join(
-                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/info.log'), 'a')
+                self.gql_config.log_tmp_dir, task_id + '/info.log'), 'a')
 
             info_handler.setLevel(logging.INFO)
             info_handler.setFormatter(formatter)
-            # error_handler = logging.FileHandler(os.path.join(
-            # CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a')
             error_handler = logging.FileHandler(os.path.join(
-                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id + '/errors.log'), 'a')
+                self.gql_config.log_tmp_dir, task_id + '/errors.log'), 'a')
 
             error_handler.setLevel(logging.ERROR)
             error_handler.setFormatter(formatter)
@@ -117,14 +105,10 @@ class KedroGraphqlTask(AbortableTask):
             error_handler.kedro_graphql_task_id = task_id
             root_logger.addHandler(info_handler)
             root_logger.addHandler(error_handler)
-            # logger.info(
-            # f"Storing tmp logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
             logger.info(
-                f"Storing tmp logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}")
+                f"Storing tmp logs in {os.path.join(self.gql_config.log_tmp_dir, task_id)}")
 
-            # Ensure KEDRO_GRAPHQL_LOG_PATH_PREFIX is provided
-            # log_path_prefix = CONFIG.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
-            log_path_prefix = self.gql_config.get('KEDRO_GRAPHQL_LOG_PATH_PREFIX')
+            log_path_prefix = self.gql_config.log_path_prefix
             logger.info("Final upload destination for logs:{s}".format(
                 s=log_path_prefix))
             if log_path_prefix:
@@ -275,17 +259,12 @@ class KedroGraphqlTask(AbortableTask):
             handler.close()
             root_logger.removeHandler(handler)
 
-        # Clear logs from temp_logs
         try:
-            # Removes the directory and its contents
-            # shutil.rmtree(os.path.join(CONFIG["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id))
             shutil.rmtree(os.path.join(
-                self.gql_config["KEDRO_GRAPHQL_LOG_TMP_DIR"], task_id))
+                self.gql_config.log_tmp_dir, task_id))
         except Exception as e:
-            # logger.info(
-            #    f"Failed to clear logs in {os.path.join(CONFIG['KEDRO_GRAPHQL_LOG_TMP_DIR'].name, task_id)}: {e}")
             logger.info(
-                f"Failed to clear logs in {os.path.join(self.gql_config['KEDRO_GRAPHQL_LOG_TMP_DIR'], task_id)}: {e}")
+                f"Failed to clear logs in {os.path.join(self.gql_config.log_tmp_dir, task_id)}: {e}")
 
 
 def _run_pipeline_in_child_process(
@@ -410,12 +389,9 @@ def run_pipeline(self,
                  only_missing: bool = False,
                  hooks: List[str] = None):
 
-    # with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
-    #                         env=CONFIG["KEDRO_GRAPHQL_ENV"],
-    #                         conf_source=CONFIG["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
     with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
-                             env=self.gql_config["KEDRO_GRAPHQL_ENV"],
-                             conf_source=self.gql_config["KEDRO_GRAPHQL_CONF_SOURCE"]) as session:
+                             env=self.gql_config.env,
+                             conf_source=self.gql_config.conf_source) as session:
 
         hook_names = list(dict.fromkeys(hooks or []))
         try:
@@ -491,6 +467,8 @@ def run_pipeline(self,
             record_data = {
                 "session_id": session.session_id,
                 "celery_task_id": self.request.id,
+                "log_tmp_dir": self.gql_config.log_tmp_dir,
+                "log_path_prefix": self.gql_config.log_path_prefix,
                 "project_path": session._project_path.as_posix(),
                 "env": session.load_context().env,
                 "kedro_version": kedro_version,
@@ -576,40 +554,20 @@ def run_pipeline(self,
             )
             child.start()
 
-            polling_interval = self.gql_config.get(
-                "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL", 5
-            )
-            try:
-                polling_interval = float(polling_interval)
-                if polling_interval < 1:
-                    logger.warning(
-                        "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=%s is below minimum 1s; clamping to 1s",
-                        polling_interval,
-                    )
-                    polling_interval = 1.0
-            except (TypeError, ValueError):
+            polling_interval = self.gql_config.celery_abort_polling_interval
+            if polling_interval < 1:
                 logger.warning(
-                    "Invalid KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=%s, falling back to 5s",
+                    "KEDRO_GRAPHQL_CELERY_ABORT_POLLING_INTERVAL=%s is below minimum 1s; clamping to 1s",
                     polling_interval,
                 )
-                polling_interval = 5.0
-            grace_period = self.gql_config.get(
-                "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD", 60
-            )
-            try:
-                grace_period = float(grace_period)
-                if grace_period < 5:
-                    logger.warning(
-                        "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=%s is below minimum 5s; clamping to 5s",
-                        grace_period,
-                    )
-                    grace_period = 5.0
-            except (TypeError, ValueError):
+                polling_interval = 1.0
+            grace_period = self.gql_config.celery_abort_grace_period
+            if grace_period < 5:
                 logger.warning(
-                    "Invalid KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=%s, falling back to 60s",
+                    "KEDRO_GRAPHQL_CELERY_ABORT_GRACE_PERIOD=%s is below minimum 5s; clamping to 5s",
                     grace_period,
                 )
-                grace_period = 60.0
+                grace_period = 5.0
             
             sigint_sent_at = None
             sigterm_sent_at = None

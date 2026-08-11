@@ -15,7 +15,7 @@
 
 `createPipeline` and `updatePipeline` accept `dryRun: true` to validate and return the projected pipeline response without saving it or submitting a task. The response uses the normal GraphQL field names (for example, `dataCatalog` and `createdAt`); a dry-run create has no `id`, so it cannot project `uniquePaths`.
 
-API pipeline runs execute only hooks listed in the pipeline's `hooks` input and `always_hooks` configured for the API. Hook names are installed `kedro.hooks` entry-point names, such as `kedro-graphql-validation`; configure always-on hooks with `KEDRO_GRAPHQL_ALWAYS_HOOKS` or `always_hooks` when creating `KedroGraphQL`.
+API pipeline runs execute only hooks listed in the pipeline's `hooks` input and `always_hooks` configured for the API. Hook names are installed `kedro.hooks` entry-point names, such as `kedro-graphql-validation`; configure always-on hooks with `KEDRO_GRAPHQL_ALWAYS_HOOKS`.
 
 ## Why Use kedro-graphql?
 

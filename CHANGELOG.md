@@ -20,6 +20,9 @@ Added:
 
 Changed:
 
+- Application startup now uses `create_app(config, metadata)` with validated `KedroGraphQLConfig` and a direct Kedro configuration snapshot; the web process no longer owns a `KedroSession`
+- Celery workers now bootstrap only Kedro, the backend, and Celery instead of constructing the web application and GraphQL schema
+- `KEDRO_GRAPHQL_APP` now identifies an application factory rather than a `FastAPI` subclass
 - `MongoBackend` migrated from synchronous PyMongo (`MongoClient`) to PyMongo's native async API (`AsyncMongoClient`); all backend methods (`startup`, `shutdown`, `read`, `list`, `create`, `update`, `delete`) are now async coroutines (Motor is deprecated as of May 14th, 2026)
 - GraphQL resolvers in `schema.py` now `await` backend methods directly, eliminating all `run_in_threadpool` delegation for database operations and providing true async I/O
 - `MongoBackend` now creates and caches one `AsyncMongoClient` per running event loop (keyed by process id) since an `AsyncMongoClient` is not thread safe and must be bound to a single event loop

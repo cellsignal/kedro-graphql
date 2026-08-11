@@ -13,7 +13,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
+        resp = await mock_app.state.services.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
         assert resp.errors is None
 
     @pytest.mark.asyncio
@@ -31,7 +31,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values={"limit": 3, "filter": "{\"tags\": {\"key\": \"author\", \"value\": \"opensean\"}}"})
+        resp = await mock_app.state.services.schema.execute(query, variable_values={"limit": 3, "filter": "{\"tags\": {\"key\": \"author\", \"value\": \"opensean\"}}"})
         assert resp.errors is None
 
     @pytest.mark.asyncio
@@ -66,7 +66,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values={"limit": 5})
+        resp = await mock_app.state.services.schema.execute(query, variable_values={"limit": 5})
 
         assert resp.errors is None
 
@@ -82,7 +82,7 @@ class TestSchemaQuery:
           }
         }
         """
-        list_resp = await mock_app.schema.execute(list_query, variable_values={"limit": 1})
+        list_resp = await mock_app.state.services.schema.execute(list_query, variable_values={"limit": 1})
         assert list_resp.errors is None
         template = list_resp.data["pipelineTemplates"]["pipelineTemplates"][0]
 
@@ -94,7 +94,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(query, variable_values={"id": template["id"]})
+        resp = await mock_app.state.services.schema.execute(query, variable_values={"id": template["id"]})
         assert resp.errors is None
         assert resp.data["pipelineTemplate"]["id"] == template["id"]
         assert resp.data["pipelineTemplate"]["name"] == template["name"]
@@ -131,7 +131,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(
+        resp = await mock_app.state.services.schema.execute(
             query,
             variable_values={
                 "id": str(mock_pipeline.id),
@@ -165,7 +165,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(
+        resp = await mock_app.state.services.schema.execute(
             query,
             variable_values={
                 "id": str(mock_example01.id),
@@ -202,7 +202,7 @@ class TestSchemaQuery:
           }
         }
         """
-        resp = await mock_app.schema.execute(
+        resp = await mock_app.state.services.schema.execute(
             query,
             variable_values={
                 "id": str(mock_example01.id),

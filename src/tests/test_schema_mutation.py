@@ -186,7 +186,7 @@ class TestSchemaMutations:
     async def test_create_pipeline_dry_run_returns_camel_case_json_without_submitting(
             self, mock_app, mock_info_context, monkeypatch):
         monkeypatch.setitem(
-            mock_app.kedro_pipelines,
+            mock_app.state.services.metadata.pipelines,
             "example00",
             pipeline(
                 [
@@ -207,9 +207,9 @@ class TestSchemaMutations:
               }
             }
         """
-        with patch.object(mock_app.backend, "create", new_callable=AsyncMock) as create, \
+        with patch.object(mock_app.state.services.backend, "create", new_callable=AsyncMock) as create, \
              patch("kedro_graphql.schema.run_pipeline.delay") as delay:
-            response = await mock_app.schema.execute(
+            response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={"pipeline": {
                     "name": "example00",
@@ -231,7 +231,11 @@ class TestSchemaMutations:
     @pytest.mark.asyncio
     async def test_create_pipeline_merges_always_and_requested_hooks(
             self, mock_app, mock_info_context, monkeypatch):
-        monkeypatch.setattr(mock_app, "always_hooks", ["kedro-graphql-validation"])
+        monkeypatch.setattr(
+            mock_app.state.services.config,
+            "always_hooks",
+            ["kedro-graphql-validation"],
+        )
         mutation = """
             mutation CreatePipeline($pipeline: PipelineInput!) {
               createPipeline(pipeline: $pipeline) {
@@ -239,7 +243,7 @@ class TestSchemaMutations:
               }
             }
         """
-        response = await mock_app.schema.execute(
+        response = await mock_app.state.services.schema.execute(
             mutation,
             variable_values={"pipeline": {
                 "name": "example00",
@@ -265,9 +269,9 @@ class TestSchemaMutations:
               }
             }
         """
-        with patch.object(mock_app.backend, "update", new_callable=AsyncMock) as update, \
+        with patch.object(mock_app.state.services.backend, "update", new_callable=AsyncMock) as update, \
              patch("kedro_graphql.schema.run_pipeline.delay") as delay:
-            response = await mock_app.schema.execute(
+            response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={
                     "id": str(mock_pipeline_staged.id),
@@ -296,7 +300,7 @@ class TestSchemaMutations:
                                       mock_text_in,
                                       mock_text_out):
 
-        resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                              variable_values={"pipeline": {
                                                  "name": "example00",
                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -328,7 +332,7 @@ class TestSchemaMutations:
                                       mock_text_in_tsv,
                                       mock_text_out_tsv):
 
-        resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                              variable_values={"pipeline": {
                                                  "name": "example00",
                                                  "dataCatalog": [
@@ -352,7 +356,7 @@ class TestSchemaMutations:
                                           mock_text_in,
                                           mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -380,7 +384,7 @@ class TestSchemaMutations:
                                          mock_text_in,
                                          mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -408,7 +412,7 @@ class TestSchemaMutations:
                                                       mock_text_in,
                                                       mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example02",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -433,7 +437,7 @@ class TestSchemaMutations:
                                                    mock_text_in,
                                                    mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "state": "STAGED",
@@ -443,7 +447,7 @@ class TestSchemaMutations:
 
         pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
 
-        update_pipeline_resp = await mock_app.schema.execute(self.update_pipeline_mutation,
+        update_pipeline_resp = await mock_app.state.services.schema.execute(self.update_pipeline_mutation,
                                                              variable_values={"id": pipeline_id,
                                                                               "pipeline": {
                                                                                   "name": "example00",
@@ -478,7 +482,7 @@ class TestSchemaMutations:
                                                            mock_app,
                                                            mock_info_context,
                                                            mock_pipeline_staged):
-        resp = await mock_app.schema.execute(
+        resp = await mock_app.state.services.schema.execute(
             self.update_pipeline_mutation,
             variable_values={
                 "id": str(mock_pipeline_staged.id),
@@ -496,7 +500,7 @@ class TestSchemaMutations:
                                          mock_info_context,
                                          mock_text_in,
                                          mock_text_out):
-        create_resp = await mock_app.schema.execute(
+        create_resp = await mock_app.state.services.schema.execute(
             self.create_pipeline_mutation,
             variable_values={"pipeline": {
                 "name": "example00",
@@ -522,7 +526,7 @@ class TestSchemaMutations:
             }
           }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async def wait_for_started_event():
             async for result in sub:
@@ -535,11 +539,11 @@ class TestSchemaMutations:
         assert started_event["id"] == pipeline_id
         assert started_event["status"] in UNREADY_STATES
         assert started_event["taskId"] is not None
-        p = await mock_app.backend.read(id=pipeline_id)
+        p = await mock_app.state.services.backend.read(id=pipeline_id)
         assert p is not None
 
         # Send an abort request
-        abort_resp = await mock_app.schema.execute(
+        abort_resp = await mock_app.state.services.schema.execute(
             self.update_pipeline_mutation,
             variable_values={
                 "id": pipeline_id,
@@ -562,7 +566,7 @@ class TestSchemaMutations:
             }
           }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async def wait_for_aborted_event():
             events = []
@@ -581,7 +585,7 @@ class TestSchemaMutations:
         assert events[-1]["status"] == "SUCCESS"
         assert str(events[-1]["result"]).lower() == "aborted"
 
-        updated = await mock_app.backend.read(id=pipeline_id)
+        updated = await mock_app.state.services.backend.read(id=pipeline_id)
         assert updated is not None
         assert updated.status[-1].state == State.ABORTED
 
@@ -594,7 +598,7 @@ class TestSchemaMutations:
                                    mock_text_in,
                                    mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -608,7 +612,7 @@ class TestSchemaMutations:
 
         pipeline_id = create_pipeline_resp.data["createPipeline"]["id"]
 
-        delete_pipeline_resp = await mock_app.schema.execute(self.delete_pipeline_mutation,
+        delete_pipeline_resp = await mock_app.state.services.schema.execute(self.delete_pipeline_mutation,
                                                              variable_values={"id": pipeline_id})
 
         assert delete_pipeline_resp.errors is None
@@ -622,7 +626,7 @@ class TestSchemaMutations:
                                                                     mock_text_in,
                                                                     mock_text_out):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example00",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -644,13 +648,13 @@ class TestSchemaMutations:
             }
     	  }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
             if result.data["pipeline"]["status"] == "SUCCESS":
                 break
-        dataset_names = {ds.name for ds in (await mock_app.backend.read(
+        dataset_names = {ds.name for ds in (await mock_app.state.services.backend.read(
             create_pipeline_resp.data["createPipeline"]["id"])).data_catalog}
 
         assert "gql_meta" in dataset_names
@@ -667,7 +671,7 @@ class TestSchemaMutations:
                                     mock_reversed_txt,
                                     mock_timestamped_txt):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example01",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -691,7 +695,7 @@ class TestSchemaMutations:
             }
     	  }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
@@ -699,7 +703,7 @@ class TestSchemaMutations:
                 break
 
         # Make sure only nodes specified in "slices" were run
-        assert (await mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
+        assert (await mock_app.state.services.backend.read(create_pipeline_resp.data["createPipeline"]
                                             ["id"])).status[-1].filtered_nodes == ["uppercase_node", "reverse_node"]
         create_pipeline_resp.errors is None
 
@@ -714,7 +718,7 @@ class TestSchemaMutations:
                                              mock_reversed_txt,
                                              mock_timestamped_txt):
 
-        create_pipeline_resp = await mock_app.schema.execute(self.create_pipeline_mutation,
+        create_pipeline_resp = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                              variable_values={"pipeline": {
                                                                  "name": "example01",
                                                                  "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -737,7 +741,7 @@ class TestSchemaMutations:
             }
     	  }
         """
-        sub = await mock_app.schema.subscribe(query)
+        sub = await mock_app.state.services.schema.subscribe(query)
 
         async for result in sub:
             assert not result.errors
@@ -745,7 +749,7 @@ class TestSchemaMutations:
                 break
 
         # Make sure only timestamp_node was run because the file does not exist (did not write to it in conftest.py)
-        assert (await mock_app.backend.read(create_pipeline_resp.data["createPipeline"]
+        assert (await mock_app.state.services.backend.read(create_pipeline_resp.data["createPipeline"]
                                             ["id"])).status[-1].filtered_nodes == ["timestamp_node", "timestamp_partitions_node"]
         create_pipeline_resp.errors is None
 
@@ -757,7 +761,7 @@ class TestSchemaMutations:
                                    mock_info_context):
 
         # create a staged pipeline
-        response = await mock_app.schema.execute(self.create_pipeline_mutation,
+        response = await mock_app.state.services.schema.execute(self.create_pipeline_mutation,
                                                  variable_values={"pipeline": {
                                                      "name": "example01",
                                                      "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})},
@@ -770,7 +774,7 @@ class TestSchemaMutations:
                                                      "state": "STAGED",
                                                  }, "uniquePaths": None})
 
-        create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
+        create_datasets_resp = await mock_app.state.services.schema.execute(self.create_datasets_mutation,
                                                              variable_values={"id": str(response.data["createPipeline"]["id"]),
                                                                               "datasets": [{"name": "text_in"}, {"name": "text_out"}],
                                                                               "expiresInSec": 3600})
@@ -786,7 +790,7 @@ class TestSchemaMutations:
                                               mock_pipeline,
                                               mock_info_context):
 
-        create_datasets_resp = await mock_app.schema.execute(self.create_datasets_mutation,
+        create_datasets_resp = await mock_app.state.services.schema.execute(self.create_datasets_mutation,
                                                              variable_values={"id": str(mock_pipeline.id),
                                                                               "datasets": [{"name": "text_in"}, {"name": "text_out"}],
                                                                               "expiresInSec": 3600})
