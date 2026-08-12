@@ -58,6 +58,13 @@ def _normalize_pipeline(
     catalog, parameters, sources = normalize_pipeline_config(
         full_pipeline, submitted_catalog, submitted_parameters
     )
+    parameters.update(
+        {
+            name: value
+            for name, value in submitted_parameters.items()
+            if name == "runner_kwargs" or name.startswith("runner_kwargs.")
+        }
+    )
 
     datasets = {dataset.name: dataset for dataset in pipeline.data_catalog}
     pipeline.data_catalog = [

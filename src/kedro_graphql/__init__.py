@@ -1,3 +1,3 @@
 """kedro-graphql"""
 
-__version__ = "1.5.2.dev2"
+__version__ = "1.5.2.dev3"

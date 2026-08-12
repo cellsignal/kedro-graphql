@@ -65,7 +65,10 @@ def _pipeline_input(state):
                     ),
                 },
             ],
-            "parameters": [{"name": "example", "value": "hello"}],
+            "parameters": [
+                {"name": "example", "value": "hello"},
+                {"name": "runner_kwargs.is_async", "value": "true", "type": "BOOLEAN"},
+            ],
         }
     )
 
@@ -118,6 +121,10 @@ async def test_update_pipeline_service_persists_once_before_submission(
     assert updated.status[-1].state is State.READY
     backend.update.assert_awaited_once()
     assert delay.call_count == 1
+    assert delay.call_args.kwargs["parameters"] == {
+        "example": "hello",
+        "runner_kwargs.is_async": True,
+    }
 
 
 @pytest.mark.asyncio
