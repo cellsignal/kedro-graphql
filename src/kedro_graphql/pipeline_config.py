@@ -63,15 +63,20 @@ def _parameter_value(parameters, name):
     return value
 
 
-def filter_pipeline(pipeline, slices=None):
-    """Apply explicit GraphQL pipeline slices."""
+def pipeline_slice_args(slices=None):
+    """Translate GraphQL slices into Kedro filter arguments."""
     filters = {}
     for item in slices or []:
         slice_type = item["slice"].lower()
         filters[slice_type] = (
             item["args"][0] if slice_type == "node_namespace" else item["args"]
         )
-    return pipeline.filter(**filters)
+    return filters
+
+
+def filter_pipeline(pipeline, slices=None):
+    """Apply explicit GraphQL pipeline slices."""
+    return pipeline.filter(**pipeline_slice_args(slices))
 
 
 def filter_only_missing_pipeline(pipeline, catalog):

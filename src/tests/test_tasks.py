@@ -1,4 +1,7 @@
 import json
+import signal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from unittest.mock import patch, MagicMock
@@ -11,7 +14,11 @@ from kedro_graphql.models import (
     State,
     Tag,
 )
-from kedro_graphql.tasks import run_pipeline, _run_pipeline_in_child_process
+from kedro_graphql.tasks import (
+    KedroGraphqlTask,
+    _run_pipeline_in_child_process,
+    run_pipeline,
+)
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -114,4 +121,62 @@ def test_run_pipeline_child_process_recreates_catalog():
             assert call_args[1]['catalog'] == mock_catalog_instance
             
             # Verify success was reported
-            result_queue.put.assert_called_with({"status": "success"})
+            result_queue.put.assert_called_with((State.SUCCESS, None, None))
+            mock_hook_manager.hook.after_pipeline_run.assert_called_once()
+            mock_hook_manager.hook.on_pipeline_error.assert_not_called()
+
+
+def test_run_pipeline_child_process_reports_abort_once():
+    callbacks = {}
+    result_queue = MagicMock()
+    runner = MagicMock()
+    hook_manager = MagicMock()
+
+    def register(signum, callback):
+        callbacks[signum] = callback
+
+    def abort(*args, **kwargs):
+        callbacks[signal.SIGTERM](signal.SIGTERM, None)
+
+    runner.run.side_effect = abort
+    with patch("kedro_graphql.tasks.signal.signal", side_effect=register), patch(
+        "kedro_graphql.tasks.DataCatalog"
+    ), patch("kedro_graphql.tasks.KedroGraphQLLogHandler"):
+        _run_pipeline_in_child_process(
+            runner,
+            MagicMock(),
+            {},
+            {},
+            hook_manager,
+            "session",
+            {},
+            "pipeline",
+            "task",
+            "redis://localhost",
+            result_queue,
+        )
+
+    outcome, error, trace = result_queue.put.call_args.args[0]
+    assert outcome is State.ABORTED
+    assert "abort signal" in error
+    assert "KeyboardInterrupt" in trace
+    hook_manager.hook.on_pipeline_error.assert_called_once()
+    hook_manager.hook.after_pipeline_run.assert_not_called()
+
+
+def test_duplicate_and_missing_callback_delivery_is_idempotent():
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.SUCCESS)],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(side_effect=[pipeline, None]),
+        update_if_current=AsyncMock(),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+
+    assert task._transition(str(pipeline.id), "task", State.SUCCESS) is pipeline
+    assert task._transition(str(pipeline.id), "task", State.FAILURE) is None
+    backend.update_if_current.assert_not_awaited()
