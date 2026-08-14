@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 
 from kedro_graphql.models import State
@@ -25,3 +27,17 @@ async def test_backend_update_status(mock_app, mock_pipeline_no_task):
     p.status[-1].state = State.STARTED
     p = await mock_app.state.services.backend.update(p)
     assert p.status[-1].state == State.STARTED
+
+
+@pytest.mark.asyncio
+async def test_backend_update_if_current_rejects_stale_status(mock_app, mock_pipeline_no_task):
+    backend = mock_app.state.services.backend
+    current = await backend.create(mock_pipeline_no_task)
+    stale = deepcopy(current)
+
+    current.status[-1].state = State.STARTED
+    await backend.update(current)
+    stale.status[-1].state = State.ABORTING
+
+    assert await backend.update_if_current(stale, State.STAGED, 1) is None
+    assert (await backend.read(id=current.id)).status[-1].state is State.STARTED

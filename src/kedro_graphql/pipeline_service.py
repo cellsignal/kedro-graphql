@@ -29,6 +29,7 @@ from .pipeline_config import (
     validate_pipeline_config,
 )
 from .runners import get_runner_class
+from .run_state import InvalidRunTransition, transition_run
 from .tasks import run_pipeline
 from .utils import generate_unique_paths
 
@@ -113,11 +114,10 @@ async def _read_pipeline(services: AppServices, id: str) -> Pipeline:
     return pipeline
 
 
-def _ready_status(runner: str, started_at: datetime) -> PipelineStatus:
+def _ready_status(runner: str) -> PipelineStatus:
     return PipelineStatus(
         state=State.READY,
         runner=runner,
-        started_at=started_at,
         task_name=str(run_pipeline),
     )
 
@@ -209,7 +209,7 @@ async def create_pipeline(
         )
         return pipeline
 
-    pipeline.status.append(_ready_status(runner, pipeline.created_at))
+    pipeline.status.append(_ready_status(runner))
     if dry_run:
         return pipeline
     pipeline = await services.backend.create(pipeline)
@@ -235,9 +235,12 @@ async def abort_pipeline(
 ) -> Pipeline:
     pipeline = await _read_pipeline(services, id)
     current = pipeline.status[-1]
-    if current.state in {State.ABORTED, State.ABORTING}:
+    if current.state is State.ABORTED:
         return pipeline
-    if current.state.value not in UNREADY_STATES.union({"READY"}):
+    if (
+        current.state is not State.ABORTING
+        and current.state.value not in UNREADY_STATES.union({"READY"})
+    ):
         raise InvalidPipeline(
             f"Pipeline {id} is not currently running and cannot be aborted."
         )
@@ -245,12 +248,25 @@ async def abort_pipeline(
         raise InvalidPipeline(
             f"Pipeline {id} is running but has no task_id; abort is not possible."
         )
-    current.state = State.ABORTING
-    current.abort_requested_at = datetime.now()
+    expected_state = current.state
+    try:
+        changed = transition_run(pipeline, State.ABORTING)
+    except InvalidRunTransition as error:
+        raise InvalidPipeline(str(error)) from error
     if dry_run:
         return pipeline
+    if changed:
+        pipeline = await services.backend.update_if_current(
+            pipeline, expected_state, len(pipeline.status)
+        )
+        if pipeline is None:
+            pipeline = await _read_pipeline(services, id)
+            if pipeline.status[-1].state is not State.ABORTING:
+                raise InvalidPipeline(
+                    f"Pipeline {id} changed while abort was requested."
+                )
+        current = pipeline.status[-1]
     AbortableAsyncResult(current.task_id, app=services.celery).abort()
-    pipeline = await services.backend.update(pipeline)
     logger.info(
         "user=%s, action=abort_pipeline, id=%s, name=%s, task_id=%s",
         _caller_name(caller),
@@ -275,6 +291,8 @@ async def update_pipeline(
         return await abort_pipeline(services, id, caller, dry_run)
 
     pipeline = await _read_pipeline(services, id)
+    expected_state = pipeline.status[-1].state
+    expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
         Pipeline.from_dict(values),
@@ -297,12 +315,21 @@ async def update_pipeline(
     active_states = UNREADY_STATES.union({"READY"})
     if requested_state is PipelineInputStatus.READY and current_state not in active_states:
         if current_state == "STAGED":
-            pipeline.status[-1] = _ready_status(runner, datetime.now())
+            transition_run(
+                pipeline,
+                State.READY,
+                runner=runner,
+                task_name=str(run_pipeline),
+            )
         else:
-            pipeline.status.append(_ready_status(runner, datetime.now()))
+            pipeline.status.append(_ready_status(runner))
         if dry_run:
             return pipeline
-        pipeline = await services.backend.update(pipeline)
+        pipeline = await services.backend.update_if_current(
+            pipeline, expected_state, expected_status_count
+        )
+        if pipeline is None:
+            raise InvalidPipeline(f"Pipeline {id} changed while it was submitted.")
         result = _publish_pipeline(pipeline, values, runner)
         logger.info(
             "user=%s, action=run_pipeline, id=%s, name=%s, state=READY, task_id=%s",
@@ -328,7 +355,11 @@ async def update_pipeline(
         logger.info("Staging pipeline %s", pipeline.name)
     if dry_run:
         return pipeline
-    pipeline = await services.backend.update(pipeline)
+    pipeline = await services.backend.update_if_current(
+        pipeline, expected_state, expected_status_count
+    )
+    if pipeline is None:
+        raise InvalidPipeline(f"Pipeline {id} changed while it was updated.")
     logger.info(
         "user=%s, action=update_pipeline, id=%s, name=%s",
         _caller_name(caller),
@@ -350,7 +381,7 @@ async def submit_event_pipeline(
     pipeline, values, runner, _ = _prepare_new_pipeline(
         services, pipeline_input, validate_ready=False
     )
-    pipeline.status.append(_ready_status(runner, pipeline.created_at))
+    pipeline.status.append(_ready_status(runner))
     pipeline = await services.backend.create(pipeline)
     pipeline.parameters.append(Parameter.from_value("id", str(pipeline.id)))
     pipeline = _normalize_pipeline(

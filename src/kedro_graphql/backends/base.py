@@ -1,7 +1,7 @@
 import abc
 import uuid
 
-from kedro_graphql.models import Pipeline
+from kedro_graphql.models import Pipeline, State
 
 
 class BaseBackend(metaclass=abc.ABCMeta):
@@ -34,6 +34,13 @@ class BaseBackend(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     async def update(self, pipeline: Pipeline):
         """Update a pipeline"""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def update_if_current(
+        self, pipeline: Pipeline, expected_state: State, status_count: int
+    ):
+        """Update a pipeline only while its current run still matches."""
         raise NotImplementedError
 
     @abc.abstractmethod

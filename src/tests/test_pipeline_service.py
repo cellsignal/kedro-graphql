@@ -39,9 +39,13 @@ def _backend(pipeline_id="000000000000000000000001"):
     async def update(pipeline):
         return pipeline
 
+    async def update_if_current(pipeline, expected_state, status_count):
+        return pipeline
+
     return SimpleNamespace(
         create=AsyncMock(side_effect=create),
         update=AsyncMock(side_effect=update),
+        update_if_current=AsyncMock(side_effect=update_if_current),
         read=AsyncMock(),
     )
 
@@ -119,7 +123,7 @@ async def test_update_pipeline_service_persists_once_before_submission(
         )
 
     assert updated.status[-1].state is State.READY
-    backend.update.assert_awaited_once()
+    backend.update_if_current.assert_awaited_once()
     assert delay.call_count == 1
     assert delay.call_args.kwargs["parameters"] == {
         "example": "hello",
@@ -147,7 +151,7 @@ async def test_abort_pipeline_service_uses_explicit_celery_service(
 
     result.assert_called_once_with("task-id", app=services.celery)
     result.return_value.abort.assert_called_once_with()
-    backend.update.assert_awaited_once()
+    backend.update_if_current.assert_awaited_once()
     assert aborted.status[-1].state is State.ABORTING
     assert aborted.status[-1].abort_requested_at is not None
 
