@@ -1,7 +1,5 @@
 import asyncio
 from base64 import b64decode, b64encode
-from datetime import datetime
-from importlib import import_module
 from typing import Optional, Union, List, Callable, Any
 import json
 from collections.abc import AsyncGenerator, Iterable
@@ -9,9 +7,7 @@ from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
 from bson.objectid import ObjectId
-from celery.contrib.abortable import AbortableAsyncResult
-from celery.states import UNREADY_STATES, READY_STATES
-from fastapi.encoders import jsonable_encoder
+from celery.states import READY_STATES
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
 from strawberry.tools import merge_types
@@ -23,36 +19,28 @@ from strawberry.schema.config import StrawberryConfig
 from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
-from . import __version__ as kedro_graphql_version
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
     DataSetInput,
-    Node,
     PageMeta,
     Pipeline,
     PipelineEvent,
     PipelineInput,
     PipelineLogMessage,
     Pipelines,
-    PipelineStatus,
     PipelineTemplate,
     PipelineTemplates,
     SignedUrl,
     SignedUrls,
-    State,
 )
-from .pipeline_config import (
-    filter_pipeline,
-    normalize_pipeline_config,
-    validate_pipeline_config,
+from .pipeline_service import (
+    create_pipeline as create_pipeline_service,
+    update_pipeline as update_pipeline_service,
 )
-from .runners import get_runner_class
-from .tasks import run_pipeline
 from .permissions import AppPermission, permission_class
-from .utils import generate_unique_paths
 
 
 def _services(info):
@@ -65,54 +53,6 @@ def _config(info):
 
 def _permission_class(info):
     return permission_class(info)
-
-
-def _normalize_pipeline(p, metadata, slices, only_missing, runner, validate=False):
-    full_pipeline = metadata.pipelines[p.name]
-    selected_pipeline = filter_pipeline(full_pipeline, slices)
-    p.describe = selected_pipeline.describe()
-    p.nodes = [
-        Node(name=node.name, inputs=node.inputs, outputs=node.outputs, tags=node.tags)
-        for node in selected_pipeline.nodes
-    ]
-    submitted_catalog = {
-        dataset.name: dataset.parse_config() for dataset in p.data_catalog or []
-    }
-    submitted_parameters = p.to_kedro()["parameters"]
-    catalog, parameters, sources = normalize_pipeline_config(
-        full_pipeline, submitted_catalog, submitted_parameters
-    )
-
-    datasets = {dataset.name: dataset for dataset in p.data_catalog or []}
-    p.data_catalog = [
-        DataSet(
-            name=name,
-            config=json.dumps(config),
-            tags=datasets[sources[name]].tags if sources[name] in datasets else None,
-        )
-        for name, config in catalog.items()
-    ]
-    p.parameters = [
-        parameter for parameter in p.parameters or [] if parameter.name in parameters
-    ]
-
-    if validate and not only_missing:
-        runner_class = get_runner_class(runner)
-        validate_pipeline_config(
-            selected_pipeline,
-            catalog,
-            parameters,
-            getattr(runner_class, "supports_memory_datasets", True),
-        )
-    return p
-
-
-def _effective_hooks(services, hooks):
-    hooks = hooks or []
-    unknown = sorted(set(hooks) - services.available_hooks)
-    if unknown:
-        raise InvalidPipeline(f"Unavailable pipeline hooks: {unknown}")
-    return list(dict.fromkeys([*services.config.always_hooks, *hooks]))
 
 
 def encode_cursor(id: int) -> str:
@@ -518,222 +458,24 @@ class Query:
 class Mutation:
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")]), PipelineInputExtension()])
     async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
-        """
-        - is validation against template needed, e.g. check DataSet type or at least check dataset names
-        """
-
-        if pipeline.name not in _services(info).metadata.pipelines:
-            raise InvalidPipeline(
-                f"Pipeline {pipeline.name} does not exist in the project.")
-
-        d = jsonable_encoder(pipeline)
-        p = Pipeline.from_dict(d)
-        p.hooks = _effective_hooks(_services(info), pipeline.hooks)
-
-        runner = d.get("runner") or _config(info).runner
-        p = _normalize_pipeline(
-            p,
-            _services(info).metadata,
-            d.get("slices"),
-            d.get("only_missing", False),
-            runner,
-            validate=d["state"] == "READY",
+        return await create_pipeline_service(
+            _services(info),
+            pipeline,
+            _permission_class(info).get_user_info(info),
+            unique_paths,
+            dry_run,
         )
-        serial = p.to_kedro()
-        # credentials not supported yet
-        # merge any credentials with inputs and outputs
-        # credentials are intentionally not persisted
-        # NOTE celery result may persist creds in task result?
-
-        started_at = datetime.now()
-        p.created_at = started_at
-
-        # Get kedro project, kedro-graphql, and pipeline versions
-        p.project_version = _config(info).project_version
-        p.kedro_graphql_version = kedro_graphql_version
-        p.pipeline_version = None
-        package_name = _config(info).project_name
-        if package_name:
-            try:
-                module = import_module(
-                    f".pipelines.{pipeline.name}", package=package_name)
-                p.pipeline_version = getattr(module, "__version__", None)
-            except Exception as e:
-                logger.info(f"Could not find pipeline version: {e}")
-
-        if d["state"] == "STAGED":
-            p.status.append(PipelineStatus(state=State.STAGED,
-                                           runner=runner,
-                                           session=None,
-                                           started_at=None,
-                                           finished_at=None,
-                                           task_id=None,
-                                           task_name=None))
-            if dry_run:
-                return p
-            logger.info(f'Staging pipeline {p.name}')
-            p = await _services(info).backend.create(p)
-            if unique_paths:
-                p = generate_unique_paths(p, unique_paths)
-                p = await _services(info).backend.update(p)
-
-            logger.info(
-                f"user={_permission_class(info).get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=STAGED")
-            return p
-        else:
-            p.status.append(PipelineStatus(state=State.READY,
-                                           runner=runner,
-                                           session=None,
-                                           started_at=started_at,
-                                           finished_at=None,
-                                           task_id=None,
-                                           task_name=str(run_pipeline)))
-
-            if dry_run:
-                return p
-
-            p = await _services(info).backend.create(p)
-            if unique_paths:
-                p = generate_unique_paths(p, unique_paths)
-                p = await _services(info).backend.update(p)
-
-            result = run_pipeline.delay(
-                id=str(p.id),
-                name=serial["name"],
-                parameters=serial["parameters"],
-                data_catalog=serial["data_catalog"],
-                runner=runner,
-                slices=d.get("slices", None),
-                only_missing=d.get("only_missing", False),
-                hooks=p.hooks,
-            )
-
-            logger.info(
-                f"user={_permission_class(info).get_user_info(info)['email']}, action=create_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
-            return p
 
     @strawberry.mutation(description="Update a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="update_pipeline")]), PipelineInputExtension()])
     async def update_pipeline(self, id: str, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
-
-        try:
-            p = await _services(info).backend.read(id=id)
-            if p is None:
-                raise InvalidPipeline(
-                    f"Pipeline {id} does not exist in the project.")
-        except Exception as e:
-            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
-
-        pipeline_input_dict = jsonable_encoder(pipeline)
-        requested_state = pipeline_input_dict.get("state", None)
-
-        if requested_state == "ABORTED":
-            if p.status[-1].state == State.ABORTED:
-                return p
-            if p.status[-1].state == State.ABORTING:
-                return p
-            # abortable states are {PENDING, RECEIVED, STARTED, REJECTED, RETRY, READY}
-            if p.status[-1].state.value not in UNREADY_STATES.union({"READY"}):
-                raise InvalidPipeline(
-                    f"Pipeline {id} is not currently running and cannot be aborted.")
-            if not p.status[-1].task_id:
-                raise InvalidPipeline(
-                    f"Pipeline {id} is running but has no task_id; abort is not possible.")
-            if dry_run:
-                p.status[-1].state = State.ABORTING
-                p.status[-1].abort_requested_at = datetime.now()
-                return p
-            AbortableAsyncResult(
-                p.status[-1].task_id,
-                app=_services(info).celery
-            ).abort()
-            p.status[-1].state = State.ABORTING
-            p.status[-1].abort_requested_at = datetime.now()
-            p = await _services(info).backend.update(p)
-            logger.info(
-                f"user={_permission_class(info).get_user_info(info)['email']}, action=abort_pipeline, id={p.id}, name={p.name}, task_id={p.status[-1].task_id}")
-            return p
-
-        runner = pipeline_input_dict.get("runner") or _config(info).runner
-        submitted = _normalize_pipeline(
-            Pipeline.from_dict(pipeline_input_dict),
-            _services(info).metadata,
-            pipeline_input_dict.get("slices"),
-            pipeline_input_dict.get("only_missing", False),
-            runner,
-            validate=requested_state == "READY",
+        return await update_pipeline_service(
+            _services(info),
+            id,
+            pipeline,
+            _permission_class(info).get_user_info(info),
+            unique_paths,
+            dry_run,
         )
-
-        # Update pipeline with normalized pipeline input
-        p.parameters = submitted.parameters
-        p.data_catalog = submitted.data_catalog
-        p.tags = submitted.tags
-        p.parent = pipeline_input_dict.get("parent")
-        p.hooks = _effective_hooks(_services(info), pipeline.hooks)
-
-        if unique_paths:
-            p = generate_unique_paths(p, unique_paths)
-
-        # If PipelineInput is READY and pipeline is not already running
-        if requested_state == "READY" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]):
-
-            if (p.status[-1].state.value != "STAGED"):
-                # Add new status object to pipeline because this is another run attempt
-                p.status.append(PipelineStatus(state=State.READY,
-                                               runner=runner,
-                                               session=None,
-                                               started_at=datetime.now(),
-                                               finished_at=None,
-                                               task_id=None,
-                                               task_name=str(run_pipeline)))
-            else:
-                # Replace staged status with running status
-                p.status[-1] = PipelineStatus(state=State.READY,
-                                              runner=runner,
-                                              session=None,
-                                              started_at=datetime.now(),
-                                              finished_at=None,
-                                              task_id=None,
-                                              task_name=str(run_pipeline))
-
-            if dry_run:
-                return p
-
-            # Update pipeline in backend before running task
-            p = await _services(info).backend.update(p)
-
-            serial = p.to_kedro()
-
-            result = run_pipeline.delay(
-                id=str(p.id),
-                name=serial["name"],
-                parameters=serial["parameters"],
-                data_catalog=serial["data_catalog"],
-                runner=runner,
-                slices=pipeline_input_dict.get("slices", None),
-                only_missing=pipeline_input_dict.get("only_missing", False),
-                hooks=p.hooks,
-            )
-
-            logger.info(
-                f"user={_permission_class(info).get_user_info(info)['email']}, action=run_pipeline, id={p.id}, name={p.name}, state=READY, task_id={result.task_id}")
-
-        # If PipelineInput is STAGED and pipeline is not already running or staged
-        elif requested_state == "STAGED" and p.status[-1].state.value not in UNREADY_STATES.union(["READY"]) and p.status[-1].state.value != "STAGED":
-            p.status.append(PipelineStatus(state=State.STAGED,
-                                           runner=runner,
-                                           session=None,
-                                           started_at=None,
-                                           finished_at=None,
-                                           task_id=None,
-                                           task_name=None))
-            logger.info(f'Staging pipeline {p.name}')
-        if dry_run:
-            return p
-        p = await _services(info).backend.update(p)
-        logger.info(
-            f"user={_permission_class(info).get_user_info(info)['email']}, action=update_pipeline, id={p.id}, name={p.name}")
-
-        return p
 
     @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="delete_pipeline")]), PipelineExtension()])
     async def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:

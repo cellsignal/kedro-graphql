@@ -50,3 +50,7 @@ class TestASGI:
         assert "name" in pipe
         assert pipe["name"] == "event00"
         assert pipe["status"][-1]['state'] in ["STARTED", "READY"]
+        assert all(status["state"] != "STAGED" for status in pipe["status"])
+        assert next(
+            parameter for parameter in pipe["parameters"] if parameter["name"] == "id"
+        )["value"] == pipe["id"]

@@ -145,6 +145,23 @@ class MongoBackend(BaseBackend):
 
         return p
 
+    async def update_if_current(self, pipeline, expected_state, status_count):
+        """Reject stale lifecycle writers instead of replacing newer state."""
+        collection = self._get_collection()
+        values = pipeline.to_dict()
+        values.pop("id")
+        result = await collection.update_one(
+            {
+                "_id": ObjectId(pipeline.id),
+                f"status.{status_count - 1}.state": expected_state.value,
+                "status": {"$size": status_count},
+            },
+            {"$set": values},
+        )
+        if not result.matched_count:
+            return None
+        return await self.read(id=pipeline.id)
+
     async def delete(self, id: uuid.UUID = None):
         """Delete a pipeline using id"""
         collection = self._get_collection()

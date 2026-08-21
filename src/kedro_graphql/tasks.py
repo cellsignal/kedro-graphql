@@ -7,7 +7,7 @@ import shutil
 import signal
 import time
 import traceback
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Dict, List
 
@@ -25,12 +25,14 @@ from kedro_graphql.runners import init_runner
 from kedro_graphql.pipeline_config import (
     filter_only_missing_pipeline,
     filter_pipeline,
+    pipeline_slice_args,
     validate_pipeline_config,
 )
 from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
 from kedro_graphql.hooks import hook_manager_for
 
 from .models import DataSet, State
+from .run_state import InvalidRunTransition, transition_run
 from .client import PIPELINE_GQL
 
 from cloudevents.pydantic.v1 import CloudEvent
@@ -54,6 +56,46 @@ class KedroGraphqlTask(AbortableTask):
             self._gql_config = self.app.kedro_graphql_config
         return self._gql_config
 
+    def _update_current(self, pipeline, expected_state, task_id, action):
+        updated = run_sync(
+            self.db.update_if_current(pipeline, expected_state, len(pipeline.status))
+        )
+        if updated is None:
+            logger.warning(
+                "Skipped stale pipeline update action=%s pipeline_id=%s task_id=%s",
+                action,
+                pipeline.id,
+                task_id,
+            )
+        return updated
+
+    def _transition(self, pipeline_id, celery_task_id, target, **fields):
+        pipeline = run_sync(self.db.read(id=pipeline_id))
+        if pipeline is None:
+            logger.warning(
+                "Pipeline missing during transition target=%s pipeline_id=%s task_id=%s",
+                target.value,
+                pipeline_id,
+                celery_task_id,
+            )
+            return None
+        expected_state = pipeline.status[-1].state
+        try:
+            changed = transition_run(pipeline, target, **fields)
+        except InvalidRunTransition as error:
+            logger.warning(
+                "Rejected pipeline transition pipeline_id=%s task_id=%s: %s",
+                pipeline_id,
+                celery_task_id,
+                error,
+            )
+            return None
+        if not changed:
+            return pipeline
+        return self._update_current(
+            pipeline, expected_state, celery_task_id, target.value
+        )
+
     def before_start(self, task_id, args, kwargs):
         """Handler called before the task starts.
 
@@ -76,16 +118,16 @@ class KedroGraphqlTask(AbortableTask):
         )
         stream_handler.kedro_graphql_task_id = task_id
         root_logger.addHandler(stream_handler)
-        p = run_sync(self.db.read(id=kwargs["id"]))
+        p = self._transition(
+            kwargs["id"],
+            task_id,
+            State.STARTED,
+            task_id=task_id,
+            task_args=json.dumps(args),
+            task_kwargs=json.dumps(kwargs),
+        )
         if p is None:
-            logger.error(
-                f"Pipeline id={kwargs['id']} not found in backend during before_start; task_id={task_id}")
             return
-        p.status[-1].state = State.STARTED
-        p.status[-1].task_id = task_id
-        p.status[-1].task_args = json.dumps(args)
-        p.status[-1].task_kwargs = json.dumps(kwargs)
-        run_sync(self.db.update(p))
 
         try:
             os.makedirs(os.path.join(
@@ -127,7 +169,9 @@ class KedroGraphqlTask(AbortableTask):
                 # Save metadata to S3
                 AbstractDataset.from_config(gql_meta.name, json.loads(
                     gql_meta.config)).save(p.to_kedro())
-                p = run_sync(self.db.update(p))
+                p = self._update_current(p, State.STARTED, task_id, "log metadata")
+                if p is None:
+                    return
 
                 logger.info(
                     f"Capturing pipeline metadata in {os.path.join(log_path_prefix,f'year={today.year}',f'month={today.month}',f'day={today.day}',str(p.id),'meta.json')}")
@@ -157,13 +201,9 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is None:
-            return
-        if p.status[-1].state in {State.ABORTING, State.ABORTED}:
-            return
-        p.status[-1].state = State.SUCCESS
-        run_sync(self.db.update(p))
+        self._transition(
+            kwargs["id"], task_id, State.SUCCESS, task_result=str(retval)
+        )
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.
@@ -181,12 +221,13 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None:
-            p.status[-1].state = State.RETRY
-            p.status[-1].task_exception = str(exc)
-            p.status[-1].task_einfo = str(einfo)
-            run_sync(self.db.update(p))
+        self._transition(
+            kwargs["id"],
+            task_id,
+            State.RETRY,
+            task_exception=str(exc),
+            task_einfo=str(einfo),
+        )
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Error handler.
@@ -204,14 +245,14 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None:
-            if p.status[-1].state in {State.ABORTING, State.ABORTED}:
-                return
-            p.status[-1].state = State.FAILURE
-            p.status[-1].task_exception = str(exc)
-            p.status[-1].task_einfo = str(einfo)
-            run_sync(self.db.update(p))
+        self._transition(
+            kwargs["id"],
+            task_id,
+            State.FAILURE,
+            task_exception=str(exc),
+            task_einfo=str(einfo),
+            task_result=str(exc),
+        )
 
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
         """Handler called after the task returns.
@@ -228,13 +269,11 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        finished_at = datetime.now()
-
         p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None:
-            p.status[-1].finished_at = finished_at
-            p.status[-1].task_result = str(retval)
-            run_sync(self.db.update(p))
+        if p is not None and p.status[-1].state is State.ABORTING:
+            self._transition(
+                kwargs["id"], task_id, State.ABORTED, task_result=str(retval)
+            )
 
         # Clean up only this task's handlers from the root logger.
         root_logger = logging.getLogger()
@@ -308,10 +347,12 @@ def _run_pipeline_in_child_process(
     stream_handler.kedro_graphql_task_id = task_id
     root_logger.addHandler(stream_handler)
 
-    # Track abort state so signal handlers can safely flush logs and call hooks.
     abort_triggered = False
     io = None
     run_result = None
+    child_error = None
+    child_traceback = None
+    outcome = State.SUCCESS
 
     def handle_abort_signal(signum, frame):
         """Handle SIGINT or SIGTERM by setting flag so logs and hooks are properly cleaned up."""
@@ -341,41 +382,43 @@ def _run_pipeline_in_child_process(
             hook_manager=hook_manager,
             session_id=session_id,
         )
-        hook_manager.hook.after_pipeline_run(
-            run_params=record_data,
-            run_result=run_result,
-            pipeline=pipelines.get(pipeline_name, None),
-            catalog=io,
-        )
-        result_queue.put({"status": "success"})
-    except BaseException as child_error:
-        # Always attempt to flush logs and call hooks even if pipeline was aborted or failed.
-        # This ensures persisted logs and S3 uploads happen before child exits.
+    except BaseException as error:
+        child_error = error
+        child_traceback = traceback.format_exc()
+        outcome = State.ABORTED if abort_triggered else State.FAILURE
+    finally:
         if io is not None:
             try:
-                # Flush all file handlers to ensure logs are written to disk.
-                for handler in list(root_logger.handlers):
+                if outcome is State.SUCCESS:
+                    hook_manager.hook.after_pipeline_run(
+                        run_params=record_data,
+                        run_result=run_result,
+                        pipeline=pipelines.get(pipeline_name),
+                        catalog=io,
+                    )
+                else:
+                    hook_manager.hook.on_pipeline_error(
+                        error=child_error,
+                        run_params=record_data,
+                        pipeline=pipelines.get(pipeline_name),
+                        catalog=io,
+                    )
+            except Exception as cleanup_error:
+                logger.warning("Error during child cleanup: %s", cleanup_error)
+                if outcome is State.SUCCESS:
+                    outcome = State.FAILURE
+                    child_error = cleanup_error
+                    child_traceback = traceback.format_exc()
+            for handler in list(root_logger.handlers):
+                if getattr(handler, "kedro_graphql_task_id", None) == task_id:
                     try:
                         handler.flush()
                     except Exception:
                         pass
-                # Call after_pipeline_run hook so logs are saved to S3.
-                # For aborted pipelines, run_result may be None, but hook should still run.
-                hook_manager.hook.after_pipeline_run(
-                    run_params=record_data,
-                    run_result=run_result,
-                    pipeline=pipelines.get(pipeline_name, None),
-                    catalog=io,
-                )
-            except Exception as cleanup_error:
-                logger.warning(f"Error during log cleanup after abort: {cleanup_error}")
-        
+                    handler.close()
+                    root_logger.removeHandler(handler)
         result_queue.put(
-            {
-                "status": "error",
-                "error": str(child_error),
-                "traceback": traceback.format_exc(),
-            }
+            (outcome, str(child_error) if child_error else None, child_traceback)
         )
 
 @shared_task(bind=True, base=KedroGraphqlTask)
@@ -409,8 +452,10 @@ def run_pipeline(self,
                 self.request.id,
             )
             return
+        expected_state = p.status[-1].state
         p.status[-1].session = session.session_id
-        run_sync(self.db.update(p))
+        if self._update_current(p, expected_state, self.request.id, "session") is None:
+            return
 
         # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
         if getattr(self, "kedro_graphql_pipeline", None):
@@ -435,34 +480,7 @@ def run_pipeline(self,
         io.add_feed_dict(feed_dict)
 
         try:
-            # Populate the filtering parameters based on the slices input
-            tags = None
-            from_nodes = None
-            to_nodes = None
-            node_names = None
-            from_inputs = None
-            to_outputs = None
-            node_namespace = None
-
-            if slices:
-                for slice_item in slices:
-                    slice_type = slice_item['slice']
-                    slice_args = slice_item['args']
-
-                    if slice_type == 'tags':
-                        tags = slice_args
-                    if slice_type == 'from_nodes':
-                        from_nodes = slice_args
-                    if slice_type == 'to_nodes':
-                        to_nodes = slice_args
-                    if slice_type == 'node_names':
-                        node_names = slice_args
-                    if slice_type == 'from_inputs':
-                        from_inputs = slice_args
-                    if slice_type == 'to_outputs':
-                        to_outputs = slice_args
-                    if slice_type == 'node_namespace':
-                        node_namespace = slice_args[0]
+            filters = pipeline_slice_args(slices)
 
             record_data = {
                 "session_id": session.session_id,
@@ -473,22 +491,22 @@ def run_pipeline(self,
                 "env": session.load_context().env,
                 "kedro_version": kedro_version,
                 # Construct the pipeline using only nodes which have this tag attached.
-                "tags": tags,
+                "tags": filters.get("tags"),
                 # A list of node names which should be used as a starting point.
-                "from_nodes": from_nodes,
+                "from_nodes": filters.get("from_nodes"),
                 # A list of node names which should be used as an end point.
-                "to_nodes": to_nodes,
-                "node_names": node_names,  # Run only nodes with specified names.
+                "to_nodes": filters.get("to_nodes"),
+                "node_names": filters.get("node_names"),
                 # A list of dataset names which should be used as a starting point.
-                "from_inputs": from_inputs,
+                "from_inputs": filters.get("from_inputs"),
                 # A list of dataset names which should be used as an end point.
-                "to_outputs": to_outputs,
+                "to_outputs": filters.get("to_outputs"),
                 # Specify a particular dataset version (timestamp) for loading
                 "load_versions": "",
                 # Specify extra parameters that you want to pass to the context initialiser.
                 "extra_params": "",
                 "pipeline_name": name,
-                "namespace": node_namespace,  # Name of the node namespace to run.
+                "namespace": filters.get("node_namespace"),
                 "runner": getattr(runner, "__name__", str(runner)),
             }
 
@@ -527,8 +545,12 @@ def run_pipeline(self,
             )
 
             p = run_sync(self.db.read(id=id))
+            expected_state = p.status[-1].state
             p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
-            run_sync(self.db.update(p))
+            if self._update_current(
+                p, expected_state, self.request.id, "filtered nodes"
+            ) is None:
+                return
 
             # Use Celery's multiprocessing library (billiard) instead of multiprocessing
             # to avoid AssertionError: daemonic processes are not allowed to have children
@@ -553,6 +575,7 @@ def run_pipeline(self,
                 ),
             )
             child.start()
+            child_owns_terminal_hook = True
 
             polling_interval = self.gql_config.celery_abort_polling_interval
             if polling_interval < 1:
@@ -619,34 +642,31 @@ def run_pipeline(self,
 
             child.join()
 
-            child_result = {
-                "status": "error",
-                "error": "Child process exited without returning a result",
-            }
+            child_result = (
+                State.FAILURE,
+                "Child process exited without returning a result",
+                None,
+            )
             try:
                 child_result = result_queue.get_nowait()
             except queue.Empty:
                 logger.warning("Child process pid=%s finished without posting a result", child.pid)
 
             if self.is_aborted():
-                p = run_sync(self.db.read(id=id))
-                if p is not None:
-                    p.status[-1].state = State.ABORTED
-                    p.status[-1].abort_completed_at = datetime.now()
-                    run_sync(self.db.update(p))
                 return "aborted"
 
-            if child_result.get("status") != "success":
-                error_message = child_result.get("error", "Unknown child process error")
-                raise RuntimeError(error_message)
+            outcome, error_message, _ = child_result
+            if outcome is not State.SUCCESS:
+                raise RuntimeError(error_message or "Unknown child process error")
 
             return "success"
         except Exception as e:
             logger.exception(f"Error running pipeline: {e}")
-            hook_manager.hook.on_pipeline_error(
-                error=e,
-                run_params=record_data,
-                pipeline=pipelines.get(name, None),
-                catalog=io
-            )
+            if not locals().get("child_owns_terminal_hook", False):
+                hook_manager.hook.on_pipeline_error(
+                    error=e,
+                    run_params=record_data,
+                    pipeline=pipelines.get(name, None),
+                    catalog=io
+                )
             raise e
