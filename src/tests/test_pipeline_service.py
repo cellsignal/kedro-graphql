@@ -1,4 +1,5 @@
 import json
+from datetime import timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -99,6 +100,8 @@ async def test_create_pipeline_service_stages_without_submission(mock_app):
         )
 
     assert created.current_status.state is State.STAGED
+    assert created.created_at is not None
+    assert created.created_at.tzinfo is timezone.utc
     assert all(dataset.tags is not None for dataset in created.data_catalog)
     backend.create.assert_awaited_once()
     backend.update.assert_not_awaited()

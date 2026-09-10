@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -32,12 +32,22 @@ def test_transition_run_accepts_lifecycle(source, target):
 
 def test_transition_run_owns_timestamps_and_duplicate_delivery():
     run = pipeline(State.READY)
-    now = datetime(2026, 8, 14, 12)
+    now = datetime(2026, 8, 14, 8, tzinfo=timezone(timedelta(hours=-4)))
 
     assert transition_run(run, State.STARTED, now=now)
-    assert run.status[-1].started_at == now
+    assert run.status[-1].started_at == datetime(2026, 8, 14, 12, tzinfo=timezone.utc)
     assert not transition_run(run, State.STARTED)
-    assert run.status[-1].started_at == now
+    assert run.status[-1].started_at == datetime(2026, 8, 14, 12, tzinfo=timezone.utc)
+
+
+def test_transition_run_treats_naive_injected_time_as_utc():
+    run = pipeline(State.READY)
+
+    transition_run(run, State.STARTED, now=datetime(2026, 8, 14, 12))
+
+    assert run.current_status.started_at == datetime(
+        2026, 8, 14, 12, tzinfo=timezone.utc
+    )
 
 
 def test_transition_run_preserves_terminal_state():

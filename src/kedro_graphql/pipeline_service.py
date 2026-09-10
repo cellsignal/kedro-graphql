@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -149,7 +149,7 @@ def _prepare_new_pipeline(
         runner,
         validate=validate_ready and requested_state is PipelineInputStatus.READY,
     )
-    pipeline.created_at = datetime.now()
+    pipeline.created_at = datetime.now(timezone.utc)
     pipeline.project_version = services.config.project_version
     pipeline.kedro_graphql_version = kedro_graphql_version
     pipeline.pipeline_version = None

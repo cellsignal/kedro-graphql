@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -332,7 +332,7 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
     payload = {
         "id": "pipeline-id",
         "name": "example",
-        "createdAt": "2026-08-07T12:00:00",
+        "createdAt": datetime(2026, 8, 7, 12),
         "hooks": ["logging"],
         "nodes": [{"name": "first", "inputs": ["in"], "outputs": ["out"], "tags": []}],
         "dataCatalog": [
@@ -352,14 +352,16 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
 
     pipeline = Pipeline.from_dict(payload)
 
-    assert pipeline.created_at == datetime(2026, 8, 7, 12)
+    assert pipeline.created_at == datetime(2026, 8, 7, 12, tzinfo=timezone.utc)
     assert pipeline.hooks == ["logging"]
     assert pipeline.nodes[0].name == "first"
     assert pipeline.data_catalog[0].tags[0].value == "data"
     assert pipeline.parameters[0].type.value == "integer"
     assert pipeline.status[0].state is State.READY
     assert pipeline.status[0].filtered_nodes == ["first"]
-    assert pipeline.status[0].abort_requested_at == datetime(2026, 8, 7, 12, 1)
+    assert pipeline.status[0].abort_requested_at == datetime(
+        2026, 8, 7, 12, 1, tzinfo=timezone.utc
+    )
     pipeline_input = PipelineInput(name="example", hooks=["logging"])
     assert Pipeline.from_input(pipeline_input).hooks == ["logging"]
 
@@ -436,13 +438,17 @@ def test_pipelines_decode_normalizes_page_and_pipeline_keys():
         {
             "readPipelines": {
                 "pageMeta": {"nextCursor": "cursor"},
-                "pipelines": [{"name": "example", "createdAt": "2026-08-07T12:00:00"}],
+                "pipelines": [
+                    {"name": "example", "createdAt": "2026-08-07T08:00:00-04:00"}
+                ],
             }
         }
     )
 
     assert pipelines.page_meta.next_cursor == "cursor"
-    assert pipelines.pipelines[0].created_at == datetime(2026, 8, 7, 12)
+    assert pipelines.pipelines[0].created_at == datetime(
+        2026, 8, 7, 12, tzinfo=timezone.utc
+    )
 
 
 class TestDataSetInput:

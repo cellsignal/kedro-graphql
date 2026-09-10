@@ -1,7 +1,7 @@
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -521,7 +521,12 @@ def _snake_case_keys(value: Any) -> Any:
 
 
 def _decode_datetime(value: str | datetime | None) -> datetime | None:
-    return datetime.fromisoformat(value) if isinstance(value, str) else value
+    if value is None:
+        return None
+    decoded = datetime.fromisoformat(value) if isinstance(value, str) else value
+    if decoded.tzinfo is None:
+        decoded = decoded.replace(tzinfo=timezone.utc)
+    return decoded.astimezone(timezone.utc)
 
 
 def _reject_unknown_fields(model: type, values: Mapping[str, Any]) -> None:
