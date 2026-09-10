@@ -587,7 +587,11 @@ class Pipeline:
         return PipelineInput(
             name=self.name,
             data_catalog=[
-                DataSetInput(name=dataset.name, config=dataset.config)
+                DataSetInput(
+                    name=dataset.name,
+                    config=dataset.config,
+                    tags=[TagInput(key=tag.key, value=tag.value) for tag in dataset.tags],
+                )
                 for dataset in self.data_catalog
             ],
             parameters=[
@@ -599,6 +603,8 @@ class Pipeline:
                 for parameter in self.parameters
             ],
             tags=[TagInput(key=tag.key, value=tag.value) for tag in self.tags],
+            parent=self.parent,
+            runner=self.current_status.runner if self.status else None,
             hooks=list(self.hooks),
         )
 

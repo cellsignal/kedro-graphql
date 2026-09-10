@@ -14,8 +14,10 @@ from kedro_graphql.models import (
     ParameterType,
     Pipeline,
     PipelineInput,
+    PipelineStatus,
     Pipelines,
     State,
+    Tag,
     TagInput,
     parameter_inputs_from_mapping,
 )
@@ -289,6 +291,40 @@ class TestParameter:
         assert len(result.data_catalog) == len(mock_pipeline_staged.data_catalog)
         assert len(result.parameters) == len(mock_pipeline_staged.parameters)
         assert len(result.tags) == len(mock_pipeline_staged.tags)
+
+    def test_pipeline_input_preserves_editable_persisted_values(self):
+        pipeline = Pipeline(
+            name="example",
+            data_catalog=[
+                DataSet(
+                    name="input",
+                    config="{}",
+                    tags=[Tag(key="kind", value="source")],
+                )
+            ],
+            tags=[Tag(key="owner", value="platform")],
+            parent="parent-id",
+            status=[
+                PipelineStatus(state=State.STAGED, runner="ParallelRunner"),
+                PipelineStatus(state=State.READY, runner="ThreadRunner"),
+            ],
+            hooks=["audit", "metrics"],
+        )
+
+        result = pipeline.to_input()
+
+        assert result.data_catalog[0].tags == [
+            TagInput(key="kind", value="source")
+        ]
+        assert result.tags == [TagInput(key="owner", value="platform")]
+        assert result.parent == "parent-id"
+        assert result.runner == "ThreadRunner"
+        assert result.hooks == ["audit", "metrics"]
+
+    def test_pipeline_input_without_status_has_no_runner(self):
+        result = Pipeline(name="example").to_input()
+
+        assert result.runner is None
 
 
 def test_pipeline_decode_normalizes_and_converts_declared_fields():
