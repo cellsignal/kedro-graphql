@@ -30,7 +30,7 @@ def transition_run(
     **fields,
 ) -> bool:
     """Apply one valid state change, returning false for duplicate delivery."""
-    status = pipeline.status[-1]
+    status = pipeline.current_status
     if status.state is target:
         return False
     if target not in TRANSITIONS.get(status.state, set()):

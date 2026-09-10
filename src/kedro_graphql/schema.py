@@ -517,7 +517,7 @@ class Mutation:
         urls = []
         p = await _services(info).backend.read(id=id)
 
-        if p.status[-1].state.value != "STAGED":
+        if p.current_status.state.value != "STAGED":
             raise ValueError(
                 f"Pipeline {p.name} with id {id} must be staged before creating datasets.")
 
@@ -554,24 +554,24 @@ class Subscription:
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        while (not p.status[-1].task_id):
+        while not p.current_status.task_id:
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
             p = await _services(info).backend.read(id=id)
 
-        if p and p.status[-1].state.value not in READY_STATES:
-            async for e in PipelineEventMonitor(app=_services(info).celery, task_id=p.status[-1].task_id).start(interval=interval):
+        if p and p.current_status.state.value not in READY_STATES:
+            async for e in PipelineEventMonitor(app=_services(info).celery, task_id=p.current_status.task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
         else:
-            finished_at = p.status[-1].finished_at
+            finished_at = p.current_status.finished_at
             yield PipelineEvent(
                 id=id,
-                task_id=p.status[-1].task_id,
+                task_id=p.current_status.task_id,
                 timestamp=finished_at.isoformat() if finished_at is not None else None,
-                status=p.status[-1].state.value,
-                result=p.status[-1].task_result,
-                traceback=p.status[-1].task_traceback
+                status=p.current_status.state.value,
+                result=p.current_status.task_result,
+                traceback=p.current_status.task_traceback
             )
 
     @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[AppPermission(action="subscribe_to_logs")])])
@@ -585,13 +585,13 @@ class Subscription:
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        while (not p.status[-1].task_id):
+        while not p.current_status.task_id:
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
             p = await _services(info).backend.read(id=id)
 
         if p:
-            stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=_config(info).broker)
+            stream = await PipelineLogStream().create(task_id=p.current_status.task_id, broker_url=_config(info).broker)
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)

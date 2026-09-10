@@ -79,7 +79,7 @@ class KedroGraphqlTask(AbortableTask):
                 celery_task_id,
             )
             return None
-        expected_state = pipeline.status[-1].state
+        expected_state = pipeline.current_status.state
         try:
             changed = transition_run(pipeline, target, **fields)
         except InvalidRunTransition as error:
@@ -270,7 +270,7 @@ class KedroGraphqlTask(AbortableTask):
         """
 
         p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None and p.status[-1].state is State.ABORTING:
+        if p is not None and p.current_status.state is State.ABORTING:
             self._transition(
                 kwargs["id"], task_id, State.ABORTED, task_result=str(retval)
             )
@@ -452,8 +452,8 @@ def run_pipeline(self,
                 self.request.id,
             )
             return
-        expected_state = p.status[-1].state
-        p.status[-1].session = session.session_id
+        expected_state = p.current_status.state
+        p.current_status.session = session.session_id
         if self._update_current(p, expected_state, self.request.id, "session") is None:
             return
 
@@ -545,8 +545,8 @@ def run_pipeline(self,
             )
 
             p = run_sync(self.db.read(id=id))
-            expected_state = p.status[-1].state
-            p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
+            expected_state = p.current_status.state
+            p.current_status.filtered_nodes = [node.name for node in filtered_pipeline.nodes]
             if self._update_current(
                 p, expected_state, self.request.id, "filtered nodes"
             ) is None:

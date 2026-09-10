@@ -16,7 +16,7 @@ from kedro.io.core import _parse_filepath
 from kedro.pipeline import Pipeline as KedroPipeline
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
-from kedro_graphql.exceptions import DataSetConfigError
+from kedro_graphql.exceptions import DataSetConfigError, MissingPipelineStatus
 
 from .pipeline_config import normalize_pipeline_config
 
@@ -555,6 +555,15 @@ class Pipeline:
     pipeline_version: str | None = None
     kedro_graphql_version: str | None = None
     hooks: list[str] = strawberry.field(default_factory=list)
+
+    @property
+    def current_status(self) -> PipelineStatus:
+        try:
+            return self.status[-1]
+        except IndexError as error:
+            raise MissingPipelineStatus(
+                f"Pipeline {self.id or self.name} has no status history."
+            ) from error
 
     def to_kedro(self) -> JsonObject:
         parameters: dict[str, Primitive] = {}

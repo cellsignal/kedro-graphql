@@ -98,7 +98,7 @@ async def test_create_pipeline_service_stages_without_submission(mock_app):
             {"email": "user@example.com"},
         )
 
-    assert created.status[-1].state is State.STAGED
+    assert created.current_status.state is State.STAGED
     assert all(dataset.tags is not None for dataset in created.data_catalog)
     backend.create.assert_awaited_once()
     backend.update.assert_not_awaited()

@@ -98,6 +98,7 @@ class MongoBackend(BaseBackend):
         async for r in raw:
             r["id"] = str(r["_id"])
             p = Pipeline.from_dict(r)
+            _ = p.current_status
             results.append(p)
         return results
 
@@ -114,6 +115,7 @@ class MongoBackend(BaseBackend):
         if r:
             r["id"] = str(r["_id"])
             p = Pipeline.from_dict(r)
+            _ = p.current_status
             return p
         else:
             return None

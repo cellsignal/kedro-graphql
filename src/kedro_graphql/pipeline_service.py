@@ -237,7 +237,7 @@ async def abort_pipeline(
 ) -> Pipeline:
     if pipeline is None:
         pipeline = await _read_pipeline(services, id)
-    current = pipeline.status[-1]
+    current = pipeline.current_status
     if current.state is State.ABORTED:
         return pipeline
     if (
@@ -264,11 +264,11 @@ async def abort_pipeline(
         )
         if pipeline is None:
             pipeline = await _read_pipeline(services, id)
-            if pipeline.status[-1].state is not State.ABORTING:
+            if pipeline.current_status.state is not State.ABORTING:
                 raise InvalidPipeline(
                     f"Pipeline {id} changed while abort was requested."
                 )
-        current = pipeline.status[-1]
+        current = pipeline.current_status
     AbortableAsyncResult(current.task_id, app=services.celery).abort()
     logger.info(
         "user=%s, action=abort_pipeline, id=%s, name=%s, task_id=%s",
@@ -300,7 +300,7 @@ async def update_pipeline(
             services, id, caller, dry_run, pipeline=pipeline
         )
 
-    expected_state = pipeline.status[-1].state
+    expected_state = pipeline.current_status.state
     expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
@@ -322,7 +322,7 @@ async def update_pipeline(
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
 
-    current_state = pipeline.status[-1].state.value
+    current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})
     if requested_state is PipelineInputStatus.READY and current_state not in active_states:
         if current_state == "STAGED":
