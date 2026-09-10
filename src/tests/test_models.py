@@ -9,6 +9,7 @@ from kedro_graphql.models import (
     DataSet,
     DataSetInput,
     DataSetPartitions,
+    Node,
     Parameter,
     ParameterInput,
     ParameterType,
@@ -329,7 +330,6 @@ class TestParameter:
 
 def test_pipeline_decode_normalizes_and_converts_declared_fields():
     payload = {
-        "_id": "ignored",
         "id": "pipeline-id",
         "name": "example",
         "createdAt": "2026-08-07T12:00:00",
@@ -360,10 +360,75 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
     assert pipeline.status[0].state is State.READY
     assert pipeline.status[0].filtered_nodes == ["first"]
     assert pipeline.status[0].abort_requested_at == datetime(2026, 8, 7, 12, 1)
-    assert not hasattr(pipeline, "_id")
-
     pipeline_input = PipelineInput(name="example", hooks=["logging"])
     assert Pipeline.from_input(pipeline_input).hooks == ["logging"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"_id": "mongo-id", "name": "example"}, "Unknown Pipeline field.*_id"),
+        ({"name": "example", "unexpected": True}, "Unknown Pipeline field.*unexpected"),
+        (
+            {"name": "example", "status": [{"state": "READY", "surprise": True}]},
+            "Unknown PipelineStatus field.*surprise",
+        ),
+        (
+            {"name": "example", "nodes": [{"name": "node", "mystery": True}]},
+            "Unknown Node field.*mystery",
+        ),
+        (
+            {
+                "name": "example",
+                "dataCatalog": [
+                    {"name": "dataset", "config": "{}", "unknownField": True}
+                ],
+            },
+            "Unknown DataSet field.*unknown_field",
+        ),
+        (
+            {
+                "name": "example",
+                "parameters": [
+                    {"name": "count", "value": "1", "unknownField": True}
+                ],
+            },
+            "Unknown Parameter field.*unknown_field",
+        ),
+    ],
+)
+def test_pipeline_decode_rejects_unknown_fields(payload, message):
+    with pytest.raises(ValueError, match=message):
+        Pipeline.from_dict(payload)
+
+
+def test_pipeline_decode_accepts_partial_nested_graphql_fields():
+    pipeline = Pipeline.from_dict(
+        {
+            "name": "example",
+            "nodes": [{"name": "node"}],
+            "status": [{"state": "READY"}],
+        }
+    )
+
+    assert pipeline.nodes == [Node(name="node", inputs=[], outputs=[], tags=[])]
+    assert pipeline.status == [PipelineStatus(state=State.READY)]
+
+
+def test_pipeline_from_input_deliberately_ignores_command_fields():
+    pipeline = Pipeline.from_input(
+        PipelineInput.from_dict(
+            {
+                "name": "example",
+                "state": "READY",
+                "runner": "ThreadRunner",
+                "slices": [{"slice": "TAGS", "args": ["selected"]}],
+                "onlyMissing": True,
+            }
+        )
+    )
+
+    assert pipeline == Pipeline(name="example")
 
 
 def test_pipelines_decode_normalizes_page_and_pipeline_keys():

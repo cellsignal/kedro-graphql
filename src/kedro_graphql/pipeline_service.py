@@ -138,7 +138,7 @@ def _prepare_new_pipeline(
 
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    pipeline = Pipeline.from_dict(values)
+    pipeline = Pipeline.from_input(pipeline_input)
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
     runner = values.get("runner") or services.config.runner
     pipeline = _normalize_pipeline(
@@ -304,7 +304,7 @@ async def update_pipeline(
     expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
-        Pipeline.from_dict(values),
+        Pipeline.from_input(pipeline_input),
         services,
         values.get("slices"),
         values.get("only_missing", False),

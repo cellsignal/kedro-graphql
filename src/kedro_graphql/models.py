@@ -78,10 +78,12 @@ class Parameter:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "Parameter":
+        values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
         return cls(
-            name=str(payload["name"]),
-            value=str(payload["value"]),
-            type=_parameter_type_from_wire(payload.get("type")),
+            name=str(values["name"]),
+            value=str(values["value"]),
+            type=_parameter_type_from_wire(values.get("type")),
         )
 
     @classmethod
@@ -152,13 +154,15 @@ class DataSet:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "DataSet":
-        config = payload.get("config")
+        values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
+        config = values.get("config")
         if not isinstance(config, str):
             raise DataSetConfigError("Dataset config must be a JSON string")
         return cls(
-            name=str(payload["name"]),
+            name=str(values["name"]),
             config=config,
-            tags=[Tag(**tag) for tag in payload.get("tags") or []],
+            tags=[Tag(**tag) for tag in values.get("tags") or []],
         )
 
     def serialize(self) -> dict[str, JsonObject]:
@@ -520,14 +524,30 @@ def _decode_datetime(value: str | datetime | None) -> datetime | None:
     return datetime.fromisoformat(value) if isinstance(value, str) else value
 
 
+def _reject_unknown_fields(model: type, values: Mapping[str, Any]) -> None:
+    unknown = set(values) - set(model.__dataclass_fields__)
+    if unknown:
+        raise ValueError(
+            f"Unknown {model.__name__} field(s): {', '.join(sorted(unknown))}"
+        )
+
+
 def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
     values = _snake_case_keys(payload)
+    _reject_unknown_fields(PipelineStatus, values)
     return PipelineStatus(
         **{
             **{
                 key: value
                 for key, value in values.items()
-                if key in PipelineStatus.__dataclass_fields__
+                if key not in {
+                    "state",
+                    "filtered_nodes",
+                    "started_at",
+                    "finished_at",
+                    "abort_requested_at",
+                    "abort_completed_at",
+                }
             },
             "state": State(values["state"]),
             "filtered_nodes": values.get("filtered_nodes") or [],
@@ -536,6 +556,17 @@ def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
             "abort_requested_at": _decode_datetime(values.get("abort_requested_at")),
             "abort_completed_at": _decode_datetime(values.get("abort_completed_at")),
         }
+    )
+
+
+def _decode_node(payload: Mapping[str, Any]) -> Node:
+    values = _snake_case_keys(payload)
+    _reject_unknown_fields(Node, values)
+    return Node(
+        name=values["name"],
+        inputs=list(values.get("inputs") or []),
+        outputs=list(values.get("outputs") or []),
+        tags=list(values.get("tags") or []),
     )
 
 
@@ -610,26 +641,34 @@ class Pipeline:
 
     @classmethod
     def from_input(cls, pipeline_input: PipelineInput) -> "Pipeline":
-        return cls.from_dict(jsonable_encoder(pipeline_input))
+        return cls.from_dict(
+            {
+                "name": pipeline_input.name,
+                "parameters": jsonable_encoder(pipeline_input.parameters),
+                "data_catalog": [
+                    {
+                        "name": dataset.name,
+                        "config": dataset.config,
+                        "tags": jsonable_encoder(dataset.tags),
+                    }
+                    for dataset in pipeline_input.data_catalog
+                ],
+                "tags": jsonable_encoder(pipeline_input.tags),
+                "parent": pipeline_input.parent,
+                "hooks": pipeline_input.hooks,
+            }
+        )
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "Pipeline":
         values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
         converters = {
             "created_at": _decode_datetime,
             "data_catalog": lambda items: [
                 DataSet.from_dict(item) for item in items or []
             ],
-            "nodes": lambda items: [
-                Node(
-                    **{
-                        key: value
-                        for key, value in item.items()
-                        if key in Node.__dataclass_fields__
-                    }
-                )
-                for item in items or []
-            ],
+            "nodes": lambda items: [_decode_node(item) for item in items or []],
             "parameters": lambda items: [
                 Parameter.from_dict(item) for item in items or []
             ],
@@ -640,7 +679,6 @@ class Pipeline:
         converted = {
             key: converters[key](value) if key in converters else value
             for key, value in values.items()
-            if key in cls.__dataclass_fields__
         }
         for field_name in (
             "data_catalog",
