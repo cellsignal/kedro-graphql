@@ -96,8 +96,9 @@ class MongoBackend(BaseBackend):
 
         results = []
         async for r in raw:
-            r["id"] = str(r["_id"])
+            r["id"] = str(r.pop("_id"))
             p = Pipeline.from_dict(r)
+            _ = p.current_status
             results.append(p)
         return results
 
@@ -112,8 +113,9 @@ class MongoBackend(BaseBackend):
             r = await collection.find_one({"_id": ObjectId(id)})
 
         if r:
-            r["id"] = str(r["_id"])
+            r["id"] = str(r.pop("_id"))
             p = Pipeline.from_dict(r)
+            _ = p.current_status
             return p
         else:
             return None
@@ -126,7 +128,7 @@ class MongoBackend(BaseBackend):
         values.pop("id")  # we dont have an id yet, we will get it after insert
         created = await collection.insert_one(values)
         created = await collection.find_one({"_id": created.inserted_id})
-        created["id"] = str(created["_id"])
+        created["id"] = str(created.pop("_id"))
         p = Pipeline.from_dict(created)
         return p
 

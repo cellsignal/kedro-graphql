@@ -8,12 +8,14 @@ from unittest.mock import patch, MagicMock
 
 from kedro_graphql.models import (
     DataSet,
+    ExtensionMetadata,
     Parameter,
     Pipeline,
     PipelineStatus,
     State,
     Tag,
 )
+from kedro.runner import SequentialRunner
 from kedro_graphql.tasks import (
     KedroGraphqlTask,
     _run_pipeline_in_child_process,
@@ -21,6 +23,12 @@ from kedro_graphql.tasks import (
 )
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
+
+
+class MetadataRunner(SequentialRunner):
+    def run(self, *args, **kwargs):
+        self.emit_metadata({"x-runner-id": "external-id"})
+        return super().run(*args, **kwargs)
 
 
 @pytest.mark.asyncio
@@ -47,7 +55,7 @@ async def test_run_pipeline(mock_app,
         parameters=[Parameter.from_dict(p) for p in parameters],
         tags=[Tag(**p) for p in tags],
         status=[PipelineStatus(state=State.STAGED,
-                               runner="kedro.runner.SequentialRunner",
+                               runner="tests.test_tasks.MetadataRunner",
                                session=None,
                                started_at=None,
                                finished_at=None,
@@ -63,9 +71,13 @@ async def test_run_pipeline(mock_app,
         name=serial["name"],
         data_catalog=serial["data_catalog"],
         parameters=serial["parameters"],
-        runner="kedro.runner.SequentialRunner"
+        runner="tests.test_tasks.MetadataRunner"
     )
-    result = result.wait(timeout=None, interval=0.5)
+    assert result.wait(timeout=None, interval=0.5) == "success"
+    stored = await mock_app.state.services.backend.read(id=p.id)
+    assert stored.current_status.metadata == [
+        ExtensionMetadata(key="x-runner-id", value="external-id")
+    ]
 
 
 def test_run_pipeline_child_process_recreates_catalog():
@@ -104,6 +116,7 @@ def test_run_pipeline_child_process_recreates_catalog():
                 session_id="test-session",
                 record_data={},
                 pipeline_name="test_pipeline",
+                pipeline_id="pipeline-id",
                 task_id="test-task-id",
                 broker_url="redis://localhost:6379/15",
                 result_queue=result_queue
@@ -151,6 +164,7 @@ def test_run_pipeline_child_process_reports_abort_once():
             "session",
             {},
             "pipeline",
+            "pipeline-id",
             "task",
             "redis://localhost",
             result_queue,
@@ -180,3 +194,39 @@ def test_duplicate_and_missing_callback_delivery_is_idempotent():
     assert task._transition(str(pipeline.id), "task", State.SUCCESS) is pipeline
     assert task._transition(str(pipeline.id), "task", State.FAILURE) is None
     backend.update_if_current.assert_not_awaited()
+
+
+def test_child_emits_runner_metadata_over_parent_queue():
+    result_queue = MagicMock()
+    runner = MagicMock()
+    hook_manager = MagicMock()
+    runner.run.side_effect = lambda *args, **kwargs: runner.emit_metadata(
+        {"x-runner-id": "external-id"}
+    )
+
+    with patch("kedro_graphql.tasks.DataCatalog"), patch(
+        "kedro_graphql.tasks.KedroGraphQLLogHandler"
+    ):
+        _run_pipeline_in_child_process(
+            runner,
+            MagicMock(),
+            {},
+            {},
+            hook_manager,
+            "session",
+            {},
+            "pipeline",
+            "pipeline-id",
+            "task-id",
+            "redis://localhost",
+            result_queue,
+        )
+
+    assert result_queue.put.call_args_list[0].args[0] == (
+        "metadata",
+        {"x-runner-id": "external-id"},
+    )
+    assert runner.run_context == {
+        "pipeline_id": "pipeline-id",
+        "task_id": "task-id",
+    }

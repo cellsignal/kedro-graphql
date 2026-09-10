@@ -481,7 +481,7 @@ class PipelineCloning(pn.viewable.Viewer):
                         tags=[TagInput(key=tag.key, value=tag.value) for tag in ds.tags] if ds.tags else [])
                     for ds in self.state.data_catalog] if self.state.data_catalog else [],
                 tags=[TagInput(key=tag.key, value=tag.value) for tag in self.state.tags] if self.state.tags else [],
-                runner=self.state.status[-1].runner, state=PipelineInputStatus.STAGED
+                runner=self.state.current_status.runner, state=PipelineInputStatus.STAGED
                 if type == "staged" else PipelineInputStatus.READY)
             await self.client.create_pipeline(pipeline_input=pipeline_input)
 

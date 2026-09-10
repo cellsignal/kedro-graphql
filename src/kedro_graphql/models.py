@@ -1,7 +1,7 @@
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, TypeAlias
@@ -16,7 +16,7 @@ from kedro.io.core import _parse_filepath
 from kedro.pipeline import Pipeline as KedroPipeline
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
-from kedro_graphql.exceptions import DataSetConfigError
+from kedro_graphql.exceptions import DataSetConfigError, MissingPipelineStatus
 
 from .pipeline_config import normalize_pipeline_config
 
@@ -78,10 +78,12 @@ class Parameter:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "Parameter":
+        values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
         return cls(
-            name=str(payload["name"]),
-            value=str(payload["value"]),
-            type=_parameter_type_from_wire(payload.get("type")),
+            name=str(values["name"]),
+            value=str(values["value"]),
+            type=_parameter_type_from_wire(values.get("type")),
         )
 
     @classmethod
@@ -152,13 +154,15 @@ class DataSet:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "DataSet":
-        config = payload.get("config")
+        values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
+        config = values.get("config")
         if not isinstance(config, str):
             raise DataSetConfigError("Dataset config must be a JSON string")
         return cls(
-            name=str(payload["name"]),
+            name=str(values["name"]),
             config=config,
-            tags=[Tag(**tag) for tag in payload.get("tags") or []],
+            tags=[Tag(**tag) for tag in values.get("tags") or []],
         )
 
     def serialize(self) -> dict[str, JsonObject]:
@@ -326,16 +330,15 @@ class PipelineTemplates:
         kedro_catalog: Mapping[str, JsonObject],
         kedro_parameters: Mapping[str, Any],
     ) -> list[PipelineTemplate]:
-        count = 100000000000000000000000
         return [
             PipelineTemplate(
                 name=name,
-                id=str(ObjectId(str(count + index))),
+                id=name,
                 kedro_pipelines=kedro_pipelines,
                 kedro_catalog=kedro_catalog,
                 kedro_parameters=kedro_parameters,
             )
-            for index, name in enumerate(kedro_pipelines)
+            for name in sorted(kedro_pipelines)
         ]
 
 
@@ -485,6 +488,22 @@ class State(Enum):
 
 
 @strawberry.type
+class ExtensionMetadata:
+    key: str
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.key, str) or not self.key.startswith("x-"):
+            raise ValueError(f"Extension metadata key must start with 'x-': {self.key}")
+        if not isinstance(self.value, str):
+            raise ValueError(f"Extension metadata value must be a string: {self.key}")
+
+
+def extension_metadata_entries(values: Mapping[str, str]) -> list[ExtensionMetadata]:
+    return [ExtensionMetadata(key=key, value=value) for key, value in values.items()]
+
+
+@strawberry.type
 class PipelineStatus:
     state: State
     session: str | None = None
@@ -503,6 +522,25 @@ class PipelineStatus:
     task_traceback: str | None = None
     task_einfo: str | None = None
     task_result: str | None = None
+    metadata: list[ExtensionMetadata] = strawberry.field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        entries = []
+        for item in self.metadata:
+            if isinstance(item, ExtensionMetadata):
+                entries.append(item)
+            elif isinstance(item, Mapping):
+                if set(item) != {"key", "value"}:
+                    raise ValueError("Extension metadata entries require key and value")
+                entries.append(ExtensionMetadata(**item))
+            else:
+                raise ValueError("Extension metadata entries require key and value")
+        self.metadata = entries
+
+    def update_metadata(self, values: Mapping[str, str]) -> None:
+        merged = {item.key: item for item in self.metadata}
+        merged.update({item.key: item for item in extension_metadata_entries(values)})
+        self.metadata = list(merged.values())
 
 
 def _snake_case_keys(value: Any) -> Any:
@@ -517,17 +555,45 @@ def _snake_case_keys(value: Any) -> Any:
 
 
 def _decode_datetime(value: str | datetime | None) -> datetime | None:
-    return datetime.fromisoformat(value) if isinstance(value, str) else value
+    if value is None:
+        return None
+    decoded = datetime.fromisoformat(value) if isinstance(value, str) else value
+    if decoded.tzinfo is None:
+        decoded = decoded.replace(tzinfo=timezone.utc)
+    return decoded.astimezone(timezone.utc)
+
+
+def _reject_unknown_fields(model: type, values: Mapping[str, Any]) -> None:
+    unknown = set(values) - set(model.__dataclass_fields__)
+    if unknown:
+        raise ValueError(
+            f"Unknown {model.__name__} field(s): {', '.join(sorted(unknown))}"
+        )
+
+
+def _decode_extension_metadata(payload: Mapping[str, Any]) -> ExtensionMetadata:
+    values = _snake_case_keys(payload)
+    _reject_unknown_fields(ExtensionMetadata, values)
+    return ExtensionMetadata(**values)
 
 
 def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
     values = _snake_case_keys(payload)
+    _reject_unknown_fields(PipelineStatus, values)
     return PipelineStatus(
         **{
             **{
                 key: value
                 for key, value in values.items()
-                if key in PipelineStatus.__dataclass_fields__
+                if key not in {
+                    "state",
+                    "filtered_nodes",
+                    "started_at",
+                    "finished_at",
+                    "abort_requested_at",
+                    "abort_completed_at",
+                    "metadata",
+                }
             },
             "state": State(values["state"]),
             "filtered_nodes": values.get("filtered_nodes") or [],
@@ -535,7 +601,22 @@ def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
             "finished_at": _decode_datetime(values.get("finished_at")),
             "abort_requested_at": _decode_datetime(values.get("abort_requested_at")),
             "abort_completed_at": _decode_datetime(values.get("abort_completed_at")),
+            "metadata": [
+                _decode_extension_metadata(item)
+                for item in values.get("metadata") or []
+            ],
         }
+    )
+
+
+def _decode_node(payload: Mapping[str, Any]) -> Node:
+    values = _snake_case_keys(payload)
+    _reject_unknown_fields(Node, values)
+    return Node(
+        name=values["name"],
+        inputs=list(values.get("inputs") or []),
+        outputs=list(values.get("outputs") or []),
+        tags=list(values.get("tags") or []),
     )
 
 
@@ -555,6 +636,15 @@ class Pipeline:
     pipeline_version: str | None = None
     kedro_graphql_version: str | None = None
     hooks: list[str] = strawberry.field(default_factory=list)
+
+    @property
+    def current_status(self) -> PipelineStatus:
+        try:
+            return self.status[-1]
+        except IndexError as error:
+            raise MissingPipelineStatus(
+                f"Pipeline {self.id or self.name} has no status history."
+            ) from error
 
     def to_kedro(self) -> JsonObject:
         parameters: dict[str, Primitive] = {}
@@ -578,7 +668,11 @@ class Pipeline:
         return PipelineInput(
             name=self.name,
             data_catalog=[
-                DataSetInput(name=dataset.name, config=dataset.config)
+                DataSetInput(
+                    name=dataset.name,
+                    config=dataset.config,
+                    tags=[TagInput(key=tag.key, value=tag.value) for tag in dataset.tags],
+                )
                 for dataset in self.data_catalog
             ],
             parameters=[
@@ -590,31 +684,41 @@ class Pipeline:
                 for parameter in self.parameters
             ],
             tags=[TagInput(key=tag.key, value=tag.value) for tag in self.tags],
+            parent=self.parent,
+            runner=self.current_status.runner if self.status else None,
             hooks=list(self.hooks),
         )
 
     @classmethod
     def from_input(cls, pipeline_input: PipelineInput) -> "Pipeline":
-        return cls.from_dict(jsonable_encoder(pipeline_input))
+        return cls.from_dict(
+            {
+                "name": pipeline_input.name,
+                "parameters": jsonable_encoder(pipeline_input.parameters),
+                "data_catalog": [
+                    {
+                        "name": dataset.name,
+                        "config": dataset.config,
+                        "tags": jsonable_encoder(dataset.tags),
+                    }
+                    for dataset in pipeline_input.data_catalog
+                ],
+                "tags": jsonable_encoder(pipeline_input.tags),
+                "parent": pipeline_input.parent,
+                "hooks": pipeline_input.hooks,
+            }
+        )
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "Pipeline":
         values = _snake_case_keys(payload)
+        _reject_unknown_fields(cls, values)
         converters = {
             "created_at": _decode_datetime,
             "data_catalog": lambda items: [
                 DataSet.from_dict(item) for item in items or []
             ],
-            "nodes": lambda items: [
-                Node(
-                    **{
-                        key: value
-                        for key, value in item.items()
-                        if key in Node.__dataclass_fields__
-                    }
-                )
-                for item in items or []
-            ],
+            "nodes": lambda items: [_decode_node(item) for item in items or []],
             "parameters": lambda items: [
                 Parameter.from_dict(item) for item in items or []
             ],
@@ -625,7 +729,6 @@ class Pipeline:
         converted = {
             key: converters[key](value) if key in converters else value
             for key, value in values.items()
-            if key in cls.__dataclass_fields__
         }
         for field_name in (
             "data_catalog",

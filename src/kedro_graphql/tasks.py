@@ -9,7 +9,7 @@ import time
 import traceback
 from datetime import date
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Mapping
 
 from celery import shared_task
 from celery.contrib.abortable import AbortableTask
@@ -28,7 +28,12 @@ from kedro_graphql.pipeline_config import (
     pipeline_slice_args,
     validate_pipeline_config,
 )
-from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
+from kedro_graphql.models import (
+    ParameterInput,
+    Pipeline,
+    PipelineInput,
+    extension_metadata_entries,
+)
 from kedro_graphql.hooks import hook_manager_for
 
 from .models import DataSet, State
@@ -79,7 +84,7 @@ class KedroGraphqlTask(AbortableTask):
                 celery_task_id,
             )
             return None
-        expected_state = pipeline.status[-1].state
+        expected_state = pipeline.current_status.state
         try:
             changed = transition_run(pipeline, target, **fields)
         except InvalidRunTransition as error:
@@ -94,6 +99,23 @@ class KedroGraphqlTask(AbortableTask):
             return pipeline
         return self._update_current(
             pipeline, expected_state, celery_task_id, target.value
+        )
+
+    def _persist_runner_metadata(
+        self, pipeline_id: str, task_id: str, values: Mapping[str, str]
+    ):
+        pipeline = run_sync(self.db.read(id=pipeline_id))
+        if pipeline is None:
+            logger.warning(
+                "Pipeline missing while persisting runner metadata pipeline_id=%s task_id=%s",
+                pipeline_id,
+                task_id,
+            )
+            return None
+        expected_state = pipeline.current_status.state
+        pipeline.current_status.update_metadata(values)
+        return self._update_current(
+            pipeline, expected_state, task_id, "runner metadata"
         )
 
     def before_start(self, task_id, args, kwargs):
@@ -270,7 +292,7 @@ class KedroGraphqlTask(AbortableTask):
         """
 
         p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None and p.status[-1].state is State.ABORTING:
+        if p is not None and p.current_status.state is State.ABORTING:
             self._transition(
                 kwargs["id"], task_id, State.ABORTED, task_result=str(retval)
             )
@@ -315,6 +337,7 @@ def _run_pipeline_in_child_process(
     session_id: str,
     record_data: dict,
     pipeline_name: str,
+    pipeline_id: str,
     task_id: str,
     broker_url: str,
     result_queue,
@@ -365,6 +388,16 @@ def _run_pipeline_in_child_process(
     # before logs and hooks are flushed.
     signal.signal(signal.SIGINT, handle_abort_signal)
     signal.signal(signal.SIGTERM, handle_abort_signal)
+
+    def emit_metadata(values: Mapping[str, str]) -> None:
+        extension_metadata_entries(values)
+        result_queue.put(("metadata", dict(values)))
+
+    runner_instance.emit_metadata = emit_metadata
+    runner_instance.run_context = {
+        "pipeline_id": pipeline_id,
+        "task_id": task_id,
+    }
 
     try:
         # Recreate catalog in child process to avoid fork-unsafe connections with S3
@@ -452,8 +485,8 @@ def run_pipeline(self,
                 self.request.id,
             )
             return
-        expected_state = p.status[-1].state
-        p.status[-1].session = session.session_id
+        expected_state = p.current_status.state
+        p.current_status.session = session.session_id
         if self._update_current(p, expected_state, self.request.id, "session") is None:
             return
 
@@ -545,8 +578,8 @@ def run_pipeline(self,
             )
 
             p = run_sync(self.db.read(id=id))
-            expected_state = p.status[-1].state
-            p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
+            expected_state = p.current_status.state
+            p.current_status.filtered_nodes = [node.name for node in filtered_pipeline.nodes]
             if self._update_current(
                 p, expected_state, self.request.id, "filtered nodes"
             ) is None:
@@ -557,7 +590,7 @@ def run_pipeline(self,
             ctx = billiard.get_context("fork")
 
             # queue to communicate with the child process
-            result_queue = ctx.Queue(maxsize=1)
+            result_queue = ctx.Queue()
             child = ctx.Process(
                 target=_run_pipeline_in_child_process,
                 args=(
@@ -569,6 +602,7 @@ def run_pipeline(self,
                     session.session_id,
                     record_data,
                     name,
+                    id,
                     self.request.id,
                     self._app.conf["broker_url"],
                     result_queue,
@@ -594,6 +628,14 @@ def run_pipeline(self,
             
             sigint_sent_at = None
             sigterm_sent_at = None
+            child_result = None
+
+            def consume_child_event(event):
+                nonlocal child_result
+                if len(event) == 2 and event[0] == "metadata":
+                    self._persist_runner_metadata(id, self.request.id, event[1])
+                else:
+                    child_result = event
 
             while child.is_alive():
                 if self.is_aborted():
@@ -634,23 +676,38 @@ def run_pipeline(self,
                                 os.killpg(child_pgid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
-                    # Quick checks to see if the child process has exited
-                    child.join(timeout=1)
+                    wait_timeout = 1
                 else:
-                    # Interval to check if child process should be aborted
-                    child.join(timeout=polling_interval)
+                    wait_timeout = polling_interval
+                try:
+                    consume_child_event(result_queue.get(timeout=wait_timeout))
+                except queue.Empty:
+                    pass
+                if child_result is not None:
+                    child.join()
+                    break
 
             child.join()
-
-            child_result = (
-                State.FAILURE,
-                "Child process exited without returning a result",
-                None,
-            )
-            try:
-                child_result = result_queue.get_nowait()
-            except queue.Empty:
-                logger.warning("Child process pid=%s finished without posting a result", child.pid)
+            if child_result is None:
+                deadline = time.monotonic() + 1
+                while child_result is None and time.monotonic() < deadline:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        consume_child_event(result_queue.get(timeout=remaining))
+                    except queue.Empty:
+                        break
+                if child_result is None:
+                    child_result = (
+                        State.FAILURE,
+                        "Child process exited without returning a result",
+                        None,
+                    )
+                    logger.warning(
+                        "Child process pid=%s finished without posting a result",
+                        child.pid,
+                    )
 
             if self.is_aborted():
                 return "aborted"

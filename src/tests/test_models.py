@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -9,13 +9,17 @@ from kedro_graphql.models import (
     DataSet,
     DataSetInput,
     DataSetPartitions,
+    Node,
     Parameter,
     ParameterInput,
     ParameterType,
     Pipeline,
     PipelineInput,
+    PipelineStatus,
+    PipelineTemplates,
     Pipelines,
     State,
+    Tag,
     TagInput,
     parameter_inputs_from_mapping,
 )
@@ -290,13 +294,46 @@ class TestParameter:
         assert len(result.parameters) == len(mock_pipeline_staged.parameters)
         assert len(result.tags) == len(mock_pipeline_staged.tags)
 
+    def test_pipeline_input_preserves_editable_persisted_values(self):
+        pipeline = Pipeline(
+            name="example",
+            data_catalog=[
+                DataSet(
+                    name="input",
+                    config="{}",
+                    tags=[Tag(key="kind", value="source")],
+                )
+            ],
+            tags=[Tag(key="owner", value="platform")],
+            parent="parent-id",
+            status=[
+                PipelineStatus(state=State.STAGED, runner="ParallelRunner"),
+                PipelineStatus(state=State.READY, runner="ThreadRunner"),
+            ],
+            hooks=["audit", "metrics"],
+        )
+
+        result = pipeline.to_input()
+
+        assert result.data_catalog[0].tags == [
+            TagInput(key="kind", value="source")
+        ]
+        assert result.tags == [TagInput(key="owner", value="platform")]
+        assert result.parent == "parent-id"
+        assert result.runner == "ThreadRunner"
+        assert result.hooks == ["audit", "metrics"]
+
+    def test_pipeline_input_without_status_has_no_runner(self):
+        result = Pipeline(name="example").to_input()
+
+        assert result.runner is None
+
 
 def test_pipeline_decode_normalizes_and_converts_declared_fields():
     payload = {
-        "_id": "ignored",
         "id": "pipeline-id",
         "name": "example",
-        "createdAt": "2026-08-07T12:00:00",
+        "createdAt": datetime(2026, 8, 7, 12),
         "hooks": ["logging"],
         "nodes": [{"name": "first", "inputs": ["in"], "outputs": ["out"], "tags": []}],
         "dataCatalog": [
@@ -309,6 +346,7 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
                 "session": "session-id",
                 "filteredNodes": ["first"],
                 "abortRequestedAt": "2026-08-07T12:01:00",
+                "metadata": [{"key": "x-runner-id", "value": "external-id"}],
             }
         ],
         "tags": [{"key": "owner", "value": "platform"}],
@@ -316,18 +354,115 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
 
     pipeline = Pipeline.from_dict(payload)
 
-    assert pipeline.created_at == datetime(2026, 8, 7, 12)
+    assert pipeline.created_at == datetime(2026, 8, 7, 12, tzinfo=timezone.utc)
     assert pipeline.hooks == ["logging"]
     assert pipeline.nodes[0].name == "first"
     assert pipeline.data_catalog[0].tags[0].value == "data"
     assert pipeline.parameters[0].type.value == "integer"
     assert pipeline.status[0].state is State.READY
     assert pipeline.status[0].filtered_nodes == ["first"]
-    assert pipeline.status[0].abort_requested_at == datetime(2026, 8, 7, 12, 1)
-    assert not hasattr(pipeline, "_id")
-
+    assert pipeline.status[0].abort_requested_at == datetime(
+        2026, 8, 7, 12, 1, tzinfo=timezone.utc
+    )
+    assert pipeline.to_dict()["status"][0]["metadata"] == [
+        {"key": "x-runner-id", "value": "external-id"}
+    ]
     pipeline_input = PipelineInput(name="example", hooks=["logging"])
     assert Pipeline.from_input(pipeline_input).hooks == ["logging"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"_id": "mongo-id", "name": "example"}, "Unknown Pipeline field.*_id"),
+        ({"name": "example", "unexpected": True}, "Unknown Pipeline field.*unexpected"),
+        (
+            {"name": "example", "status": [{"state": "READY", "surprise": True}]},
+            "Unknown PipelineStatus field.*surprise",
+        ),
+        (
+            {"name": "example", "nodes": [{"name": "node", "mystery": True}]},
+            "Unknown Node field.*mystery",
+        ),
+        (
+            {
+                "name": "example",
+                "dataCatalog": [
+                    {"name": "dataset", "config": "{}", "unknownField": True}
+                ],
+            },
+            "Unknown DataSet field.*unknown_field",
+        ),
+        (
+            {
+                "name": "example",
+                "parameters": [
+                    {"name": "count", "value": "1", "unknownField": True}
+                ],
+            },
+            "Unknown Parameter field.*unknown_field",
+        ),
+    ],
+)
+def test_pipeline_decode_rejects_unknown_fields(payload, message):
+    with pytest.raises(ValueError, match=message):
+        Pipeline.from_dict(payload)
+
+
+def test_pipeline_decode_accepts_partial_nested_graphql_fields():
+    pipeline = Pipeline.from_dict(
+        {
+            "name": "example",
+            "nodes": [{"name": "node"}],
+            "status": [{"state": "READY"}],
+        }
+    )
+
+    assert pipeline.nodes == [Node(name="node", inputs=[], outputs=[], tags=[])]
+    assert pipeline.status == [PipelineStatus(state=State.READY)]
+
+
+def test_pipeline_status_rejects_unprefixed_extension_metadata():
+    status = PipelineStatus(
+        state=State.READY,
+        metadata=[{"key": "x-runner-id", "value": "external-id"}],
+    )
+    assert status.metadata[0].key == "x-runner-id"
+
+    with pytest.raises(ValueError, match="must start with 'x-'"):
+        PipelineStatus(
+            state=State.READY,
+            metadata=[{"key": "runner-id", "value": "bad"}],
+        )
+
+    with pytest.raises(ValueError, match="must start with 'x-'"):
+        Pipeline.from_dict(
+            {
+                "name": "example",
+                "status": [
+                    {
+                        "state": "READY",
+                        "metadata": [{"key": "runner-id", "value": "bad"}],
+                    }
+                ],
+            }
+        )
+
+
+def test_pipeline_from_input_deliberately_ignores_command_fields():
+    pipeline = Pipeline.from_input(
+        PipelineInput.from_dict(
+            {
+                "name": "example",
+                "state": "READY",
+                "runner": "ThreadRunner",
+                "slices": [{"slice": "TAGS", "args": ["selected"]}],
+                "onlyMissing": True,
+            }
+        )
+    )
+
+    assert pipeline == Pipeline(name="example")
 
 
 def test_pipelines_decode_normalizes_page_and_pipeline_keys():
@@ -335,13 +470,17 @@ def test_pipelines_decode_normalizes_page_and_pipeline_keys():
         {
             "readPipelines": {
                 "pageMeta": {"nextCursor": "cursor"},
-                "pipelines": [{"name": "example", "createdAt": "2026-08-07T12:00:00"}],
+                "pipelines": [
+                    {"name": "example", "createdAt": "2026-08-07T08:00:00-04:00"}
+                ],
             }
         }
     )
 
     assert pipelines.page_meta.next_cursor == "cursor"
-    assert pipelines.pipelines[0].created_at == datetime(2026, 8, 7, 12)
+    assert pipelines.pipelines[0].created_at == datetime(
+        2026, 8, 7, 12, tzinfo=timezone.utc
+    )
 
 
 class TestDataSetInput:
@@ -396,3 +535,21 @@ def test_collection_defaults_are_independent_and_null_payloads_are_normalized():
     assert second.tags == []
     assert pipeline.tags == []
     assert pipeline.nodes == []
+
+
+def test_pipeline_template_ids_and_order_are_stable():
+    pipelines = {"zeta": object(), "alpha": object(), "pipeline:β": object()}
+
+    templates = PipelineTemplates._build_pipeline_index(pipelines, {}, {})
+    reversed_templates = PipelineTemplates._build_pipeline_index(
+        dict(reversed(pipelines.items())), {}, {}
+    )
+
+    assert [(template.id, template.name) for template in templates] == [
+        ("alpha", "alpha"),
+        ("pipeline:β", "pipeline:β"),
+        ("zeta", "zeta"),
+    ]
+    assert [template.id for template in reversed_templates] == [
+        template.id for template in templates
+    ]

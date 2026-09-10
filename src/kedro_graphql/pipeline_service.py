@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
@@ -138,7 +138,7 @@ def _prepare_new_pipeline(
 
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    pipeline = Pipeline.from_dict(values)
+    pipeline = Pipeline.from_input(pipeline_input)
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
     runner = values.get("runner") or services.config.runner
     pipeline = _normalize_pipeline(
@@ -149,7 +149,7 @@ def _prepare_new_pipeline(
         runner,
         validate=validate_ready and requested_state is PipelineInputStatus.READY,
     )
-    pipeline.created_at = datetime.now()
+    pipeline.created_at = datetime.now(timezone.utc)
     pipeline.project_version = services.config.project_version
     pipeline.kedro_graphql_version = kedro_graphql_version
     pipeline.pipeline_version = None
@@ -232,9 +232,12 @@ async def abort_pipeline(
     id: str,
     caller: Mapping[str, Any] | None,
     dry_run: bool = False,
+    *,
+    pipeline: Pipeline | None = None,
 ) -> Pipeline:
-    pipeline = await _read_pipeline(services, id)
-    current = pipeline.status[-1]
+    if pipeline is None:
+        pipeline = await _read_pipeline(services, id)
+    current = pipeline.current_status
     if current.state is State.ABORTED:
         return pipeline
     if (
@@ -261,11 +264,11 @@ async def abort_pipeline(
         )
         if pipeline is None:
             pipeline = await _read_pipeline(services, id)
-            if pipeline.status[-1].state is not State.ABORTING:
+            if pipeline.current_status.state is not State.ABORTING:
                 raise InvalidPipeline(
                     f"Pipeline {id} changed while abort was requested."
                 )
-        current = pipeline.status[-1]
+        current = pipeline.current_status
     AbortableAsyncResult(current.task_id, app=services.celery).abort()
     logger.info(
         "user=%s, action=abort_pipeline, id=%s, name=%s, task_id=%s",
@@ -287,15 +290,21 @@ async def update_pipeline(
 ) -> Pipeline:
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    if requested_state is PipelineInputStatus.ABORTED:
-        return await abort_pipeline(services, id, caller, dry_run)
-
     pipeline = await _read_pipeline(services, id)
-    expected_state = pipeline.status[-1].state
+    if pipeline_input.name != pipeline.name:
+        raise InvalidPipeline(
+            f"Pipeline name cannot be changed from {pipeline.name} to {pipeline_input.name}."
+        )
+    if requested_state is PipelineInputStatus.ABORTED:
+        return await abort_pipeline(
+            services, id, caller, dry_run, pipeline=pipeline
+        )
+
+    expected_state = pipeline.current_status.state
     expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
-        Pipeline.from_dict(values),
+        Pipeline.from_input(pipeline_input),
         services,
         values.get("slices"),
         values.get("only_missing", False),
@@ -304,6 +313,8 @@ async def update_pipeline(
     )
     pipeline.parameters = submitted.parameters
     pipeline.data_catalog = submitted.data_catalog
+    pipeline.describe = submitted.describe
+    pipeline.nodes = submitted.nodes
     pipeline.tags = submitted.tags
     pipeline.parent = values.get("parent")
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
@@ -311,7 +322,7 @@ async def update_pipeline(
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
 
-    current_state = pipeline.status[-1].state.value
+    current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})
     if requested_state is PipelineInputStatus.READY and current_state not in active_states:
         if current_state == "STAGED":

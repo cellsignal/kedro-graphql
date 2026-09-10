@@ -3,6 +3,9 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   generateName: {{ package_name }}-
+  labels:
+    kgql-pipeline: {{ pipeline_id }}
+    kgql-task: {{ task_id }}
 spec:
   entrypoint: dag
   templates:

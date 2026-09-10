@@ -206,7 +206,7 @@ class PipelineRetry(pn.viewable.Viewer):
                     tags=[
                         TagInput(key=tag.key, value=tag.value) for tag in self.pipeline.tags
                     ] if self.pipeline.tags else [],
-                    runner=self.pipeline.status[-1].runner,
+                    runner=self.pipeline.current_status.runner,
                     state=PipelineInputStatus.READY
                 )
             else:
@@ -236,7 +236,7 @@ class PipelineRetry(pn.viewable.Viewer):
                     tags=[
                         TagInput(key=tag.key, value=tag.value) for tag in self.pipeline.tags
                     ] if self.pipeline.tags else [],
-                    runner=self.pipeline.status[-1].runner,
+                    runner=self.pipeline.current_status.runner,
                     state=PipelineInputStatus.READY,
                     slices=slices,
                     only_missing=self.only_missing.value
