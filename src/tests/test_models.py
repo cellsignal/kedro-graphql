@@ -346,6 +346,7 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
                 "session": "session-id",
                 "filteredNodes": ["first"],
                 "abortRequestedAt": "2026-08-07T12:01:00",
+                "metadata": [{"key": "x-runner-id", "value": "external-id"}],
             }
         ],
         "tags": [{"key": "owner", "value": "platform"}],
@@ -363,6 +364,9 @@ def test_pipeline_decode_normalizes_and_converts_declared_fields():
     assert pipeline.status[0].abort_requested_at == datetime(
         2026, 8, 7, 12, 1, tzinfo=timezone.utc
     )
+    assert pipeline.to_dict()["status"][0]["metadata"] == [
+        {"key": "x-runner-id", "value": "external-id"}
+    ]
     pipeline_input = PipelineInput(name="example", hooks=["logging"])
     assert Pipeline.from_input(pipeline_input).hooks == ["logging"]
 
@@ -416,6 +420,33 @@ def test_pipeline_decode_accepts_partial_nested_graphql_fields():
 
     assert pipeline.nodes == [Node(name="node", inputs=[], outputs=[], tags=[])]
     assert pipeline.status == [PipelineStatus(state=State.READY)]
+
+
+def test_pipeline_status_rejects_unprefixed_extension_metadata():
+    status = PipelineStatus(
+        state=State.READY,
+        metadata=[{"key": "x-runner-id", "value": "external-id"}],
+    )
+    assert status.metadata[0].key == "x-runner-id"
+
+    with pytest.raises(ValueError, match="must start with 'x-'"):
+        PipelineStatus(
+            state=State.READY,
+            metadata=[{"key": "runner-id", "value": "bad"}],
+        )
+
+    with pytest.raises(ValueError, match="must start with 'x-'"):
+        Pipeline.from_dict(
+            {
+                "name": "example",
+                "status": [
+                    {
+                        "state": "READY",
+                        "metadata": [{"key": "runner-id", "value": "bad"}],
+                    }
+                ],
+            }
+        )
 
 
 def test_pipeline_from_input_deliberately_ignores_command_fields():

@@ -488,6 +488,22 @@ class State(Enum):
 
 
 @strawberry.type
+class ExtensionMetadata:
+    key: str
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.key, str) or not self.key.startswith("x-"):
+            raise ValueError(f"Extension metadata key must start with 'x-': {self.key}")
+        if not isinstance(self.value, str):
+            raise ValueError(f"Extension metadata value must be a string: {self.key}")
+
+
+def extension_metadata_entries(values: Mapping[str, str]) -> list[ExtensionMetadata]:
+    return [ExtensionMetadata(key=key, value=value) for key, value in values.items()]
+
+
+@strawberry.type
 class PipelineStatus:
     state: State
     session: str | None = None
@@ -506,6 +522,25 @@ class PipelineStatus:
     task_traceback: str | None = None
     task_einfo: str | None = None
     task_result: str | None = None
+    metadata: list[ExtensionMetadata] = strawberry.field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        entries = []
+        for item in self.metadata:
+            if isinstance(item, ExtensionMetadata):
+                entries.append(item)
+            elif isinstance(item, Mapping):
+                if set(item) != {"key", "value"}:
+                    raise ValueError("Extension metadata entries require key and value")
+                entries.append(ExtensionMetadata(**item))
+            else:
+                raise ValueError("Extension metadata entries require key and value")
+        self.metadata = entries
+
+    def update_metadata(self, values: Mapping[str, str]) -> None:
+        merged = {item.key: item for item in self.metadata}
+        merged.update({item.key: item for item in extension_metadata_entries(values)})
+        self.metadata = list(merged.values())
 
 
 def _snake_case_keys(value: Any) -> Any:
@@ -536,6 +571,12 @@ def _reject_unknown_fields(model: type, values: Mapping[str, Any]) -> None:
         )
 
 
+def _decode_extension_metadata(payload: Mapping[str, Any]) -> ExtensionMetadata:
+    values = _snake_case_keys(payload)
+    _reject_unknown_fields(ExtensionMetadata, values)
+    return ExtensionMetadata(**values)
+
+
 def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
     values = _snake_case_keys(payload)
     _reject_unknown_fields(PipelineStatus, values)
@@ -551,6 +592,7 @@ def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
                     "finished_at",
                     "abort_requested_at",
                     "abort_completed_at",
+                    "metadata",
                 }
             },
             "state": State(values["state"]),
@@ -559,6 +601,10 @@ def _decode_status(payload: Mapping[str, Any]) -> PipelineStatus:
             "finished_at": _decode_datetime(values.get("finished_at")),
             "abort_requested_at": _decode_datetime(values.get("abort_requested_at")),
             "abort_completed_at": _decode_datetime(values.get("abort_completed_at")),
+            "metadata": [
+                _decode_extension_metadata(item)
+                for item in values.get("metadata") or []
+            ],
         }
     )
 

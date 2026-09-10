@@ -1,5 +1,6 @@
 import pytest
 
+from kedro_graphql.models import ExtensionMetadata, Pipeline
 from kedro_graphql.schema import decode_cursor, encode_cursor
 
 
@@ -17,6 +18,29 @@ class TestSchemaQuery:
         """
         resp = await mock_app.state.services.schema.execute(query, variable_values={"id": str(mock_pipeline.id)})
         assert resp.errors is None
+
+    @pytest.mark.asyncio
+    async def test_pipeline_status_metadata(self, mock_app, mock_info_context, mock_pipeline):
+        mock_pipeline.current_status.metadata = [
+            ExtensionMetadata(key="x-runner-id", value="external-id")
+        ]
+        await mock_app.state.services.backend.update(mock_pipeline)
+        query = """
+        query TestQuery($id: String!) {
+          readPipeline(id: $id) {
+            name
+            status { state metadata { key value } }
+          }
+        }
+        """
+
+        response = await mock_app.state.services.schema.execute(
+            query, variable_values={"id": str(mock_pipeline.id)}
+        )
+
+        assert response.errors is None
+        decoded = Pipeline.from_dict(response.data["readPipeline"])
+        assert decoded.current_status.metadata == mock_pipeline.current_status.metadata
 
     @pytest.mark.asyncio
     async def test_pipelines(self, mock_app, mock_info_context, mock_pipeline):

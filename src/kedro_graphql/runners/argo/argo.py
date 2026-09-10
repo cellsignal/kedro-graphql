@@ -1,15 +1,16 @@
 
-from jinja2 import Environment, PackageLoader, select_autoescape
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import json
-from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
+import re
+
+import requests
+import yaml
+from jinja2 import Environment, PackageLoader, select_autoescape
+from kedro.io import AbstractDataset, DataCatalog, MemoryDataset
 from kedro.pipeline import Pipeline
 from kedro.runner.runner import AbstractRunner
 from pluggy import PluginManager
-import re
-import requests
-import yaml
-
-
 
 
 class ArgoWorkflowsRunner(AbstractRunner):
@@ -27,11 +28,13 @@ class ArgoWorkflowsRunner(AbstractRunner):
     image = "docker/whalesay:latest"
     package_name = "kedro-graphql"
     env = Environment(
-        loader=PackageLoader("kedro_graphql.runner.argo"), autoescape=select_autoescape()
+        loader=PackageLoader("kedro_graphql.runners.argo"), autoescape=select_autoescape()
     )
 
+    def _get_executor(self, max_workers: int):
+        return ThreadPoolExecutor(max_workers=max_workers)
 
-    def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
+    def create_default_data_set(self, ds_name: str) -> AbstractDataset:
         """Factory method for creating the default data set for the runner.
 
         NOTE THIS SHOULD BE CHANGED TO SOMETHING S3 COMPATIBLE.
@@ -43,7 +46,7 @@ class ArgoWorkflowsRunner(AbstractRunner):
             for all unregistered data sets.
 
         """
-        return MemoryDataSet()
+        return MemoryDataset()
 
     def _run(
         self,
@@ -83,16 +86,24 @@ class ArgoWorkflowsRunner(AbstractRunner):
         tasks = self.get_dependencies(pipeline.node_dependencies)
 
         template = self.env.get_template("argo_spec.tmpl")
-        output = template.render(image=self.image, package_name=self.package_name, tasks=tasks)
+        output = template.render(
+            image=self.image,
+            package_name=self.package_name,
+            tasks=tasks,
+            pipeline_id=self._label_value(self.run_context["pipeline_id"]),
+            task_id=self._label_value(self.run_context["task_id"]),
+        )
         manifest =  yaml.safe_load(output)
         
         
         resp0 = self.create_workflow(manifest)
+        self.emit_metadata(self._workflow_metadata(resp0))
 
         ## stream argo logs to kedro logger
         self.workflow_logs(resp0["metadata"]["name"])
 
         resp1 = self.get_workflow(resp0["metadata"]["name"])
+        self.emit_metadata(self._workflow_metadata(resp1))
 
         self._logger.info("Completed " + resp1["status"]["progress"] + " tasks")
 
@@ -106,12 +117,36 @@ class ArgoWorkflowsRunner(AbstractRunner):
     def clean_name(self, name):
         return re.sub(r"[\W_]+", "-", name).strip("-")
 
+    def _label_value(self, value):
+        value = re.sub(r"[^A-Za-z0-9_.-]", "-", str(value)).strip("-_.")[:63]
+        if not value:
+            raise ValueError("Argo correlation label cannot be empty")
+        return value.rstrip("-_.")
+
+    def _workflow_metadata(self, response):
+        metadata = response["metadata"]
+        submitted_at = datetime.fromisoformat(
+            metadata["creationTimestamp"].replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+        values = {
+            "x-argo-namespace": metadata["namespace"],
+            "x-argo-workflow-name": metadata["name"],
+            "x-argo-workflow-uid": metadata["uid"],
+            "x-argo-submitted-at": submitted_at.isoformat(),
+            "x-argo-reconciled-at": datetime.now(timezone.utc).isoformat(),
+        }
+        phase = response.get("status", {}).get("phase")
+        if phase is not None:
+            values["x-argo-phase"] = phase
+        return values
+
     def create_workflow(self, manifest):
         """
         
         """
         endpoint = self.host + self.endpoints["create_workflow"].format(namespace = self.namespace)
         resp = requests.post(url = endpoint, json = {"workflow":manifest})
+        resp.raise_for_status()
         return resp.json()
 
         
@@ -132,6 +167,7 @@ class ArgoWorkflowsRunner(AbstractRunner):
         """
         endpoint = self.host + self.endpoints["get_workflow"].format(namespace = self.namespace, name = name)
         resp = requests.get(url = endpoint)
+        resp.raise_for_status()
         return resp.json()
 
 
@@ -150,5 +186,3 @@ class ArgoWorkflowsRunner(AbstractRunner):
         with requests.get(url=endpoint, params=params, stream=True) as resp:
             for _line in resp.iter_lines():
                 self._logger.info(json.loads(_line.decode())["result"]["content"])
-
-
