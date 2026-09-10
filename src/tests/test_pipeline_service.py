@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from cloudevents.http import CloudEvent
 
+from kedro_graphql.exceptions import InvalidPipeline
 from kedro_graphql.models import (
     ParameterType,
     Pipeline,
@@ -129,6 +130,66 @@ async def test_update_pipeline_service_persists_once_before_submission(
         "example": "hello",
         "runner_kwargs.is_async": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_rejects_name_change_before_side_effects(mock_app):
+    stored = _staged_pipeline()
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    pipeline_input = _pipeline_input("READY")
+    pipeline_input.name = "different"
+
+    with (
+        patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay,
+        pytest.raises(InvalidPipeline, match="Pipeline name cannot be changed"),
+    ):
+        await update_pipeline(services, str(stored.id), pipeline_input, None)
+
+    backend.update.assert_not_awaited()
+    backend.update_if_current.assert_not_awaited()
+    delay.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_refreshes_describe_and_nodes(mock_app):
+    stored = _staged_pipeline()
+    stored.describe = "stale"
+    stored.nodes = []
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    template = services.metadata.pipelines[stored.name]
+
+    updated = await update_pipeline(
+        services, str(stored.id), _pipeline_input("STAGED"), None
+    )
+
+    assert updated.describe == template.describe()
+    assert [
+        (node.name, node.inputs, node.outputs, node.tags) for node in updated.nodes
+    ] == [
+        (node.name, node.inputs, node.outputs, node.tags) for node in template.nodes
+    ]
+    backend.update_if_current.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_abort_reads_once(mock_app):
+    stored = _staged_pipeline()
+    stored.status[-1].state = State.READY
+    stored.status[-1].task_id = "task-id"
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+
+    with patch("kedro_graphql.pipeline_service.AbortableAsyncResult"):
+        await update_pipeline(
+            services, str(stored.id), _pipeline_input("ABORTED"), None
+        )
+
+    backend.read.assert_awaited_once_with(id=str(stored.id))
 
 
 @pytest.mark.asyncio

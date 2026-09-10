@@ -232,8 +232,11 @@ async def abort_pipeline(
     id: str,
     caller: Mapping[str, Any] | None,
     dry_run: bool = False,
+    *,
+    pipeline: Pipeline | None = None,
 ) -> Pipeline:
-    pipeline = await _read_pipeline(services, id)
+    if pipeline is None:
+        pipeline = await _read_pipeline(services, id)
     current = pipeline.status[-1]
     if current.state is State.ABORTED:
         return pipeline
@@ -287,10 +290,16 @@ async def update_pipeline(
 ) -> Pipeline:
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    if requested_state is PipelineInputStatus.ABORTED:
-        return await abort_pipeline(services, id, caller, dry_run)
-
     pipeline = await _read_pipeline(services, id)
+    if pipeline_input.name != pipeline.name:
+        raise InvalidPipeline(
+            f"Pipeline name cannot be changed from {pipeline.name} to {pipeline_input.name}."
+        )
+    if requested_state is PipelineInputStatus.ABORTED:
+        return await abort_pipeline(
+            services, id, caller, dry_run, pipeline=pipeline
+        )
+
     expected_state = pipeline.status[-1].state
     expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
@@ -304,6 +313,8 @@ async def update_pipeline(
     )
     pipeline.parameters = submitted.parameters
     pipeline.data_catalog = submitted.data_catalog
+    pipeline.describe = submitted.describe
+    pipeline.nodes = submitted.nodes
     pipeline.tags = submitted.tags
     pipeline.parent = values.get("parent")
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
