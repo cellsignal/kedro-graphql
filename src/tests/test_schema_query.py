@@ -1,5 +1,7 @@
 import pytest
 
+from kedro_graphql.schema import decode_cursor, encode_cursor
+
 
 class TestSchemaQuery:
 
@@ -98,6 +100,38 @@ class TestSchemaQuery:
         assert resp.errors is None
         assert resp.data["pipelineTemplate"]["id"] == template["id"]
         assert resp.data["pipelineTemplate"]["name"] == template["name"]
+
+    @pytest.mark.asyncio
+    async def test_pipeline_template_ids_and_pagination(self, mock_app, mock_info_context):
+        query = """
+        query TestQuery($limit: Int!, $cursor: String) {
+          pipelineTemplates(limit: $limit, cursor: $cursor) {
+            pageMeta { nextCursor }
+            pipelineTemplates { id name }
+          }
+        }
+        """
+        expected = [template.name for template in mock_app.state.services.metadata.templates]
+        found = []
+        cursor = None
+
+        while True:
+            resp = await mock_app.state.services.schema.execute(
+                query, variable_values={"limit": 1, "cursor": cursor}
+            )
+            assert resp.errors is None
+            page = resp.data["pipelineTemplates"]
+            found.extend(page["pipelineTemplates"])
+            cursor = page["pageMeta"]["nextCursor"]
+            if cursor is None:
+                break
+
+        assert found == [{"id": name, "name": name} for name in expected]
+
+    def test_cursor_round_trip_supports_unicode_and_delimiters(self):
+        ids = ["pipeline:β", "66b8df706d718a4ee2a0144b"]
+
+        assert [decode_cursor(encode_cursor(id)) for id in ids] == ids
 
     @pytest.mark.asyncio
     async def test_read_datasets(self, mock_app, mock_info_context, mock_pipeline):

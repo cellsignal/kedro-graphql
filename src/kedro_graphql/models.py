@@ -330,16 +330,15 @@ class PipelineTemplates:
         kedro_catalog: Mapping[str, JsonObject],
         kedro_parameters: Mapping[str, Any],
     ) -> list[PipelineTemplate]:
-        count = 100000000000000000000000
         return [
             PipelineTemplate(
                 name=name,
-                id=str(ObjectId(str(count + index))),
+                id=name,
                 kedro_pipelines=kedro_pipelines,
                 kedro_catalog=kedro_catalog,
                 kedro_parameters=kedro_parameters,
             )
-            for index, name in enumerate(kedro_pipelines)
+            for name in sorted(kedro_pipelines)
         ]
 
 

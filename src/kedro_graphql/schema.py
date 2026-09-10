@@ -6,7 +6,6 @@ from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
-from bson.objectid import ObjectId
 from celery.states import READY_STATES
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
@@ -55,7 +54,7 @@ def _permission_class(info):
     return permission_class(info)
 
 
-def encode_cursor(id: int) -> str:
+def encode_cursor(id: str) -> str:
     """
     Encodes the given id into a cursor.
 
@@ -63,10 +62,10 @@ def encode_cursor(id: int) -> str:
 
     :return: The encoded cursor.
     """
-    return b64encode(f"cursor:{id}".encode("ascii")).decode("ascii")
+    return b64encode(f"cursor:{id}".encode()).decode("ascii")
 
 
-def decode_cursor(cursor: str) -> int:
+def decode_cursor(cursor: str) -> str:
     """
     Decodes the ID from the given cursor.
 
@@ -74,8 +73,11 @@ def decode_cursor(cursor: str) -> int:
 
     :return: The decoded user ID.
     """
-    cursor_data = b64decode(cursor.encode("ascii")).decode("ascii")
-    return cursor_data.split(":")[1]
+    cursor_data = b64decode(cursor.encode("ascii")).decode()
+    prefix, separator, id = cursor_data.partition(":")
+    if prefix != "cursor" or not separator:
+        raise ValueError("Invalid cursor")
+    return id
 
 
 class DataSetConfigException(Exception):
@@ -329,18 +331,11 @@ class Query:
 
     @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
-        if cursor is not None:
-            # decode the user ID from the given cursor.
-            pipe_id = ObjectId(decode_cursor(cursor=cursor))
-        else:
-            # unix epoch Jan 1, 1970 as objectId
-            pipe_id = ObjectId("100000000000000000000000")
-
-        # filter the pipeline template data, going through the next set of results.
+        pipe_id = decode_cursor(cursor) if cursor is not None else ""
         filtered_data = [
             pipe
             for pipe in _services(info).metadata.templates
-            if ObjectId(pipe.id).generation_time >= pipe_id.generation_time
+            if pipe.id >= pipe_id
         ]
 
         # slice the relevant pipeline template data (Here, we also slice an

@@ -16,6 +16,7 @@ from kedro_graphql.models import (
     Pipeline,
     PipelineInput,
     PipelineStatus,
+    PipelineTemplates,
     Pipelines,
     State,
     Tag,
@@ -503,3 +504,21 @@ def test_collection_defaults_are_independent_and_null_payloads_are_normalized():
     assert second.tags == []
     assert pipeline.tags == []
     assert pipeline.nodes == []
+
+
+def test_pipeline_template_ids_and_order_are_stable():
+    pipelines = {"zeta": object(), "alpha": object(), "pipeline:β": object()}
+
+    templates = PipelineTemplates._build_pipeline_index(pipelines, {}, {})
+    reversed_templates = PipelineTemplates._build_pipeline_index(
+        dict(reversed(pipelines.items())), {}, {}
+    )
+
+    assert [(template.id, template.name) for template in templates] == [
+        ("alpha", "alpha"),
+        ("pipeline:β", "pipeline:β"),
+        ("zeta", "zeta"),
+    ]
+    assert [template.id for template in reversed_templates] == [
+        template.id for template in templates
+    ]
