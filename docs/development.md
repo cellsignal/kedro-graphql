@@ -93,6 +93,4 @@ docker compose --profile app up
 
 ## TO DO
 
-- support custom runners e.g. Argo Workflows, AWS Batch, etc...
-- support passing credentials via api
-
+- document custom external runner implementations
