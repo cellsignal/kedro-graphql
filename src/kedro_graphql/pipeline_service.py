@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES
@@ -127,10 +128,11 @@ async def _read_pipeline(services: AppServices, id: str) -> Pipeline:
     return pipeline
 
 
-def _ready_status(runner: str) -> PipelineStatus:
+def _ready_status(runner: str, task_id: str | None = None) -> PipelineStatus:
     return PipelineStatus(
         state=State.READY,
         runner=runner,
+        task_id=task_id,
         task_name=str(run_pipeline),
     )
 
@@ -180,19 +182,41 @@ def _prepare_new_pipeline(
 
 
 def _publish_pipeline(
-    pipeline: Pipeline, values: dict[str, Any], runner: str
+    pipeline: Pipeline, values: dict[str, Any], runner: str, task_id: str
 ):
     serial = pipeline.to_kedro()
-    return run_pipeline.delay(
-        id=str(pipeline.id),
-        name=serial["name"],
-        parameters=serial["parameters"],
-        data_catalog=serial["data_catalog"],
-        runner=runner,
-        slices=values.get("slices"),
-        only_missing=values.get("only_missing", False),
-        hooks=pipeline.hooks,
+    return run_pipeline.apply_async(
+        kwargs={
+            "id": str(pipeline.id),
+            "name": serial["name"],
+            "parameters": serial["parameters"],
+            "data_catalog": serial["data_catalog"],
+            "runner": runner,
+            "slices": values.get("slices"),
+            "only_missing": values.get("only_missing", False),
+            "hooks": pipeline.hooks,
+        },
+        task_id=task_id,
     )
+
+
+async def _publish_or_record_failure(
+    services: AppServices,
+    pipeline: Pipeline,
+    values: dict[str, Any],
+    runner: str,
+) -> None:
+    task_id = pipeline.current_status.task_id
+    if not task_id:
+        raise RuntimeError("A durable task ID is required before publication")
+    try:
+        _publish_pipeline(pipeline, values, runner, task_id)
+    except Exception as error:
+        transition_run(pipeline, State.FAILURE, task_exception=str(error))
+        await services.backend.update_if_current(
+            pipeline, State.READY, len(pipeline.status)
+        )
+        raise
 
 
 async def create_pipeline(
@@ -223,20 +247,21 @@ async def create_pipeline(
         )
         return pipeline
 
-    pipeline.status.append(_ready_status(runner))
+    task_id = str(uuid4())
+    pipeline.status.append(_ready_status(runner, None if dry_run else task_id))
     if dry_run:
         return pipeline
     pipeline = await services.backend.create(pipeline)
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
         pipeline = await services.backend.update(pipeline)
-    result = _publish_pipeline(pipeline, values, runner)
+    await _publish_or_record_failure(services, pipeline, values, runner)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),
         pipeline.id,
         pipeline.name,
-        result.task_id,
+        task_id,
     )
     return pipeline
 
@@ -340,15 +365,19 @@ async def update_pipeline(
     current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})
     if requested_state is PipelineInputStatus.READY and current_state not in active_states:
+        task_id = str(uuid4())
         if current_state == "STAGED":
             transition_run(
                 pipeline,
                 State.READY,
                 runner=runner,
+                task_id=None if dry_run else task_id,
                 task_name=str(run_pipeline),
             )
         else:
-            pipeline.status.append(_ready_status(runner))
+            pipeline.status.append(
+                _ready_status(runner, None if dry_run else task_id)
+            )
         if dry_run:
             return pipeline
         pipeline = await services.backend.update_if_current(
@@ -356,13 +385,13 @@ async def update_pipeline(
         )
         if pipeline is None:
             raise InvalidPipeline(f"Pipeline {id} changed while it was submitted.")
-        result = _publish_pipeline(pipeline, values, runner)
+        await _publish_or_record_failure(services, pipeline, values, runner)
         logger.info(
             "user=%s, action=run_pipeline, id=%s, name=%s, state=READY, task_id=%s",
             _caller_name(caller),
             pipeline.id,
             pipeline.name,
-            result.task_id,
+            task_id,
         )
         logger.info(
             "user=%s, action=update_pipeline, id=%s, name=%s",
@@ -407,7 +436,8 @@ async def submit_event_pipeline(
     pipeline, values, runner, _ = _prepare_new_pipeline(
         services, pipeline_input, validate_ready=False
     )
-    pipeline.status.append(_ready_status(runner))
+    task_id = str(uuid4())
+    pipeline.status.append(_ready_status(runner, task_id))
     pipeline = await services.backend.create(pipeline)
     pipeline.parameters.append(Parameter.from_value("id", str(pipeline.id)))
     pipeline = _normalize_pipeline(
@@ -420,12 +450,12 @@ async def submit_event_pipeline(
         validate=True,
     )
     pipeline = await services.backend.update(pipeline)
-    result = _publish_pipeline(pipeline, values, runner)
+    await _publish_or_record_failure(services, pipeline, values, runner)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),
         pipeline.id,
         pipeline.name,
-        result.task_id,
+        task_id,
     )
     return pipeline

@@ -15,6 +15,7 @@ def pipeline(state):
     [
         (State.STAGED, State.READY),
         (State.READY, State.STARTED),
+        (State.READY, State.FAILURE),
         (State.STARTED, State.RETRY),
         (State.RETRY, State.STARTED),
         (State.STARTED, State.ABORTING),

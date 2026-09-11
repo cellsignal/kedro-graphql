@@ -104,7 +104,7 @@ async def test_create_pipeline_service_stages_without_submission(mock_app):
     backend = _backend()
     services = _services(mock_app, backend)
 
-    with patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
+    with patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish:
         created = await create_pipeline(
             services,
             _pipeline_input("STAGED"),
@@ -117,7 +117,47 @@ async def test_create_pipeline_service_stages_without_submission(mock_app):
     assert all(dataset.tags is not None for dataset in created.data_catalog)
     backend.create.assert_awaited_once()
     backend.update.assert_not_awaited()
-    delay.assert_not_called()
+    publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_persists_task_id_before_publication(mock_app):
+    backend = _backend()
+    services = _services(mock_app, backend)
+
+    with (
+        patch("kedro_graphql.pipeline_service.uuid4", return_value="task-id"),
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+    ):
+        created = await create_pipeline(services, _pipeline_input("READY"), None)
+
+    persisted = backend.create.await_args.args[0]
+    assert persisted.current_status.task_id == "task-id"
+    assert created.current_status.task_id == "task-id"
+    assert publish.call_args.kwargs["task_id"] == "task-id"
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_records_publication_failure(mock_app):
+    backend = _backend()
+    services = _services(mock_app, backend)
+
+    with (
+        patch("kedro_graphql.pipeline_service.uuid4", return_value="task-id"),
+        patch(
+            "kedro_graphql.pipeline_service.run_pipeline.apply_async",
+            side_effect=RuntimeError("broker unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="broker unavailable"),
+    ):
+        await create_pipeline(services, _pipeline_input("READY"), None)
+
+    failed, expected_state, status_count = backend.update_if_current.await_args.args
+    assert expected_state is State.READY
+    assert status_count == 1
+    assert failed.current_status.state is State.FAILURE
+    assert failed.current_status.task_id == "task-id"
+    assert failed.current_status.task_exception == "broker unavailable"
 
 
 @pytest.mark.asyncio
@@ -171,7 +211,7 @@ message: default
         }
     )
 
-    with patch("kedro_graphql.pipeline_service.run_pipeline.delay"):
+    with patch("kedro_graphql.pipeline_service.run_pipeline.apply_async"):
         created = await create_pipeline(services, pipeline_input, None)
 
     serial = created.to_kedro()
@@ -222,7 +262,7 @@ text_in:
         }
     )
 
-    with patch("kedro_graphql.pipeline_service.run_pipeline.delay"):
+    with patch("kedro_graphql.pipeline_service.run_pipeline.apply_async"):
         created = await create_pipeline(services, pipeline_input, None)
 
     assert created.to_kedro()["data_catalog"] == {
@@ -265,8 +305,10 @@ async def test_update_pipeline_service_persists_once_before_submission(
     backend.read.return_value = stored
     services = _services(mock_app, backend)
 
-    with patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
-        delay.return_value.task_id = "task-id"
+    with (
+        patch("kedro_graphql.pipeline_service.uuid4", return_value="task-id"),
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+    ):
         updated = await update_pipeline(
             services,
             str(stored.id),
@@ -276,14 +318,36 @@ async def test_update_pipeline_service_persists_once_before_submission(
 
     assert updated.status[-1].state is State.READY
     backend.update_if_current.assert_awaited_once()
-    assert delay.call_count == 1
-    assert delay.call_args.kwargs["parameters"] == {
+    assert updated.current_status.task_id == "task-id"
+    assert publish.call_count == 1
+    assert publish.call_args.kwargs["task_id"] == "task-id"
+    assert publish.call_args.kwargs["kwargs"]["parameters"] == {
         "duration": 1,
         "event": "placeholder",
         "example": "hello",
         "id": "placeholder",
         "runner_kwargs": {"is_async": True},
     }
+
+
+@pytest.mark.asyncio
+async def test_update_pipeline_does_not_publish_after_concurrent_change(mock_app):
+    stored = _staged_pipeline()
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    backend.update_if_current.side_effect = None
+    backend.update_if_current.return_value = None
+    services = _services(mock_app, backend)
+
+    with (
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+        pytest.raises(InvalidPipeline, match="changed while it was submitted"),
+    ):
+        await update_pipeline(
+            services, str(stored.id), _pipeline_input("READY"), None
+        )
+
+    publish.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -296,14 +360,14 @@ async def test_update_pipeline_rejects_name_change_before_side_effects(mock_app)
     pipeline_input.name = "different"
 
     with (
-        patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay,
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
         pytest.raises(InvalidPipeline, match="Pipeline name cannot be changed"),
     ):
         await update_pipeline(services, str(stored.id), pipeline_input, None)
 
     backend.update.assert_not_awaited()
     backend.update_if_current.assert_not_awaited()
-    delay.assert_not_called()
+    publish.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -384,8 +448,10 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
         {"key": "value"},
     )
 
-    with patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
-        delay.return_value.task_id = "task-id"
+    with (
+        patch("kedro_graphql.pipeline_service.uuid4", return_value="task-id"),
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+    ):
         created = await submit_event_pipeline(
             services,
             "event00",
@@ -394,6 +460,7 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
         )
 
     assert [status.state for status in created.status] == [State.READY]
+    assert created.current_status.task_id == "task-id"
     id_parameter = next(
         parameter for parameter in created.parameters if parameter.name == "id"
     )
@@ -402,4 +469,5 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
     assert all(dataset.tags is not None for dataset in created.data_catalog)
     backend.create.assert_awaited_once()
     backend.update.assert_awaited_once()
-    assert delay.call_args.kwargs["parameters"]["id"] == str(created.id)
+    assert publish.call_args.kwargs["task_id"] == "task-id"
+    assert publish.call_args.kwargs["kwargs"]["parameters"]["id"] == str(created.id)

@@ -6,7 +6,7 @@ from .models import Pipeline, State
 TERMINAL_STATES = {State.ABORTED, State.FAILURE, State.SUCCESS}
 TRANSITIONS = {
     State.STAGED: {State.READY},
-    State.READY: {State.STARTED, State.ABORTING},
+    State.READY: {State.STARTED, State.ABORTING, State.FAILURE},
     State.STARTED: {
         State.RETRY,
         State.ABORTING,
