@@ -159,14 +159,6 @@
 * [plugins](#plugins)
 * [plugins.plugins](#plugins.plugins)
 * [runners](#runners)
-* [runners.argo](#runners.argo)
-* [runners.argo.argo](#runners.argo.argo)
-  * [ArgoWorkflowsRunner](#runners.argo.argo.ArgoWorkflowsRunner)
-    * [create\_default\_data\_set](#runners.argo.argo.ArgoWorkflowsRunner.create_default_data_set)
-    * [\_run](#runners.argo.argo.ArgoWorkflowsRunner._run)
-    * [create\_workflow](#runners.argo.argo.ArgoWorkflowsRunner.create_workflow)
-    * [get\_workflow](#runners.argo.argo.ArgoWorkflowsRunner.get_workflow)
-    * [workflow\_logs](#runners.argo.argo.ArgoWorkflowsRunner.workflow_logs)
 * [signed\_url](#signed_url)
 * [signed\_url.base](#signed_url.base)
   * [SignedUrlProvider](#signed_url.base.SignedUrlProvider)
@@ -2571,98 +2563,6 @@ Factory method for async instantiation PipelineLogStream objects.
 <a id="runners"></a>
 
 # Module runners
-
-<a id="runners.argo"></a>
-
-# Module runners.argo
-
-<a id="runners.argo.argo"></a>
-
-# Module runners.argo.argo
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner"></a>
-
-## ArgoWorkflowsRunner Objects
-
-```python
-class ArgoWorkflowsRunner(AbstractRunner)
-```
-
-``ArgoWorkflowsRunner`` is an ``AbstractRunner`` implementation. It can be used
-to run pipelines on [argo workflows](https://argoproj.github.io/argo-workflows/).
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.create_default_data_set"></a>
-
-#### create\_default\_data\_set
-
-```python
-def create_default_data_set(ds_name: str) -> AbstractDataSet
-```
-
-Factory method for creating the default data set for the runner.
-
-NOTE THIS SHOULD BE CHANGED TO SOMETHING S3 COMPATIBLE.
-
-**Arguments**:
-
-- `ds_name` - Name of the missing data set
-
-**Returns**:
-
-  An instance of an implementation of AbstractDataSet to be used
-  for all unregistered data sets.
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner._run"></a>
-
-#### \_run
-
-```python
-def _run(pipeline: Pipeline,
-         catalog: DataCatalog,
-         hook_manager: PluginManager = None,
-         session_id: str = None) -> None
-```
-
-The method implementing argo workflows pipeline running.
-Example logs output using this implementation:
-
-
-
-**Arguments**:
-
-- `pipeline` - The ``Pipeline`` to run.
-- `catalog` - The ``DataCatalog`` from which to fetch data.
-- `session_id` - The id of the session.
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.create_workflow"></a>
-
-#### create\_workflow
-
-```python
-def create_workflow(manifest)
-```
-
-
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.get_workflow"></a>
-
-#### get\_workflow
-
-```python
-def get_workflow(name)
-```
-
-
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.workflow_logs"></a>
-
-#### workflow\_logs
-
-```python
-def workflow_logs(name)
-```
-
-Inspired by https://github.com/argoproj/argo-workflows/issues/4017
 
 <a id="signed_url"></a>
 
