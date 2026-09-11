@@ -21,7 +21,7 @@ from omegaconf import OmegaConf
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.utils import add_param_to_feed_dict, run_sync
-from kedro_graphql.runners import init_runner
+from kedro_graphql.runners import has_external_lifecycle, init_runner
 from kedro_graphql.pipeline_config import (
     filter_only_missing_pipeline,
     filter_pipeline,
@@ -292,7 +292,11 @@ class KedroGraphqlTask(AbortableTask):
         """
 
         p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None and p.current_status.state is State.ABORTING:
+        if (
+            p is not None
+            and p.current_status.state is State.ABORTING
+            and not has_external_lifecycle(kwargs.get("runner"))
+        ):
             self._transition(
                 kwargs["id"], task_id, State.ABORTED, task_result=str(retval)
             )
@@ -339,6 +343,7 @@ def _run_pipeline_in_child_process(
     pipeline_name: str,
     pipeline_id: str,
     task_id: str,
+    runner_metadata: Mapping[str, str],
     broker_url: str,
     result_queue,
 ):
@@ -397,6 +402,7 @@ def _run_pipeline_in_child_process(
     runner_instance.run_context = {
         "pipeline_id": pipeline_id,
         "task_id": task_id,
+        "metadata": dict(runner_metadata),
     }
 
     try:
@@ -604,6 +610,10 @@ def run_pipeline(self,
                     name,
                     id,
                     self.request.id,
+                    {
+                        item.key: item.value
+                        for item in p.current_status.metadata
+                    },
                     self._app.conf["broker_url"],
                     result_queue,
                 ),

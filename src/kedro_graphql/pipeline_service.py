@@ -10,6 +10,7 @@ from uuid import uuid4
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES
 from fastapi.encoders import jsonable_encoder
+from starlette.concurrency import run_in_threadpool
 
 from . import __version__ as kedro_graphql_version
 from .exceptions import InvalidPipeline
@@ -31,8 +32,8 @@ from .pipeline_config import (
     validate_pipeline_config,
 )
 from .project import load_pipeline_configuration
-from .runners import get_runner_class
-from .run_state import InvalidRunTransition, transition_run
+from .runners import ExternalRunnerLifecycle, get_runner_class, init_runner
+from .run_state import TERMINAL_STATES, InvalidRunTransition, transition_run
 from .tasks import run_pipeline
 from .utils import generate_unique_paths
 
@@ -126,6 +127,66 @@ async def _read_pipeline(services: AppServices, id: str) -> Pipeline:
     except Exception as error:
         raise InvalidPipeline(f"Error retrieving pipeline {id}: {error}") from error
     return pipeline
+
+
+def _external_runner(pipeline: Pipeline) -> ExternalRunnerLifecycle | None:
+    status = pipeline.current_status
+    if not status.runner or not status.task_id:
+        return None
+    runner_class = get_runner_class(status.runner)
+    if not issubclass(runner_class, ExternalRunnerLifecycle):
+        return None
+    parameters = pipeline.to_kedro()["parameters"]
+    runner = init_runner(
+        status.runner, **(parameters.get("runner_kwargs") or {})
+    )
+    runner.emit_metadata = status.update_metadata
+    runner.run_context = {
+        "pipeline_id": str(pipeline.id),
+        "task_id": status.task_id,
+        "metadata": {item.key: item.value for item in status.metadata},
+    }
+    return runner
+
+
+async def _reconcile_external(
+    services: AppServices,
+    pipeline: Pipeline,
+    *,
+    terminate: bool = False,
+) -> Pipeline:
+    if pipeline.current_status.state in TERMINAL_STATES:
+        return pipeline
+    runner = _external_runner(pipeline)
+    if runner is None:
+        return pipeline
+
+    status = pipeline.current_status
+    expected_state = status.state
+    status_count = len(pipeline.status)
+    original_metadata = [(item.key, item.value) for item in status.metadata]
+    if terminate:
+        await run_in_threadpool(runner.terminate)
+    target = await run_in_threadpool(runner.reconcile)
+    if target is not None:
+        if not isinstance(target, State):
+            raise InvalidPipeline("External runner reconciliation must return a State")
+        try:
+            transition_run(pipeline, target)
+        except InvalidRunTransition as error:
+            raise InvalidPipeline(str(error)) from error
+
+    metadata = [(item.key, item.value) for item in status.metadata]
+    if status.state is expected_state and metadata == original_metadata:
+        return pipeline
+    updated = await services.backend.update_if_current(
+        pipeline, expected_state, status_count
+    )
+    return updated or await _read_pipeline(services, str(pipeline.id))
+
+
+async def read_pipeline(services: AppServices, id: str) -> Pipeline:
+    return await _reconcile_external(services, await _read_pipeline(services, id))
 
 
 def _ready_status(runner: str, task_id: str | None = None) -> PipelineStatus:
@@ -308,6 +369,8 @@ async def abort_pipeline(
                     f"Pipeline {id} changed while abort was requested."
                 )
         current = pipeline.current_status
+    pipeline = await _reconcile_external(services, pipeline, terminate=True)
+    current = pipeline.current_status
     AbortableAsyncResult(current.task_id, app=services.celery).abort()
     logger.info(
         "user=%s, action=abort_pipeline, id=%s, name=%s, task_id=%s",
@@ -329,7 +392,7 @@ async def update_pipeline(
 ) -> Pipeline:
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    pipeline = await _read_pipeline(services, id)
+    pipeline = await read_pipeline(services, id)
     if pipeline_input.name != pipeline.name:
         raise InvalidPipeline(
             f"Pipeline name cannot be changed from {pipeline.name} to {pipeline_input.name}."
@@ -417,6 +480,30 @@ async def update_pipeline(
         raise InvalidPipeline(f"Pipeline {id} changed while it was updated.")
     logger.info(
         "user=%s, action=update_pipeline, id=%s, name=%s",
+        _caller_name(caller),
+        pipeline.id,
+        pipeline.name,
+    )
+    return pipeline
+
+
+async def delete_pipeline(
+    services: AppServices,
+    id: str,
+    caller: Mapping[str, Any] | None,
+) -> Pipeline:
+    pipeline = await read_pipeline(services, id)
+    if pipeline.current_status.state.value in UNREADY_STATES.union(
+        {"READY", "ABORTING"}
+    ):
+        pipeline = await abort_pipeline(services, id, caller, pipeline=pipeline)
+        if pipeline.current_status.state not in TERMINAL_STATES:
+            raise InvalidPipeline(
+                f"Pipeline {id} termination must be confirmed before deletion."
+            )
+    await services.backend.delete(id=id)
+    logger.info(
+        "user=%s, action=delete_pipeline, id=%s, name=%s",
         _caller_name(caller),
         pipeline.id,
         pipeline.name,

@@ -16,6 +16,7 @@ from kedro_graphql.models import (
     Tag,
 )
 from kedro.runner import SequentialRunner
+from kedro_graphql.runners import ExternalRunnerLifecycle
 from kedro_graphql.tasks import (
     KedroGraphqlTask,
     _run_pipeline_in_child_process,
@@ -29,6 +30,14 @@ class MetadataRunner(SequentialRunner):
     def run(self, *args, **kwargs):
         self.emit_metadata({"x-runner-id": "external-id"})
         return super().run(*args, **kwargs)
+
+
+class LifecycleRunner(ExternalRunnerLifecycle, SequentialRunner):
+    def reconcile(self):
+        return None
+
+    def terminate(self):
+        return None
 
 
 @pytest.mark.asyncio
@@ -118,6 +127,7 @@ def test_run_pipeline_child_process_recreates_catalog():
                 pipeline_name="test_pipeline",
                 pipeline_id="pipeline-id",
                 task_id="test-task-id",
+                runner_metadata={},
                 broker_url="redis://localhost:6379/15",
                 result_queue=result_queue
             )
@@ -166,6 +176,7 @@ def test_run_pipeline_child_process_reports_abort_once():
             "pipeline",
             "pipeline-id",
             "task",
+            {},
             "redis://localhost",
             result_queue,
         )
@@ -196,6 +207,43 @@ def test_duplicate_and_missing_callback_delivery_is_idempotent():
     backend.update_if_current.assert_not_awaited()
 
 
+def test_external_runner_local_exit_does_not_confirm_abort():
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[
+            PipelineStatus(
+                state=State.ABORTING,
+                runner="tests.test_tasks.LifecycleRunner",
+                task_id="task-id",
+            )
+        ],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+    task._gql_config = SimpleNamespace(log_tmp_dir="/tmp")
+
+    with patch("kedro_graphql.tasks.shutil.rmtree"):
+        task.after_return(
+            "SUCCESS",
+            "aborted",
+            "task-id",
+            (),
+            {
+                "id": str(pipeline.id),
+                "runner": "tests.test_tasks.LifecycleRunner",
+            },
+            None,
+        )
+
+    assert pipeline.current_status.state is State.ABORTING
+    backend.update_if_current.assert_not_awaited()
+
+
 def test_child_emits_runner_metadata_over_parent_queue():
     result_queue = MagicMock()
     runner = MagicMock()
@@ -218,6 +266,7 @@ def test_child_emits_runner_metadata_over_parent_queue():
             "pipeline",
             "pipeline-id",
             "task-id",
+            {"x-existing": "value"},
             "redis://localhost",
             result_queue,
         )
@@ -229,4 +278,5 @@ def test_child_emits_runner_metadata_over_parent_queue():
     assert runner.run_context == {
         "pipeline_id": "pipeline-id",
         "task_id": "task-id",
+        "metadata": {"x-existing": "value"},
     }

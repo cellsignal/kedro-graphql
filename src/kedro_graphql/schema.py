@@ -37,6 +37,8 @@ from .models import (
 )
 from .pipeline_service import (
     create_pipeline as create_pipeline_service,
+    delete_pipeline as delete_pipeline_service,
+    read_pipeline as read_pipeline_service,
     update_pipeline as update_pipeline_service,
 )
 from .permissions import AppPermission, permission_class
@@ -359,13 +361,7 @@ class Query:
 
     @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline")]), PipelineExtension()])
     async def read_pipeline(self, id: str, info: Info) -> Pipeline:
-        try:
-            p = await _services(info).backend.read(id=id)
-            if p is None:
-                raise InvalidPipeline(
-                    f"Pipeline {id} does not exist in the project.")
-        except Exception as e:
-            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+        p = await read_pipeline_service(_services(info), id)
         logger.info(
             f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline, id={id}")
         return p
@@ -474,17 +470,11 @@ class Mutation:
 
     @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="delete_pipeline")]), PipelineExtension()])
     async def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
-        try:
-            p = await _services(info).backend.read(id=id)
-            if p is None:
-                raise InvalidPipeline(
-                    f"Pipeline {id} does not exist in the project.")
-        except Exception as e:
-            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
-
-        await _services(info).backend.delete(id=id)
-        logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
-        return p
+        return await delete_pipeline_service(
+            _services(info),
+            id,
+            _permission_class(info).get_user_info(info),
+        )
 
     @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[AppPermission(action="create_dataset")])])
     async def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: Optional[int] = None) -> List[SignedUrl | SignedUrls | None]:
