@@ -143,7 +143,7 @@ record the exact version for the AB Discovery plan. The release must contain the
 `codex/data-model-hardening` baseline as well as this merge train. Publishing is
 the dependency gate between the two repository merge trains.
 
-Release candidate: `kedro-graphql==1.5.2.dev4`.
+Published release: `kedro-graphql==1.5.2.dev4`.
 
 ## Merge order
 
