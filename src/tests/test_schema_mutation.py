@@ -208,7 +208,7 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "create", new_callable=AsyncMock) as create, \
-             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={"pipeline": {
@@ -227,7 +227,7 @@ class TestSchemaMutations:
         assert response.data["createPipeline"]["nodes"] == [{"name": "first"}]
         assert "createdAt" in response.data["createPipeline"]
         create.assert_not_awaited()
-        delay.assert_not_called()
+        publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_pipeline_merges_always_and_requested_hooks(
@@ -271,7 +271,7 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "update", new_callable=AsyncMock) as update, \
-             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={
@@ -290,7 +290,7 @@ class TestSchemaMutations:
         assert response.data["updatePipeline"]["id"] == str(mock_pipeline_staged.id)
         assert response.data["updatePipeline"]["status"][-1] == {"state": "READY"}
         update.assert_not_awaited()
-        delay.assert_not_called()
+        publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_pipeline_00(self,
