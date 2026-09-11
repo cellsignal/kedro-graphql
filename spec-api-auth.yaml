@@ -45,7 +45,7 @@ config:
     event00: conf
     example00: conf
     example01: conf
+  pipeline_submission_max_bytes: 1048576
   project_version: "1.0.1"
   root_path: null
   runner: "kedro.runner.SequentialRunner"
-

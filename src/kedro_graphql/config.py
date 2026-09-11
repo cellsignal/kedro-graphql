@@ -74,6 +74,7 @@ class KedroGraphQLConfig(BaseModel):
         }
     )
     pipeline_config_sources: dict[str, str] = Field(default_factory=dict)
+    pipeline_submission_max_bytes: int = Field(default=1_048_576, gt=0)
     project_name: str | None = Field(default=None, alias="KEDRO_PROJECT_NAME")
     project_version: str = "None"
     root_path: str = ""

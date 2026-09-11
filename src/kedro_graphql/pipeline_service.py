@@ -30,6 +30,7 @@ from .pipeline_config import (
     filter_pipeline,
     merge_parameters,
     normalize_pipeline_config,
+    validate_configuration_boundary,
     validate_pipeline_config,
 )
 from .project import load_pipeline_configuration
@@ -81,6 +82,9 @@ def _normalize_pipeline(
             for name, value in merged_parameters.items()
             if name == "runner_kwargs"
         }
+    )
+    validate_configuration_boundary(
+        catalog, parameters, services.config.pipeline_submission_max_bytes
     )
 
     datasets = {dataset.name: dataset for dataset in pipeline.data_catalog}
