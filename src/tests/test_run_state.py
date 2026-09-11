@@ -19,6 +19,8 @@ def pipeline(state):
         (State.STARTED, State.RETRY),
         (State.RETRY, State.STARTED),
         (State.STARTED, State.ABORTING),
+        (State.STARTED, State.ABORTED),
+        (State.RETRY, State.ABORTED),
         (State.ABORTING, State.ABORTED),
         (State.STARTED, State.SUCCESS),
         (State.STARTED, State.FAILURE),

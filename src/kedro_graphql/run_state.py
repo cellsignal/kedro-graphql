@@ -10,10 +10,11 @@ TRANSITIONS = {
     State.STARTED: {
         State.RETRY,
         State.ABORTING,
+        State.ABORTED,
         State.FAILURE,
         State.SUCCESS,
     },
-    State.RETRY: {State.STARTED, State.ABORTING, State.FAILURE},
+    State.RETRY: {State.STARTED, State.ABORTING, State.ABORTED, State.FAILURE},
     State.ABORTING: {State.ABORTED},
 }
 

@@ -40,6 +40,16 @@ The following table describes each configuration attribute available:
 | `signed_url_max_expires_in_sec`    | integer | `43200` | Maximum allowed expiration time (in seconds) for presigned URLs. Default: 12 hours. |
 | `signed_url_provider`                  | string | `kedro_graphql.signed_url.s3_provider.S3Provider` | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
 
+External runners that outlive the Celery worker should also inherit
+`kedro_graphql.runners.ExternalRunnerLifecycle`. Implement `terminate()` to
+request external cancellation and `reconcile()` to inspect the external system
+and return a confirmed `kedro_graphql.models.State`, or `None` while no state
+change is confirmed. Both methods receive the same `run_context` and
+`emit_metadata` attributes as `run()`. The context contains `pipeline_id`,
+`task_id`, and persisted `x-` metadata. Reads reconcile the stored state;
+aborts and deletes request termination and retain the pipeline in `ABORTING`
+until `reconcile()` confirms `ABORTED`.
+
 
 Configuration can be supplied through one or more of the following methods:
 
@@ -94,7 +104,6 @@ Complex dictionary configurations must be provided as JSON strings:
 ```bash
 --events-config '{"event1": {"source": "app", "type": "test"}}'
 --permissions-role-to-action-map '{"admin": ["create_pipeline", "read_pipeline"]}'
---pipeline-config-sources '{"analysis": "/runtime/pipelines/demeter"}'
 ```
 
 When using environment variables, list and dictionary values should be provided as:
@@ -249,7 +258,6 @@ provide them as JSON strings.
 | permissions                                        | --permissions                                    | kedro_graphql.permissions.IsAuthenticatedAlways     |
 | permissions_group_to_role_map                      | --permissions-group-to-role-map                 | '{"EXTERNAL_GROUP_NAME": "admin"}'                  |
 | permissions_role_to_action_map                     | --permissions-role-to-action-map                | '{"admin": ["create_pipeline", "read_pipeline"]}'    |
-| pipeline_config_sources                            | --pipeline-config-sources                       | '{"analysis": "/runtime/pipelines/demeter"}'          |
 | project_version                                    | --project-version                                | 1.0.0                                                |
 | root_path                                          | --root-path                                      | /api/v1                                              |
 | runner                                             | --runner                                         | kedro.runner.SequentialRunner                       |

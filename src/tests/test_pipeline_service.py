@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from cloudevents.http import CloudEvent
+from kedro.runner import SequentialRunner
 
 from kedro_graphql.exceptions import InvalidPipeline
 from kedro_graphql.models import (
@@ -18,10 +19,26 @@ from kedro_graphql.models import (
 from kedro_graphql.pipeline_service import (
     abort_pipeline,
     create_pipeline,
+    delete_pipeline,
+    read_pipeline,
     submit_event_pipeline,
     update_pipeline,
 )
 from kedro_graphql.project import ProjectMetadata, load_project_metadata
+from kedro_graphql.runners import ExternalRunnerLifecycle
+
+
+class FakeExternalRunner(ExternalRunnerLifecycle, SequentialRunner):
+    reconciled_state = None
+    calls = []
+
+    def reconcile(self):
+        self.calls.append(("reconcile", self.run_context.copy()))
+        return self.reconciled_state
+
+    def terminate(self):
+        self.calls.append(("terminate", self.run_context.copy()))
+        self.emit_metadata({"x-external-termination": "requested"})
 
 
 def _services(mock_app, backend):
@@ -51,6 +68,7 @@ def _backend(pipeline_id="000000000000000000000001"):
         update=AsyncMock(side_effect=update),
         update_if_current=AsyncMock(side_effect=update_if_current),
         read=AsyncMock(),
+        delete=AsyncMock(),
     )
 
 
@@ -86,6 +104,21 @@ def _staged_pipeline():
         id="000000000000000000000001",
         name="example00",
         status=[PipelineStatus(state=State.STAGED)],
+    )
+
+
+def _external_pipeline(state=State.STARTED):
+    return Pipeline(
+        id="000000000000000000000001",
+        name="example00",
+        status=[
+            PipelineStatus(
+                state=state,
+                runner="tests.test_pipeline_service.FakeExternalRunner",
+                task_id="task-id",
+                metadata=[{"key": "x-external-id", "value": "execution-id"}],
+            )
+        ],
     )
 
 
@@ -433,6 +466,87 @@ async def test_abort_pipeline_service_uses_explicit_celery_service(
     backend.update_if_current.assert_awaited_once()
     assert aborted.status[-1].state is State.ABORTING
     assert aborted.status[-1].abort_requested_at is not None
+
+
+@pytest.mark.asyncio
+async def test_read_pipeline_reconciles_external_execution(mock_app):
+    stored = _external_pipeline()
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    FakeExternalRunner.calls = []
+    FakeExternalRunner.reconciled_state = State.SUCCESS
+
+    reconciled = await read_pipeline(services, str(stored.id))
+
+    assert reconciled.current_status.state is State.SUCCESS
+    operation, context = FakeExternalRunner.calls[0]
+    assert operation == "reconcile"
+    assert context == {
+        "pipeline_id": str(stored.id),
+        "task_id": "task-id",
+        "metadata": {"x-external-id": "execution-id"},
+    }
+    backend.update_if_current.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_abort_external_execution_remains_aborting_until_confirmed(mock_app):
+    stored = _external_pipeline()
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    FakeExternalRunner.calls = []
+    FakeExternalRunner.reconciled_state = None
+
+    with patch("kedro_graphql.pipeline_service.AbortableAsyncResult") as result:
+        aborting = await abort_pipeline(services, str(stored.id), None)
+
+    assert aborting.current_status.state is State.ABORTING
+    assert {item.key: item.value for item in aborting.current_status.metadata} == {
+        "x-external-id": "execution-id",
+        "x-external-termination": "requested",
+    }
+    assert [call[0] for call in FakeExternalRunner.calls] == [
+        "terminate",
+        "reconcile",
+    ]
+    assert backend.update_if_current.await_count == 2
+    result.return_value.abort.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_delete_external_execution_waits_for_terminal_confirmation(mock_app):
+    stored = _external_pipeline(State.ABORTING)
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    FakeExternalRunner.calls = []
+    FakeExternalRunner.reconciled_state = None
+
+    with (
+        patch("kedro_graphql.pipeline_service.AbortableAsyncResult"),
+        pytest.raises(InvalidPipeline, match="termination must be confirmed"),
+    ):
+        await delete_pipeline(services, str(stored.id), None)
+
+    assert stored.current_status.state is State.ABORTING
+    backend.delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_external_execution_after_confirmation(mock_app):
+    stored = _external_pipeline(State.ABORTING)
+    backend = _backend(str(stored.id))
+    backend.read.return_value = stored
+    services = _services(mock_app, backend)
+    FakeExternalRunner.calls = []
+    FakeExternalRunner.reconciled_state = State.ABORTED
+
+    deleted = await delete_pipeline(services, str(stored.id), None)
+
+    assert deleted.current_status.state is State.ABORTED
+    backend.delete.assert_awaited_once_with(id=str(stored.id))
 
 
 @pytest.mark.asyncio
