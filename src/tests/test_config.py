@@ -17,6 +17,7 @@ def test_defaults_are_typed():
     assert config.app == "kedro_graphql.asgi.create_app"
     assert config.imports == ["kedro_graphql.plugins.plugins"]
     assert config.celery_abort_polling_interval == 5
+    assert config.pipeline_submission_max_bytes == 1_048_576
 
 
 def test_configuration_precedence(tmp_path):
@@ -72,6 +73,11 @@ def test_mapping_parsing():
 def test_invalid_structured_value_fails():
     with pytest.raises(ValidationError):
         KedroGraphQLConfig(events_config="not json")
+
+
+def test_submission_limit_must_be_positive():
+    with pytest.raises(ValidationError):
+        KedroGraphQLConfig(pipeline_submission_max_bytes=0)
 
 
 def test_unknown_yaml_setting_fails(tmp_path):

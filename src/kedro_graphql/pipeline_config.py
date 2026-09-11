@@ -1,10 +1,67 @@
 """Pipeline-aware catalog resolution and validation."""
 
+import json
+from collections.abc import Mapping
+
 from kedro.io import AbstractDataset, DataCatalog, MemoryDataset
 from kedro.io.core import DatasetError
 from omegaconf import OmegaConf
 
 from .exceptions import InvalidPipeline
+
+
+_CREDENTIAL_FIELDS = {
+    "access_key",
+    "access_token",
+    "api_key",
+    "apikey",
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+    "client_secret",
+    "password",
+    "passwd",
+    "private_key",
+    "refresh_token",
+    "secret",
+    "secret_key",
+    "token",
+}
+
+
+def validate_configuration_boundary(catalog, parameters, max_bytes):
+    """Reject inline credentials and configuration too large for transport."""
+
+    def visit(value, path):
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                normalized = str(key).lower().replace("-", "_")
+                item_path = f"{path}.{key}"
+                if normalized in _CREDENTIAL_FIELDS:
+                    raise InvalidPipeline(
+                        f"Credential-bearing configuration is not allowed: {item_path}"
+                    )
+                if normalized == "credentials" and not isinstance(item, str):
+                    raise InvalidPipeline(
+                        f"Inline credentials are not allowed: {item_path}"
+                    )
+                visit(item, item_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                visit(item, f"{path}[{index}]")
+
+    payload = {"data_catalog": catalog, "parameters": parameters}
+    visit(payload, "configuration")
+    try:
+        size = len(
+            json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        )
+    except (TypeError, ValueError) as error:
+        raise InvalidPipeline(f"Configuration is not JSON serializable: {error}") from error
+    if size > max_bytes:
+        raise InvalidPipeline(
+            f"Resolved pipeline configuration is {size} bytes; limit is {max_bytes} bytes."
+        )
 
 
 def merge_parameters(defaults, overrides):

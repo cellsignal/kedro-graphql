@@ -10,6 +10,7 @@ from kedro.runner import SequentialRunner
 
 from kedro_graphql.exceptions import InvalidPipeline
 from kedro_graphql.models import (
+    ParameterInput,
     ParameterType,
     Pipeline,
     PipelineInput,
@@ -351,6 +352,43 @@ text_in:
         await create_pipeline(
             services, PipelineInput.from_dict({"name": "example00"}), None
         )
+
+
+@pytest.mark.asyncio
+async def test_submission_rejects_credential_parameter_before_side_effects(mock_app):
+    backend = _backend()
+    services = _services(mock_app, backend)
+    pipeline_input = _pipeline_input("READY")
+    pipeline_input.parameters.append(
+        ParameterInput(name="api_key", value="do-not-persist")
+    )
+
+    with (
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+        pytest.raises(InvalidPipeline, match="api_key"),
+    ):
+        await create_pipeline(services, pipeline_input, None)
+
+    backend.create.assert_not_awaited()
+    publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_submission_rejects_oversized_resolved_configuration(mock_app):
+    backend = _backend()
+    services = _services(mock_app, backend)
+    services.config = services.config.model_copy(
+        update={"pipeline_submission_max_bytes": 32}
+    )
+
+    with (
+        patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish,
+        pytest.raises(InvalidPipeline, match="limit is 32 bytes"),
+    ):
+        await create_pipeline(services, _pipeline_input("READY"), None)
+
+    backend.create.assert_not_awaited()
+    publish.assert_not_called()
 
 
 @pytest.mark.asyncio
