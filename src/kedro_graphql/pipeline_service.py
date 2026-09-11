@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES
+from bson import ObjectId
 from fastapi.encoders import jsonable_encoder
 from starlette.concurrency import run_in_threadpool
 
@@ -296,10 +297,10 @@ async def create_pipeline(
         if dry_run:
             return pipeline
         logger.info("Staging pipeline %s", pipeline.name)
-        pipeline = await services.backend.create(pipeline)
+        pipeline.id = str(ObjectId())
         if unique_paths:
             pipeline = generate_unique_paths(pipeline, unique_paths)
-            pipeline = await services.backend.update(pipeline)
+        pipeline = await services.backend.create(pipeline)
         logger.info(
             "user=%s, action=create_pipeline, id=%s, name=%s, state=STAGED",
             _caller_name(caller),
@@ -312,10 +313,10 @@ async def create_pipeline(
     pipeline.status.append(_ready_status(runner, None if dry_run else task_id))
     if dry_run:
         return pipeline
-    pipeline = await services.backend.create(pipeline)
+    pipeline.id = str(ObjectId())
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
-        pipeline = await services.backend.update(pipeline)
+    pipeline = await services.backend.create(pipeline)
     await _publish_or_record_failure(services, pipeline, values, runner)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
@@ -525,7 +526,7 @@ async def submit_event_pipeline(
     )
     task_id = str(uuid4())
     pipeline.status.append(_ready_status(runner, task_id))
-    pipeline = await services.backend.create(pipeline)
+    pipeline.id = str(ObjectId())
     pipeline.parameters.append(Parameter.from_value("id", str(pipeline.id)))
     pipeline = _normalize_pipeline(
         pipeline,
@@ -536,7 +537,7 @@ async def submit_event_pipeline(
         values.get("globals"),
         validate=True,
     )
-    pipeline = await services.backend.update(pipeline)
+    pipeline = await services.backend.create(pipeline)
     await _publish_or_record_failure(services, pipeline, values, runner)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",

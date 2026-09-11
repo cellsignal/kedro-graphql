@@ -16,6 +16,16 @@ async def test_backend_create(mock_app, mock_pipeline_no_task):
 
 
 @pytest.mark.asyncio
+async def test_backend_create_preserves_preallocated_id(mock_app, mock_pipeline_no_task):
+    pipeline_id = str(ObjectId())
+    mock_pipeline_no_task.id = pipeline_id
+
+    created = await mock_app.state.services.backend.create(mock_pipeline_no_task)
+
+    assert str(created.id) == pipeline_id
+
+
+@pytest.mark.asyncio
 async def test_backend_update(mock_app, mock_pipeline_no_task):
     p = await mock_app.state.services.backend.create(mock_pipeline_no_task)
     p.name = "example01"

@@ -223,9 +223,13 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        self._transition(
-            kwargs["id"], task_id, State.SUCCESS, task_result=str(retval)
-        )
+        if retval == "aborted":
+            if has_external_lifecycle(kwargs.get("runner")):
+                return
+            target = State.ABORTED
+        else:
+            target = State.SUCCESS
+        self._transition(kwargs["id"], task_id, target, task_result=str(retval))
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.

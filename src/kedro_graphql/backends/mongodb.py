@@ -125,7 +125,9 @@ class MongoBackend(BaseBackend):
         collection = self._get_collection()
 
         values = pipeline.to_dict()
-        values.pop("id")  # we dont have an id yet, we will get it after insert
+        pipeline_id = values.pop("id", None)
+        if pipeline_id is not None:
+            values["_id"] = ObjectId(pipeline_id)
         created = await collection.insert_one(values)
         created = await collection.find_one({"_id": created.inserted_id})
         created["id"] = str(created.pop("_id"))
