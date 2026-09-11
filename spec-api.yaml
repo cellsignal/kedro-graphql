@@ -40,8 +40,12 @@ config:
       - "subscribe_to_events"
       - "subscribe_to_logs"
       - "create_event"
+  pipeline_config_sources:
+    __default__: conf
+    event00: conf
+    example00: conf
+    example01: conf
   project_version: "1.0.1"
   root_path: null
   runner: "kedro.runner.SequentialRunner"
-
 

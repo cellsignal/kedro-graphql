@@ -214,6 +214,7 @@ class TestSchemaMutations:
                 variable_values={"pipeline": {
                     "name": "example00",
                     "state": "READY",
+                    "globals": {"message": "hello"},
                     "slices": [{"slice": "NODE_NAMES", "args": ["first"]}],
                     "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": "/tmp/text_in.txt"})}],
                     "parameters": [{"name": "example", "value": "hello"}],
@@ -468,10 +469,15 @@ class TestSchemaMutations:
             "name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}
         assert update_pipeline_resp.data["updatePipeline"]["dataCatalog"][1] == {
             "name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
-        assert update_pipeline_resp.data["updatePipeline"]["parameters"][0] == {
+        parameters = {
+            parameter["name"]: parameter
+            for parameter in update_pipeline_resp.data["updatePipeline"]["parameters"]
+        }
+        assert parameters["example"] == {
             "name": "example", "value": "hello", "type": "STRING"}
-        assert update_pipeline_resp.data["updatePipeline"]["parameters"][1] == {
+        assert parameters["duration"] == {
             "name": "duration", "value": "0.1", "type": "FLOAT"}
+        assert parameters["id"]["value"] == "placeholder"
         assert update_pipeline_resp.data["updatePipeline"]["tags"][0] == {
             "key": "author", "value": "opensean"}
         assert update_pipeline_resp.data["updatePipeline"]["tags"][1] == {

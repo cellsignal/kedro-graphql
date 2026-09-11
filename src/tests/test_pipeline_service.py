@@ -1,5 +1,6 @@
 import json
 from datetime import timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -20,6 +21,7 @@ from kedro_graphql.pipeline_service import (
     submit_event_pipeline,
     update_pipeline,
 )
+from kedro_graphql.project import ProjectMetadata, load_project_metadata
 
 
 def _services(mock_app, backend):
@@ -87,6 +89,16 @@ def _staged_pipeline():
     )
 
 
+def _runtime_config(tmp_path, catalog, parameters="", globals=""):
+    source = tmp_path / "runtime-config"
+    base = source / "base"
+    base.mkdir(parents=True)
+    (base / "catalog.yml").write_text(catalog)
+    (base / "parameters.yml").write_text(parameters)
+    (base / "globals.yml").write_text(globals)
+    return source
+
+
 @pytest.mark.asyncio
 async def test_create_pipeline_service_stages_without_submission(mock_app):
     backend = _backend()
@@ -106,6 +118,142 @@ async def test_create_pipeline_service_stages_without_submission(mock_app):
     backend.create.assert_awaited_once()
     backend.update.assert_not_awaited()
     delay.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_resolves_runtime_config_globals_and_overrides(
+    mock_app, tmp_path
+):
+    source = _runtime_config(
+        tmp_path,
+        """
+text_{kind}:
+  type: text.TextDataset
+  filepath: ${globals:data_dir}/text_{kind}.txt
+""",
+        """
+example: ${globals:message}
+options:
+  nested: default
+""",
+        """
+data_dir: /default
+message: default
+""",
+    )
+    config = mock_app.state.services.config.model_copy(
+        update={
+            "env": "base",
+            "pipeline_config_sources": {"example00": str(source)},
+        }
+    )
+    backend = _backend()
+    services = _services(mock_app, backend)
+    services.config = config
+    services.metadata = load_project_metadata(Path.cwd(), config)
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example00",
+            "state": "READY",
+            "globals": {"data_dir": "/request", "message": "requested"},
+            "parameters": [{"name": "options.nested", "value": "overridden"}],
+            "data_catalog": [
+                {
+                    "name": "text_in",
+                    "config": json.dumps(
+                        {
+                            "type": "text.TextDataset",
+                            "filepath": "/client/input.txt",
+                        }
+                    ),
+                }
+            ],
+        }
+    )
+
+    with patch("kedro_graphql.pipeline_service.run_pipeline.delay"):
+        created = await create_pipeline(services, pipeline_input, None)
+
+    serial = created.to_kedro()
+    assert serial["data_catalog"]["text_in"]["filepath"] == "/client/input.txt"
+    assert serial["data_catalog"]["text_out"]["filepath"] == "/request/text_out.txt"
+    assert serial["parameters"] == {
+        "example": "requested",
+        "options": {"nested": "overridden"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_slice_accepts_input_created_by_omitted_upstream_node(mock_app, tmp_path):
+    source = _runtime_config(
+        tmp_path,
+        """
+text_in:
+  type: text.TextDataset
+  filepath: /server/full-pipeline-input.txt
+""",
+    )
+    config = mock_app.state.services.config.model_copy(
+        update={
+            "env": "base",
+            "pipeline_config_sources": {"example01": str(source)},
+        }
+    )
+    backend = _backend()
+    services = _services(mock_app, backend)
+    services.config = config
+    services.metadata = load_project_metadata(Path.cwd(), config)
+    pipeline_input = PipelineInput.from_dict(
+        {
+            "name": "example01",
+            "state": "READY",
+            "slices": [{"slice": "NODE_NAMES", "args": ["reverse_node"]}],
+            "data_catalog": [
+                {
+                    "name": "uppercased",
+                    "config": json.dumps(
+                        {
+                            "type": "text.TextDataset",
+                            "filepath": "/client/uppercased.txt",
+                        }
+                    ),
+                }
+            ],
+        }
+    )
+
+    with patch("kedro_graphql.pipeline_service.run_pipeline.delay"):
+        created = await create_pipeline(services, pipeline_input, None)
+
+    assert created.to_kedro()["data_catalog"] == {
+        "uppercased": {
+            "type": "text.TextDataset",
+            "filepath": "/client/uppercased.txt",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_submission_rejects_unresolved_runtime_globals(mock_app, tmp_path):
+    source = _runtime_config(
+        tmp_path,
+        """
+text_in:
+  type: text.TextDataset
+  filepath: ${globals:missing}
+""",
+    )
+    services = _services(mock_app, _backend())
+    services.metadata = ProjectMetadata(
+        pipelines={"example00": services.metadata.pipelines["example00"]},
+        config_sources={"example00": source},
+        templates=(),
+    )
+
+    with pytest.raises(InvalidPipeline, match="Unable to resolve configuration"):
+        await create_pipeline(
+            services, PipelineInput.from_dict({"name": "example00"}), None
+        )
 
 
 @pytest.mark.asyncio
@@ -130,8 +278,11 @@ async def test_update_pipeline_service_persists_once_before_submission(
     backend.update_if_current.assert_awaited_once()
     assert delay.call_count == 1
     assert delay.call_args.kwargs["parameters"] == {
+        "duration": 1,
+        "event": "placeholder",
         "example": "hello",
-        "runner_kwargs.is_async": True,
+        "id": "placeholder",
+        "runner_kwargs": {"is_async": True},
     }
 
 

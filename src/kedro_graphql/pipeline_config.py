@@ -2,8 +2,17 @@
 
 from kedro.io import AbstractDataset, DataCatalog, MemoryDataset
 from kedro.io.core import DatasetError
+from omegaconf import OmegaConf
 
 from .exceptions import InvalidPipeline
+
+
+def merge_parameters(defaults, overrides):
+    """Apply dotted request parameters to nested server configuration."""
+    merged = OmegaConf.create(defaults)
+    for name, value in overrides.items():
+        OmegaConf.update(merged, name, value, merge=True)
+    return OmegaConf.to_container(merged, resolve=True)
 
 
 def normalize_pipeline_config(pipeline, catalog, parameters):

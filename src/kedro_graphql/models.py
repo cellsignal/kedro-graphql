@@ -14,6 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from kedro.io import AbstractDataset
 from kedro.io.core import _parse_filepath
 from kedro.pipeline import Pipeline as KedroPipeline
+from strawberry.scalars import JSON
 from strawberry.utils.str_converters import to_camel_case, to_snake_case
 
 from kedro_graphql.exceptions import DataSetConfigError, MissingPipelineStatus
@@ -42,14 +43,17 @@ class ParameterType(Enum):
     BOOLEAN = "boolean"
     INTEGER = "integer"
     FLOAT = "float"
+    JSON = "json"
 
 
-def _parameter_type(value: Primitive) -> ParameterType:
+def _parameter_type(value: Any) -> ParameterType:
     types = {
         str: ParameterType.STRING,
         bool: ParameterType.BOOLEAN,
         int: ParameterType.INTEGER,
         float: ParameterType.FLOAT,
+        dict: ParameterType.JSON,
+        list: ParameterType.JSON,
     }
     try:
         return types[type(value)]
@@ -87,11 +91,16 @@ class Parameter:
         )
 
     @classmethod
-    def from_value(cls, name: str, value: Primitive) -> "Parameter":
-        return cls(name=name, value=str(value), type=_parameter_type(value))
+    def from_value(cls, name: str, value: Any) -> "Parameter":
+        parameter_type = _parameter_type(value)
+        return cls(
+            name=name,
+            value=json.dumps(value) if parameter_type is ParameterType.JSON else str(value),
+            type=parameter_type,
+        )
 
-    def serialize(self) -> dict[str, Primitive]:
-        value: Primitive = self.value
+    def serialize(self) -> dict[str, Any]:
+        value: Any = self.value
         if self.type is ParameterType.BOOLEAN:
             normalized = self.value.lower()
             if normalized not in {"true", "false"}:
@@ -101,6 +110,8 @@ class Parameter:
             value = int(self.value)
         elif self.type is ParameterType.FLOAT:
             value = float(self.value)
+        elif self.type is ParameterType.JSON:
+            value = json.loads(self.value)
         return {self.name: value}
 
 
@@ -120,7 +131,7 @@ class ParameterInput:
 
 
 def parameter_inputs_from_mapping(
-    parameters: Mapping[str, Primitive],
+    parameters: Mapping[str, Any],
 ) -> list[ParameterInput]:
     return [
         ParameterInput(name=name, value=str(value), type=_parameter_type(value))
@@ -378,6 +389,7 @@ class PipelineInput:
     name: str
     state: PipelineInputStatus = PipelineInputStatus.STAGED
     parameters: list[ParameterInput] = strawberry.field(default_factory=list)
+    globals: JSON = strawberry.field(default_factory=dict)
     data_catalog: list[DataSetInput] = strawberry.field(default_factory=list)
     tags: list[TagInput] = strawberry.field(default_factory=list)
     parent: strawberry.ID | None = None
@@ -389,6 +401,9 @@ class PipelineInput:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "PipelineInput":
         values = _snake_case_keys(payload)
+        globals_value = values.get("globals") or {}
+        if not isinstance(globals_value, Mapping):
+            raise ValueError("Pipeline globals must be a JSON object")
         state = values.get("state", PipelineInputStatus.STAGED)
         if not isinstance(state, PipelineInputStatus):
             state = PipelineInputStatus[str(state).upper()]
@@ -399,6 +414,7 @@ class PipelineInput:
                 ParameterInput.from_dict(item)
                 for item in values.get("parameters") or []
             ],
+            globals=dict(globals_value),
             data_catalog=[
                 DataSetInput.from_dict(item)
                 for item in values.get("data_catalog") or []
