@@ -64,6 +64,10 @@ def test_mapping_parsing():
     )
     assert config.permissions_role_to_action_map == value
 
+    sources = {"analysis": "/runtime/demeter"}
+    config = KedroGraphQLConfig(pipeline_config_sources=json.dumps(sources))
+    assert config.pipeline_config_sources == sources
+
 
 def test_invalid_structured_value_fails():
     with pytest.raises(ValidationError):

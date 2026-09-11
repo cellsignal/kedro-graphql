@@ -33,6 +33,7 @@ The following table describes each configuration attribute available:
 | `permissions`                          | string | `kedro_graphql.permissions.IsAuthenticatedAlways` | Python path to the permissions class used for authentication.                                    |
 | `permissions_group_to_role_map`        | dict | `{"EXTERNAL_GROUP_NAME": "admin"}` | Mapping of external group names to roles. Specify as JSON string when using CLI/environment variables. |
 | `permissions_role_to_action_map`       | dict | `{"admin": [...]}` | Mapping of roles to allowed actions. Specify as JSON string when using CLI/environment variables. |
+| `pipeline_config_sources`              | dict | `{}` | Required allowlist mapping API pipeline names to runtime-mounted Kedro configuration directories. |
 | `project_version`                      | string | `None` | Version of the Kedro GraphQL project.                                                            |
 | `root_path`                            | string | `""` | Root path for all API endpoints (e.g., '/api/v1'). When set, all API routes will be prefixed with this path. |
 | `runner`                               | string | `kedro.runner.SequentialRunner` | Python path to the Kedro runner class.                                                           |
@@ -93,6 +94,7 @@ Complex dictionary configurations must be provided as JSON strings:
 ```bash
 --events-config '{"event1": {"source": "app", "type": "test"}}'
 --permissions-role-to-action-map '{"admin": ["create_pipeline", "read_pipeline"]}'
+--pipeline-config-sources '{"analysis": "/runtime/pipelines/demeter"}'
 ```
 
 When using environment variables, list and dictionary values should be provided as:
@@ -104,6 +106,7 @@ When using environment variables, list and dictionary values should be provided 
 export KEDRO_GRAPHQL_IMPORTS="module1,module2,module3"
 export KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS='["./data", "/tmp"]'
 export KEDRO_GRAPHQL_EVENTS_CONFIG='{"event1": {"source": "app"}}'
+export KEDRO_GRAPHQL_PIPELINE_CONFIG_SOURCES='{"analysis": "/runtime/pipelines/demeter"}'
 ```
 
 ## Configuration Precedence
@@ -188,6 +191,8 @@ config:
       - "read_pipeline"
       - "read_pipelines"
       - "read_dataset"
+  pipeline_config_sources:
+    analysis: /runtime/pipelines/demeter
   project_version: "1.0.1"
   root_path: null
   runner: "kedro.runner.SequentialRunner"
@@ -244,6 +249,7 @@ provide them as JSON strings.
 | permissions                                        | --permissions                                    | kedro_graphql.permissions.IsAuthenticatedAlways     |
 | permissions_group_to_role_map                      | --permissions-group-to-role-map                 | '{"EXTERNAL_GROUP_NAME": "admin"}'                  |
 | permissions_role_to_action_map                     | --permissions-role-to-action-map                | '{"admin": ["create_pipeline", "read_pipeline"]}'    |
+| pipeline_config_sources                            | --pipeline-config-sources                       | '{"analysis": "/runtime/pipelines/demeter"}'          |
 | project_version                                    | --project-version                                | 1.0.0                                                |
 | root_path                                          | --root-path                                      | /api/v1                                              |
 | runner                                             | --runner                                         | kedro.runner.SequentialRunner                       |

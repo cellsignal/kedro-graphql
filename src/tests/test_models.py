@@ -101,7 +101,7 @@ class TestParameterInput:
             "e": 0.1,
         }
 
-        incorrect = {**correct, "f": [1, 2]}
+        nested = {**correct, "f": [1, 2]}
 
         params_input_list = parameter_inputs_from_mapping(correct)
 
@@ -116,8 +116,9 @@ class TestParameterInput:
             is ParameterType.BOOLEAN
         )
 
-        with pytest.raises(ValueError):
-            parameter_inputs_from_mapping(incorrect)
+        json_parameter = parameter_inputs_from_mapping(nested)[-1]
+        assert json_parameter.type is ParameterType.JSON
+        assert json.loads(json_parameter.value) == [1, 2]
 
 
 class TestParameter:

@@ -25,9 +25,11 @@ from .models import (
 )
 from .pipeline_config import (
     filter_pipeline,
+    merge_parameters,
     normalize_pipeline_config,
     validate_pipeline_config,
 )
+from .project import load_pipeline_configuration
 from .runners import get_runner_class
 from .run_state import InvalidRunTransition, transition_run
 from .tasks import run_pipeline
@@ -43,6 +45,7 @@ def _normalize_pipeline(
     slices,
     only_missing: bool,
     runner: str,
+    globals: Mapping[str, Any] | None = None,
     validate: bool = False,
 ) -> Pipeline:
     full_pipeline = services.metadata.pipelines[pipeline.name]
@@ -56,14 +59,24 @@ def _normalize_pipeline(
         dataset.name: dataset.parse_config() for dataset in pipeline.data_catalog
     }
     submitted_parameters = pipeline.to_kedro()["parameters"]
+    try:
+        server_catalog, server_parameters = load_pipeline_configuration(
+            services.metadata, services.config, pipeline.name, globals
+        )
+    except Exception as error:
+        raise InvalidPipeline(
+            f"Unable to resolve configuration for pipeline {pipeline.name}: {error}"
+        ) from error
+    merged_catalog = {**server_catalog, **submitted_catalog}
+    merged_parameters = merge_parameters(server_parameters, submitted_parameters)
     catalog, parameters, sources = normalize_pipeline_config(
-        full_pipeline, submitted_catalog, submitted_parameters
+        selected_pipeline, merged_catalog, merged_parameters
     )
     parameters.update(
         {
             name: value
-            for name, value in submitted_parameters.items()
-            if name == "runner_kwargs" or name.startswith("runner_kwargs.")
+            for name, value in merged_parameters.items()
+            if name == "runner_kwargs"
         }
     )
 
@@ -77,7 +90,7 @@ def _normalize_pipeline(
         for name, config in catalog.items()
     ]
     pipeline.parameters = [
-        parameter for parameter in pipeline.parameters if parameter.name in parameters
+        Parameter.from_value(name, value) for name, value in sorted(parameters.items())
     ]
 
     if validate and not only_missing:
@@ -147,6 +160,7 @@ def _prepare_new_pipeline(
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=validate_ready and requested_state is PipelineInputStatus.READY,
     )
     pipeline.created_at = datetime.now(timezone.utc)
@@ -309,6 +323,7 @@ async def update_pipeline(
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=requested_state is PipelineInputStatus.READY,
     )
     pipeline.parameters = submitted.parameters
@@ -401,6 +416,7 @@ async def submit_event_pipeline(
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=True,
     )
     pipeline = await services.backend.update(pipeline)

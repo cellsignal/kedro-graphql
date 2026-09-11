@@ -14,5 +14,11 @@ def kedro_graphql_config():
             "mongo_db_name": "test_pipelines",
             "broker": "redis://localhost:6379/15",
             "celery_result_backend": "redis://localhost:6379/15",
+            "pipeline_config_sources": {
+                "__default__": "conf",
+                "event00": "conf",
+                "example00": "conf",
+                "example01": "conf",
+            },
         }
     )
