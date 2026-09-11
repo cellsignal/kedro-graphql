@@ -244,6 +244,35 @@ def test_external_runner_local_exit_does_not_confirm_abort():
     backend.update_if_current.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("runner", "expected"),
+    [
+        ("kedro.runner.SequentialRunner", State.ABORTED),
+        ("tests.test_tasks.LifecycleRunner", State.ABORTING),
+    ],
+)
+def test_success_callback_handles_aborted_result_by_runner_lifecycle(
+    runner, expected
+):
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.ABORTING, runner=runner, task_id="task-id")],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(return_value=pipeline),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+
+    task.on_success(
+        "aborted", "task-id", (), {"id": str(pipeline.id), "runner": runner}
+    )
+
+    assert pipeline.current_status.state is expected
+
+
 def test_child_emits_runner_metadata_over_parent_queue():
     result_queue = MagicMock()
     runner = MagicMock()

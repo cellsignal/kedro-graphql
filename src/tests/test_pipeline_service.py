@@ -54,7 +54,8 @@ def _services(mock_app, backend):
 
 def _backend(pipeline_id="000000000000000000000001"):
     async def create(pipeline):
-        pipeline.id = pipeline_id
+        if pipeline.id is None:
+            pipeline.id = pipeline_id
         return pipeline
 
     async def update(pipeline):
@@ -168,6 +169,29 @@ async def test_create_pipeline_persists_task_id_before_publication(mock_app):
     assert persisted.current_status.task_id == "task-id"
     assert created.current_status.task_id == "task-id"
     assert publish.call_args.kwargs["task_id"] == "task-id"
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_persists_and_publishes_final_unique_paths(mock_app):
+    backend = _backend()
+    services = _services(mock_app, backend)
+
+    with patch(
+        "kedro_graphql.pipeline_service.run_pipeline.apply_async"
+    ) as publish:
+        created = await create_pipeline(
+            services,
+            _pipeline_input("READY"),
+            None,
+            unique_paths=["text_out"],
+        )
+
+    persisted = backend.create.await_args.args[0]
+    expected_path = f"/tmp/{created.id}/out.txt"
+    assert persisted is created
+    assert persisted.to_kedro()["data_catalog"]["text_out"]["filepath"] == expected_path
+    assert publish.call_args.kwargs["kwargs"]["data_catalog"]["text_out"]["filepath"] == expected_path
+    backend.update.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -347,6 +371,7 @@ async def test_update_pipeline_service_persists_once_before_submission(
             str(stored.id),
             _pipeline_input("READY"),
             {"email": "user@example.com"},
+            unique_paths=["text_out"],
         )
 
     assert updated.status[-1].state is State.READY
@@ -354,6 +379,10 @@ async def test_update_pipeline_service_persists_once_before_submission(
     assert updated.current_status.task_id == "task-id"
     assert publish.call_count == 1
     assert publish.call_args.kwargs["task_id"] == "task-id"
+    expected_path = f"/tmp/{updated.id}/out.txt"
+    persisted = backend.update_if_current.await_args.args[0]
+    assert persisted.to_kedro()["data_catalog"]["text_out"]["filepath"] == expected_path
+    assert publish.call_args.kwargs["kwargs"]["data_catalog"]["text_out"]["filepath"] == expected_path
     assert publish.call_args.kwargs["kwargs"]["parameters"] == {
         "duration": 1,
         "event": "placeholder",
@@ -582,6 +611,6 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
     assert id_parameter.type is ParameterType.STRING
     assert all(dataset.tags is not None for dataset in created.data_catalog)
     backend.create.assert_awaited_once()
-    backend.update.assert_awaited_once()
+    backend.update.assert_not_awaited()
     assert publish.call_args.kwargs["task_id"] == "task-id"
     assert publish.call_args.kwargs["kwargs"]["parameters"]["id"] == str(created.id)
