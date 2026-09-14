@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -398,6 +399,21 @@ class PipelineInput:
     only_missing: bool = False
     hooks: list[str] = strawberry.field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        for kind, items in (
+            ("parameter", self.parameters),
+            ("dataset", self.data_catalog),
+        ):
+            duplicates = sorted(
+                name
+                for name, count in Counter(item.name for item in items).items()
+                if count > 1
+            )
+            if duplicates:
+                raise ValueError(
+                    f"Duplicate {kind} name(s): {', '.join(duplicates)}"
+                )
+
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "PipelineInput":
         values = _snake_case_keys(payload)
@@ -456,6 +472,20 @@ class PipelineInput:
         for parameter in payload["parameters"]:
             parameter["type"] = parameter["type"].upper()
         return {to_camel_case(key): value for key, value in payload.items()}
+
+    def replace_parameter(self, replacement: ParameterInput) -> None:
+        for index, parameter in enumerate(self.parameters):
+            if parameter.name == replacement.name:
+                self.parameters[index] = replacement
+                return
+        raise ValueError(f"Parameter {replacement.name} does not exist")
+
+    def replace_dataset(self, replacement: DataSetInput) -> None:
+        for index, dataset in enumerate(self.data_catalog):
+            if dataset.name == replacement.name:
+                self.data_catalog[index] = replacement
+                return
+        raise ValueError(f"Dataset {replacement.name} does not exist")
 
     @classmethod
     def from_event(

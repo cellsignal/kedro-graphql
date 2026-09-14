@@ -329,6 +329,54 @@ class TestParameter:
 
         assert result.runner is None
 
+    def test_pipeline_input_replaces_named_values(self):
+        pipeline_input = PipelineInput(
+            name="example",
+            parameters=[ParameterInput(name="count", value="1")],
+            data_catalog=[DataSetInput(name="input", config="{}")],
+        )
+        parameter = ParameterInput(
+            name="count", value="2", type=ParameterType.INTEGER
+        )
+        dataset = DataSetInput(name="input", config='{"type":"MemoryDataset"}')
+
+        pipeline_input.replace_parameter(parameter)
+        pipeline_input.replace_dataset(dataset)
+
+        assert pipeline_input.parameters == [parameter]
+        assert pipeline_input.data_catalog == [dataset]
+        with pytest.raises(ValueError, match="Parameter missing does not exist"):
+            pipeline_input.replace_parameter(ParameterInput(name="missing", value=""))
+        with pytest.raises(ValueError, match="Dataset missing does not exist"):
+            pipeline_input.replace_dataset(DataSetInput(name="missing"))
+
+    @pytest.mark.parametrize(
+        ("values", "message"),
+        [
+            (
+                {
+                    "parameters": [
+                        ParameterInput(name="count", value="1"),
+                        ParameterInput(name="count", value="2"),
+                    ]
+                },
+                "Duplicate parameter name.*count",
+            ),
+            (
+                {
+                    "data_catalog": [
+                        DataSetInput(name="input"),
+                        DataSetInput(name="input"),
+                    ]
+                },
+                "Duplicate dataset name.*input",
+            ),
+        ],
+    )
+    def test_pipeline_input_rejects_duplicate_names(self, values, message):
+        with pytest.raises(ValueError, match=message):
+            PipelineInput(name="example", **values)
+
 
 def test_pipeline_decode_normalizes_and_converts_declared_fields():
     payload = {
