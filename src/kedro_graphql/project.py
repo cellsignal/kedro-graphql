@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from kedro.framework.project import settings
+from kedro.framework.session import KedroSession
 from kedro.pipeline import Pipeline as KedroPipeline
 from omegaconf import OmegaConf
 
@@ -12,9 +13,24 @@ from .models import PipelineTemplate
 
 @dataclass(frozen=True)
 class ProjectMetadata:
+    project_path: Path
     pipelines: Mapping[str, KedroPipeline]
     config_sources: Mapping[str, Path]
     templates: tuple[PipelineTemplate, ...]
+
+
+def create_pipeline_session(
+    project_path: Path, config: KedroGraphQLConfig, pipeline_name: str
+):
+    """Create a session using the selected pipeline's configuration source."""
+    conf_source = Path(config.pipeline_config_sources[pipeline_name])
+    if not conf_source.is_absolute():
+        conf_source = project_path / conf_source
+    return KedroSession.create(
+        project_path=project_path,
+        env=config.env,
+        conf_source=conf_source,
+    )
 
 
 def _load_configuration(
@@ -78,4 +94,4 @@ def load_project_metadata(
                 kedro_parameters=parameters,
             )
         )
-    return ProjectMetadata(exposed, sources, tuple(templates))
+    return ProjectMetadata(project_path, exposed, sources, tuple(templates))

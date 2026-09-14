@@ -545,8 +545,15 @@ class TestSchemaMutations:
         assert started_event["id"] == pipeline_id
         assert started_event["status"] in UNREADY_STATES
         assert started_event["taskId"] is not None
-        p = await mock_app.state.services.backend.read(id=pipeline_id)
-        assert p is not None
+
+        async def wait_for_running_pipeline():
+            while True:
+                pipeline = await mock_app.state.services.backend.read(id=pipeline_id)
+                if pipeline.current_status.state is State.STARTED:
+                    return pipeline
+                await asyncio.sleep(0.05)
+
+        p = await asyncio.wait_for(wait_for_running_pipeline(), timeout=30.0)
 
         # Send an abort request
         abort_resp = await mock_app.state.services.schema.execute(
@@ -591,8 +598,14 @@ class TestSchemaMutations:
         assert events[-1]["status"] == "SUCCESS"
         assert str(events[-1]["result"]).lower() == "aborted"
 
-        updated = await mock_app.state.services.backend.read(id=pipeline_id)
-        assert updated is not None
+        async def wait_for_aborted_pipeline():
+            while True:
+                pipeline = await mock_app.state.services.backend.read(id=pipeline_id)
+                if pipeline.current_status.state is State.ABORTED:
+                    return pipeline
+                await asyncio.sleep(0.05)
+
+        updated = await asyncio.wait_for(wait_for_aborted_pipeline(), timeout=30.0)
         assert updated.status[-1].state == State.ABORTED
 
     @pytest.mark.asyncio

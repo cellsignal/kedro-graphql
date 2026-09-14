@@ -247,20 +247,12 @@ def _prepare_new_pipeline(
     return pipeline, values, runner, requested_state
 
 
-def _publish_pipeline(
-    pipeline: Pipeline, values: dict[str, Any], runner: str, task_id: str
-):
-    serial = pipeline.to_kedro()
+def _publish_pipeline(pipeline: Pipeline, values: dict[str, Any], task_id: str):
     return run_pipeline.apply_async(
         kwargs={
             "id": str(pipeline.id),
-            "name": serial["name"],
-            "parameters": serial["parameters"],
-            "data_catalog": serial["data_catalog"],
-            "runner": runner,
             "slices": values.get("slices"),
             "only_missing": values.get("only_missing", False),
-            "hooks": pipeline.hooks,
         },
         task_id=task_id,
     )
@@ -270,13 +262,12 @@ async def _publish_or_record_failure(
     services: AppServices,
     pipeline: Pipeline,
     values: dict[str, Any],
-    runner: str,
 ) -> None:
     task_id = pipeline.current_status.task_id
     if not task_id:
         raise RuntimeError("A durable task ID is required before publication")
     try:
-        _publish_pipeline(pipeline, values, runner, task_id)
+        _publish_pipeline(pipeline, values, task_id)
     except Exception as error:
         transition_run(pipeline, State.FAILURE, task_exception=str(error))
         await services.backend.update_if_current(
@@ -321,7 +312,7 @@ async def create_pipeline(
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
     pipeline = await services.backend.create(pipeline)
-    await _publish_or_record_failure(services, pipeline, values, runner)
+    await _publish_or_record_failure(services, pipeline, values)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),
@@ -453,7 +444,7 @@ async def update_pipeline(
         )
         if pipeline is None:
             raise InvalidPipeline(f"Pipeline {id} changed while it was submitted.")
-        await _publish_or_record_failure(services, pipeline, values, runner)
+        await _publish_or_record_failure(services, pipeline, values)
         logger.info(
             "user=%s, action=run_pipeline, id=%s, name=%s, state=READY, task_id=%s",
             _caller_name(caller),
@@ -542,7 +533,7 @@ async def submit_event_pipeline(
         validate=True,
     )
     pipeline = await services.backend.create(pipeline)
-    await _publish_or_record_failure(services, pipeline, values, runner)
+    await _publish_or_record_failure(services, pipeline, values)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),

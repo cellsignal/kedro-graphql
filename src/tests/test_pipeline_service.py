@@ -25,7 +25,11 @@ from kedro_graphql.pipeline_service import (
     submit_event_pipeline,
     update_pipeline,
 )
-from kedro_graphql.project import ProjectMetadata, load_project_metadata
+from kedro_graphql.project import (
+    ProjectMetadata,
+    create_pipeline_session,
+    load_project_metadata,
+)
 from kedro_graphql.runners import ExternalRunnerLifecycle
 
 
@@ -124,6 +128,21 @@ def _external_pipeline(state=State.STARTED):
     )
 
 
+def test_pipeline_session_uses_runtime_project_and_pipeline_config(mock_app, tmp_path):
+    config = mock_app.state.services.config.model_copy(
+        update={"pipeline_config_sources": {"example00": "pipeline-conf"}}
+    )
+
+    with patch("kedro_graphql.project.KedroSession.create") as create:
+        create_pipeline_session(tmp_path, config, "example00")
+
+    create.assert_called_once_with(
+        project_path=tmp_path,
+        env=config.env,
+        conf_source=tmp_path / "pipeline-conf",
+    )
+
+
 def _runtime_config(tmp_path, catalog, parameters="", globals=""):
     source = tmp_path / "runtime-config"
     base = source / "base"
@@ -191,7 +210,11 @@ async def test_create_pipeline_persists_and_publishes_final_unique_paths(mock_ap
     expected_path = f"/tmp/{created.id}/out.txt"
     assert persisted is created
     assert persisted.to_kedro()["data_catalog"]["text_out"]["filepath"] == expected_path
-    assert publish.call_args.kwargs["kwargs"]["data_catalog"]["text_out"]["filepath"] == expected_path
+    assert publish.call_args.kwargs["kwargs"] == {
+        "id": str(created.id),
+        "slices": [],
+        "only_missing": False,
+    }
     backend.update.assert_not_awaited()
 
 
@@ -343,6 +366,7 @@ text_in:
     )
     services = _services(mock_app, _backend())
     services.metadata = ProjectMetadata(
+        project_path=tmp_path,
         pipelines={"example00": services.metadata.pipelines["example00"]},
         config_sources={"example00": source},
         templates=(),
@@ -420,13 +444,10 @@ async def test_update_pipeline_service_persists_once_before_submission(
     expected_path = f"/tmp/{updated.id}/out.txt"
     persisted = backend.update_if_current.await_args.args[0]
     assert persisted.to_kedro()["data_catalog"]["text_out"]["filepath"] == expected_path
-    assert publish.call_args.kwargs["kwargs"]["data_catalog"]["text_out"]["filepath"] == expected_path
-    assert publish.call_args.kwargs["kwargs"]["parameters"] == {
-        "duration": 1,
-        "event": "placeholder",
-        "example": "hello",
-        "id": "placeholder",
-        "runner_kwargs": {"is_async": True},
+    assert publish.call_args.kwargs["kwargs"] == {
+        "id": str(updated.id),
+        "slices": [],
+        "only_missing": False,
     }
 
 
@@ -651,4 +672,8 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
     backend.create.assert_awaited_once()
     backend.update.assert_not_awaited()
     assert publish.call_args.kwargs["task_id"] == "task-id"
-    assert publish.call_args.kwargs["kwargs"]["parameters"]["id"] == str(created.id)
+    assert publish.call_args.kwargs["kwargs"] == {
+        "id": str(created.id),
+        "slices": [],
+        "only_missing": False,
+    }

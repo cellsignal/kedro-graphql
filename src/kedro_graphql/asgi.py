@@ -53,7 +53,7 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
     discover_plugins(config)
     schema = build_schema(TYPE_PLUGINS)
     backend = init_backend(config)
-    celery = celery_app(config, backend)
+    celery = celery_app(config, backend, metadata.project_path)
     permission_class = get_permissions(config.permissions)
     module_name, provider_name = config.signed_url_provider.rsplit(".", 1)
     signed_url_provider = getattr(import_module(module_name), provider_name)

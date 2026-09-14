@@ -163,6 +163,7 @@ def cleanup_test_redis():
 def mock_celery_session_app(mock_app, mock_info_context, celery_session_app):
     celery_session_app.kedro_graphql_backend = mock_app.state.services.backend
     celery_session_app.kedro_graphql_config = mock_app.state.services.config
+    celery_session_app.kedro_project_path = Path.cwd()
     return celery_session_app
 
 
@@ -272,13 +273,7 @@ def mock_pipeline(mock_celery_session_app,
     p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.to_kedro()
-
-    result = run_pipeline.apply_async(kwargs={"id": str(p.id),
-                                              "name": "example00",
-                                              "data_catalog": serial["data_catalog"],
-                                              "parameters": serial["parameters"],
-                                              "runner": mock_app.state.services.config.runner},
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
@@ -341,13 +336,7 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
     p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.to_kedro()
-
-    result = run_pipeline.apply_async(kwargs={"id": str(p.id),
-                                              "name": "example00",
-                                              "data_catalog": serial["data_catalog"],
-                                              "parameters": serial["parameters"],
-                                              "runner": mock_app.state.services.config.runner},
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))

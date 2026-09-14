@@ -102,7 +102,6 @@
   * [run\_sync](#utils.run_sync)
   * [merge](#utils.merge)
   * [parse\_s3\_filepath](#utils.parse_s3_filepath)
-  * [add\_param\_to\_feed\_dict](#utils.add_param_to_feed_dict)
   * [generate\_unique\_paths](#utils.generate_unique_paths)
 * [decorators](#decorators)
 * [backends](#backends)
@@ -1121,12 +1120,14 @@ Handler called after the task returns.
 #### \_run\_pipeline\_in\_child\_process
 
 ```python
-def _run_pipeline_in_child_process(runner_instance, filtered_pipeline,
+def _run_pipeline_in_child_process(runner: str, runner_kwargs: dict,
+                                   pipeline_name: str, node_names: List[str],
                                    catalog_config: dict, parameters: dict,
-                                   hook_manager, session_id: str,
-                                   record_data: dict, pipeline_name: str,
-                                   task_id: str, broker_url: str,
-                                   result_queue)
+                                   hook_names: List[str], session_id: str,
+                                   record_data: dict, pipeline_id: str,
+                                   task_id: str,
+                                   runner_metadata: Mapping[str, str],
+                                   broker_url: str, result_queue)
 ```
 
 Execute Kedro pipeline in a child process and report result via queue.
@@ -1959,29 +1960,6 @@ Parse the s3 bucket name and key from DataSet filepath field.
 **Raises**:
 
 - `ValueError` - If the filepath does not start with "s3://" or if the bucket name or S3 key is missing.
-
-<a id="utils.add_param_to_feed_dict"></a>
-
-#### add\_param\_to\_feed\_dict
-
-```python
-def add_param_to_feed_dict(feed_dict,
-                           param_name: str,
-                           param_value: Any,
-                           add_prefix=True) -> None
-```
-
-Context-free version of utility found inside KedroContext._get_feed_dict method. Option to add params: prefix if desired.
-
-**Example**:
-
-
-  >>> param_name = "a"
-  >>> param_value = {"b": 1}
-  >>> feed_dict = {}
-  >>> _add_param_to_feed_dict(feed_dict, param_name, param_value)
-  >>> assert feed_dict["params:a"] == {"b": 1}
-  >>> assert feed_dict["params:a.b"] == 1
 
 <a id="utils.generate_unique_paths"></a>
 

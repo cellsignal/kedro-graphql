@@ -29,7 +29,7 @@ def start_app(config: KedroGraphQLConfig, project_path):
 def start_worker(config: KedroGraphQLConfig, project_path):
     bootstrap_project(project_path)
     backend = init_backend(config)
-    celery_app(config, backend).Worker().start()
+    celery_app(config, backend, project_path).Worker().start()
 
 
 @click.group(name="kedro-graphql")

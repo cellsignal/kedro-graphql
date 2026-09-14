@@ -29,6 +29,23 @@ _CREDENTIAL_FIELDS = {
 }
 
 
+def _add_parameter(feed_dict, name, value):
+    feed_dict[f"params:{name}"] = value
+    if isinstance(value, dict):
+        for child_name, child_value in value.items():
+            _add_parameter(feed_dict, f"{name}.{child_name}", child_value)
+
+
+def build_catalog(catalog_config, parameters):
+    """Build the catalog used for planning or execution."""
+    catalog = DataCatalog.from_config(catalog=catalog_config)
+    feed_dict = {"parameters": parameters}
+    for name, value in parameters.items():
+        _add_parameter(feed_dict, name, value)
+    catalog.add_feed_dict(feed_dict)
+    return catalog
+
+
 def validate_configuration_boundary(catalog, parameters, max_bytes):
     """Reject inline credentials and configuration too large for transport."""
 
