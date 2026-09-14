@@ -1,9 +1,92 @@
 """Pipeline-aware catalog resolution and validation."""
 
+import json
+from collections.abc import Mapping
+
 from kedro.io import AbstractDataset, DataCatalog, MemoryDataset
 from kedro.io.core import DatasetError
+from omegaconf import OmegaConf
 
 from .exceptions import InvalidPipeline
+
+
+_CREDENTIAL_FIELDS = {
+    "access_key",
+    "access_token",
+    "api_key",
+    "apikey",
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+    "client_secret",
+    "password",
+    "passwd",
+    "private_key",
+    "refresh_token",
+    "secret",
+    "secret_key",
+    "token",
+}
+
+
+def _add_parameter(feed_dict, name, value):
+    feed_dict[f"params:{name}"] = value
+    if isinstance(value, dict):
+        for child_name, child_value in value.items():
+            _add_parameter(feed_dict, f"{name}.{child_name}", child_value)
+
+
+def build_catalog(catalog_config, parameters):
+    """Build the catalog used for planning or execution."""
+    catalog = DataCatalog.from_config(catalog=catalog_config)
+    feed_dict = {"parameters": parameters}
+    for name, value in parameters.items():
+        _add_parameter(feed_dict, name, value)
+    catalog.add_feed_dict(feed_dict)
+    return catalog
+
+
+def validate_configuration_boundary(catalog, parameters, max_bytes):
+    """Reject inline credentials and configuration too large for transport."""
+
+    def visit(value, path):
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                normalized = str(key).lower().replace("-", "_")
+                item_path = f"{path}.{key}"
+                if normalized in _CREDENTIAL_FIELDS:
+                    raise InvalidPipeline(
+                        f"Credential-bearing configuration is not allowed: {item_path}"
+                    )
+                if normalized == "credentials" and not isinstance(item, str):
+                    raise InvalidPipeline(
+                        f"Inline credentials are not allowed: {item_path}"
+                    )
+                visit(item, item_path)
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                visit(item, f"{path}[{index}]")
+
+    payload = {"data_catalog": catalog, "parameters": parameters}
+    visit(payload, "configuration")
+    try:
+        size = len(
+            json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        )
+    except (TypeError, ValueError) as error:
+        raise InvalidPipeline(f"Configuration is not JSON serializable: {error}") from error
+    if size > max_bytes:
+        raise InvalidPipeline(
+            f"Resolved pipeline configuration is {size} bytes; limit is {max_bytes} bytes."
+        )
+
+
+def merge_parameters(defaults, overrides):
+    """Apply dotted request parameters to nested server configuration."""
+    merged = OmegaConf.create(defaults)
+    for name, value in overrides.items():
+        OmegaConf.update(merged, name, value, merge=True)
+    return OmegaConf.to_container(merged, resolve=True)
 
 
 def normalize_pipeline_config(pipeline, catalog, parameters):

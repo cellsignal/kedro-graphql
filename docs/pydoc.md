@@ -102,7 +102,6 @@
   * [run\_sync](#utils.run_sync)
   * [merge](#utils.merge)
   * [parse\_s3\_filepath](#utils.parse_s3_filepath)
-  * [add\_param\_to\_feed\_dict](#utils.add_param_to_feed_dict)
   * [generate\_unique\_paths](#utils.generate_unique_paths)
 * [decorators](#decorators)
 * [backends](#backends)
@@ -159,14 +158,6 @@
 * [plugins](#plugins)
 * [plugins.plugins](#plugins.plugins)
 * [runners](#runners)
-* [runners.argo](#runners.argo)
-* [runners.argo.argo](#runners.argo.argo)
-  * [ArgoWorkflowsRunner](#runners.argo.argo.ArgoWorkflowsRunner)
-    * [create\_default\_data\_set](#runners.argo.argo.ArgoWorkflowsRunner.create_default_data_set)
-    * [\_run](#runners.argo.argo.ArgoWorkflowsRunner._run)
-    * [create\_workflow](#runners.argo.argo.ArgoWorkflowsRunner.create_workflow)
-    * [get\_workflow](#runners.argo.argo.ArgoWorkflowsRunner.get_workflow)
-    * [workflow\_logs](#runners.argo.argo.ArgoWorkflowsRunner.workflow_logs)
 * [signed\_url](#signed_url)
 * [signed\_url.base](#signed_url.base)
   * [SignedUrlProvider](#signed_url.base.SignedUrlProvider)
@@ -1129,12 +1120,14 @@ Handler called after the task returns.
 #### \_run\_pipeline\_in\_child\_process
 
 ```python
-def _run_pipeline_in_child_process(runner_instance, filtered_pipeline,
+def _run_pipeline_in_child_process(runner: str, runner_kwargs: dict,
+                                   pipeline_name: str, node_names: List[str],
                                    catalog_config: dict, parameters: dict,
-                                   hook_manager, session_id: str,
-                                   record_data: dict, pipeline_name: str,
-                                   task_id: str, broker_url: str,
-                                   result_queue)
+                                   hook_names: List[str], session_id: str,
+                                   record_data: dict, pipeline_id: str,
+                                   task_id: str,
+                                   runner_metadata: Mapping[str, str],
+                                   broker_url: str, result_queue)
 ```
 
 Execute Kedro pipeline in a child process and report result via queue.
@@ -1968,29 +1961,6 @@ Parse the s3 bucket name and key from DataSet filepath field.
 
 - `ValueError` - If the filepath does not start with "s3://" or if the bucket name or S3 key is missing.
 
-<a id="utils.add_param_to_feed_dict"></a>
-
-#### add\_param\_to\_feed\_dict
-
-```python
-def add_param_to_feed_dict(feed_dict,
-                           param_name: str,
-                           param_value: Any,
-                           add_prefix=True) -> None
-```
-
-Context-free version of utility found inside KedroContext._get_feed_dict method. Option to add params: prefix if desired.
-
-**Example**:
-
-
-  >>> param_name = "a"
-  >>> param_value = {"b": 1}
-  >>> feed_dict = {}
-  >>> _add_param_to_feed_dict(feed_dict, param_name, param_value)
-  >>> assert feed_dict["params:a"] == {"b": 1}
-  >>> assert feed_dict["params:a.b"] == 1
-
 <a id="utils.generate_unique_paths"></a>
 
 #### generate\_unique\_paths
@@ -2571,98 +2541,6 @@ Factory method for async instantiation PipelineLogStream objects.
 <a id="runners"></a>
 
 # Module runners
-
-<a id="runners.argo"></a>
-
-# Module runners.argo
-
-<a id="runners.argo.argo"></a>
-
-# Module runners.argo.argo
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner"></a>
-
-## ArgoWorkflowsRunner Objects
-
-```python
-class ArgoWorkflowsRunner(AbstractRunner)
-```
-
-``ArgoWorkflowsRunner`` is an ``AbstractRunner`` implementation. It can be used
-to run pipelines on [argo workflows](https://argoproj.github.io/argo-workflows/).
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.create_default_data_set"></a>
-
-#### create\_default\_data\_set
-
-```python
-def create_default_data_set(ds_name: str) -> AbstractDataSet
-```
-
-Factory method for creating the default data set for the runner.
-
-NOTE THIS SHOULD BE CHANGED TO SOMETHING S3 COMPATIBLE.
-
-**Arguments**:
-
-- `ds_name` - Name of the missing data set
-
-**Returns**:
-
-  An instance of an implementation of AbstractDataSet to be used
-  for all unregistered data sets.
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner._run"></a>
-
-#### \_run
-
-```python
-def _run(pipeline: Pipeline,
-         catalog: DataCatalog,
-         hook_manager: PluginManager = None,
-         session_id: str = None) -> None
-```
-
-The method implementing argo workflows pipeline running.
-Example logs output using this implementation:
-
-
-
-**Arguments**:
-
-- `pipeline` - The ``Pipeline`` to run.
-- `catalog` - The ``DataCatalog`` from which to fetch data.
-- `session_id` - The id of the session.
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.create_workflow"></a>
-
-#### create\_workflow
-
-```python
-def create_workflow(manifest)
-```
-
-
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.get_workflow"></a>
-
-#### get\_workflow
-
-```python
-def get_workflow(name)
-```
-
-
-
-<a id="runners.argo.argo.ArgoWorkflowsRunner.workflow_logs"></a>
-
-#### workflow\_logs
-
-```python
-def workflow_logs(name)
-```
-
-Inspired by https://github.com/argoproj/argo-workflows/issues/4017
 
 <a id="signed_url"></a>
 

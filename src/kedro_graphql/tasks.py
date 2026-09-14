@@ -8,28 +8,32 @@ import signal
 import time
 import traceback
 from datetime import date
-from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Mapping
 
 from celery import shared_task
 from celery.contrib.abortable import AbortableTask
 from kedro import __version__ as kedro_version
 from kedro.framework.project import pipelines
-from kedro.framework.session import KedroSession
-from kedro.io import AbstractDataset, DataCatalog
-from omegaconf import OmegaConf
+from kedro.io import AbstractDataset
 
 from kedro_graphql.logs.logger import KedroGraphQLLogHandler
-from kedro_graphql.utils import add_param_to_feed_dict, run_sync
-from kedro_graphql.runners import init_runner
+from kedro_graphql.utils import run_sync
+from kedro_graphql.runners import get_runner_class, has_external_lifecycle, init_runner
 from kedro_graphql.pipeline_config import (
+    build_catalog,
     filter_only_missing_pipeline,
     filter_pipeline,
     pipeline_slice_args,
     validate_pipeline_config,
 )
-from kedro_graphql.models import PipelineInput, ParameterInput, Pipeline
+from kedro_graphql.models import (
+    ParameterInput,
+    Pipeline,
+    PipelineInput,
+    extension_metadata_entries,
+)
 from kedro_graphql.hooks import hook_manager_for
+from kedro_graphql.project import create_pipeline_session
 
 from .models import DataSet, State
 from .run_state import InvalidRunTransition, transition_run
@@ -79,7 +83,7 @@ class KedroGraphqlTask(AbortableTask):
                 celery_task_id,
             )
             return None
-        expected_state = pipeline.status[-1].state
+        expected_state = pipeline.current_status.state
         try:
             changed = transition_run(pipeline, target, **fields)
         except InvalidRunTransition as error:
@@ -94,6 +98,40 @@ class KedroGraphqlTask(AbortableTask):
             return pipeline
         return self._update_current(
             pipeline, expected_state, celery_task_id, target.value
+        )
+
+    def _persist_runner_metadata(
+        self, pipeline_id: str, task_id: str, values: Mapping[str, str]
+    ):
+        pipeline = run_sync(self.db.read(id=pipeline_id))
+        if pipeline is None:
+            logger.warning(
+                "Pipeline missing while persisting runner metadata pipeline_id=%s task_id=%s",
+                pipeline_id,
+                task_id,
+            )
+            return None
+        expected_state = pipeline.current_status.state
+        pipeline.current_status.update_metadata(values)
+        return self._update_current(
+            pipeline, expected_state, task_id, "runner metadata"
+        )
+
+    def _persist_filtered_nodes(
+        self, pipeline_id: str, task_id: str, node_names: List[str]
+    ):
+        pipeline = run_sync(self.db.read(id=pipeline_id))
+        if pipeline is None:
+            logger.warning(
+                "Pipeline missing while persisting filtered nodes pipeline_id=%s task_id=%s",
+                pipeline_id,
+                task_id,
+            )
+            return None
+        expected_state = pipeline.current_status.state
+        pipeline.current_status.filtered_nodes = node_names
+        return self._update_current(
+            pipeline, expected_state, task_id, "filtered nodes"
         )
 
     def before_start(self, task_id, args, kwargs):
@@ -178,8 +216,6 @@ class KedroGraphqlTask(AbortableTask):
                 logger.info(
                     f"Capturing pipeline logs in {os.path.join(log_path_prefix,f'year={today.year}',f'month={today.month}',f'day={today.day}',str(p.id))}")
 
-                # Capture pipeline object returned as an attribute of the task object
-                setattr(self, "kedro_graphql_pipeline", p)
             else:
                 logger.info(
                     f"Missing KEDRO_GRAPHQL_LOG_PATH_PREFIX in config. Not capturing session logs.")
@@ -201,9 +237,16 @@ class KedroGraphqlTask(AbortableTask):
             None: The return value of this handler is ignored.
         """
 
-        self._transition(
-            kwargs["id"], task_id, State.SUCCESS, task_result=str(retval)
-        )
+        if retval == "aborted":
+            pipeline = run_sync(self.db.read(id=kwargs["id"]))
+            if pipeline is not None and has_external_lifecycle(
+                pipeline.current_status.runner
+            ):
+                return
+            target = State.ABORTED
+        else:
+            target = State.SUCCESS
+        self._transition(kwargs["id"], task_id, target, task_result=str(retval))
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Retry handler.
@@ -270,7 +313,11 @@ class KedroGraphqlTask(AbortableTask):
         """
 
         p = run_sync(self.db.read(id=kwargs["id"]))
-        if p is not None and p.status[-1].state is State.ABORTING:
+        if (
+            p is not None
+            and p.current_status.state is State.ABORTING
+            and not has_external_lifecycle(p.current_status.runner)
+        ):
             self._transition(
                 kwargs["id"], task_id, State.ABORTED, task_result=str(retval)
             )
@@ -307,15 +354,18 @@ class KedroGraphqlTask(AbortableTask):
 
 
 def _run_pipeline_in_child_process(
-    runner_instance,
-    filtered_pipeline,
+    runner: str,
+    runner_kwargs: dict,
+    pipeline_name: str,
+    node_names: List[str],
     catalog_config: dict,
     parameters: dict,
-    hook_manager,
+    hook_names: List[str],
     session_id: str,
     record_data: dict,
-    pipeline_name: str,
+    pipeline_id: str,
     task_id: str,
+    runner_metadata: Mapping[str, str],
     broker_url: str,
     result_queue,
 ):
@@ -366,16 +416,35 @@ def _run_pipeline_in_child_process(
     signal.signal(signal.SIGINT, handle_abort_signal)
     signal.signal(signal.SIGTERM, handle_abort_signal)
 
+    def emit_metadata(values: Mapping[str, str]) -> None:
+        extension_metadata_entries(values)
+        result_queue.put(("metadata", dict(values)))
+
     try:
-        # Recreate catalog in child process to avoid fork-unsafe connections with S3
-        io = DataCatalog.from_config(catalog=catalog_config)
-        
-        # Re-add parameters to catalog
-        feed_dict = {"parameters": parameters}
-        for param_name, param_value in parameters.items():
-            add_param_to_feed_dict(feed_dict, param_name, param_value)
-        io.add_feed_dict(feed_dict)
-        
+        hook_manager = hook_manager_for(hook_names)
+        runner_instance = init_runner(runner_import_path=runner, **runner_kwargs)
+        runner_instance.emit_metadata = emit_metadata
+        runner_instance.run_context = {
+            "pipeline_id": pipeline_id,
+            "task_id": task_id,
+            "metadata": dict(runner_metadata),
+        }
+        filtered_pipeline = pipelines[pipeline_name].only_nodes(*node_names)
+        # Recreate catalog in child process to avoid fork-unsafe connections with S3.
+        io = build_catalog(catalog_config, parameters)
+        hook_manager.hook.after_catalog_created(
+            catalog=io,
+            conf_catalog=None,
+            conf_creds=None,
+            feed_dict=None,
+            save_version=None,
+            load_versions=None,
+        )
+        hook_manager.hook.before_pipeline_run(
+            run_params=record_data,
+            pipeline=filtered_pipeline,
+            catalog=io,
+        )
         run_result = runner_instance.run(
             filtered_pipeline,
             catalog=io,
@@ -393,14 +462,14 @@ def _run_pipeline_in_child_process(
                     hook_manager.hook.after_pipeline_run(
                         run_params=record_data,
                         run_result=run_result,
-                        pipeline=pipelines.get(pipeline_name),
+                        pipeline=filtered_pipeline,
                         catalog=io,
                     )
                 else:
                     hook_manager.hook.on_pipeline_error(
                         error=child_error,
                         run_params=record_data,
-                        pipeline=pipelines.get(pipeline_name),
+                        pipeline=filtered_pipeline,
                         catalog=io,
                     )
             except Exception as cleanup_error:
@@ -423,61 +492,37 @@ def _run_pipeline_in_child_process(
 
 @shared_task(bind=True, base=KedroGraphqlTask)
 def run_pipeline(self,
-                 id: str = None,
-                 name: str = None,
-                 parameters: dict = None,
-                 data_catalog: dict = None,
-                 runner: str = None,
+                 id: str,
                  slices: List[Dict[str, List[str]]] = None,
-                 only_missing: bool = False,
-                 hooks: List[str] = None):
+                 only_missing: bool = False):
 
-    with KedroSession.create(project_path=Path(__file__).resolve().parent.parent.parent,
-                             env=self.gql_config.env,
-                             conf_source=self.gql_config.conf_source) as session:
+    p = run_sync(self.db.read(id=id))
+    if p is None:
+        logger.warning(
+            "Pipeline id=%s not found in backend during run_pipeline; task_id=%s",
+            id,
+            self.request.id,
+        )
+        return
+    if p.current_status.state is State.ABORTING:
+        return "aborted"
+    serial = p.to_kedro()
+    name = p.name
+    parameters = serial["parameters"]
+    catalog = serial["data_catalog"]
+    runner = p.current_status.runner
+    hook_names = list(dict.fromkeys(p.hooks))
 
-        hook_names = list(dict.fromkeys(hooks or []))
-        try:
-            hook_manager = hook_manager_for(hook_names)
-        except ValueError as error:
-            raise RuntimeError(f"Unable to resolve pipeline hooks: {error}") from error
+    with create_pipeline_session(
+        self.app.kedro_project_path, self.gql_config, name
+    ) as session:
+
         logger.info("Pipeline id=%s will execute with Kedro hooks: %s", id, hook_names)
-        session._hook_manager = hook_manager
-
-        p = run_sync(self.db.read(id=id))
+        expected_state = p.current_status.state
+        p.current_status.session = session.session_id
+        p = self._update_current(p, expected_state, self.request.id, "session")
         if p is None:
-            logger.warning(
-                "Pipeline id=%s not found in backend during run_pipeline; task_id=%s",
-                id,
-                self.request.id,
-            )
-            return
-        expected_state = p.status[-1].state
-        p.status[-1].session = session.session_id
-        if self._update_current(p, expected_state, self.request.id, "session") is None:
-            return
-
-        # If modified data catalog object with gql_meta and gql_logs datasets exists, use it
-        if getattr(self, "kedro_graphql_pipeline", None):
-            logger.info("using data_catalog with gql_meta and gql_logs")
-            serial = self.kedro_graphql_pipeline.to_kedro()
-            catalog = {**serial["data_catalog"], **data_catalog}
-        else:
-            logger.info("using data_catalog parameter to build data catalog")
-            catalog = data_catalog
-
-        io = DataCatalog.from_config(catalog=catalog)
-
-        # add parameters to DataCatalog using OmegaConf and dotlist notation
-        parameters_dotlist = [f"{key}={value}" for key, value in parameters.items()]
-        conf_parameters = OmegaConf.to_container(
-            OmegaConf.from_dotlist(parameters_dotlist), resolve=True)
-
-        feed_dict = {"parameters": conf_parameters}
-        for param_name, param_value in conf_parameters.items():
-            add_param_to_feed_dict(feed_dict, param_name, param_value)
-
-        io.add_feed_dict(feed_dict)
+            return "aborted"
 
         try:
             filters = pipeline_slice_args(slices)
@@ -487,8 +532,8 @@ def run_pipeline(self,
                 "celery_task_id": self.request.id,
                 "log_tmp_dir": self.gql_config.log_tmp_dir,
                 "log_path_prefix": self.gql_config.log_path_prefix,
-                "project_path": session._project_path.as_posix(),
-                "env": session.load_context().env,
+                "project_path": self.app.kedro_project_path.as_posix(),
+                "env": self.gql_config.env,
                 "kedro_version": kedro_version,
                 # Construct the pipeline using only nodes which have this tag attached.
                 "tags": filters.get("tags"),
@@ -507,26 +552,20 @@ def run_pipeline(self,
                 "extra_params": "",
                 "pipeline_name": name,
                 "namespace": filters.get("node_namespace"),
-                "runner": getattr(runner, "__name__", str(runner)),
+                "runner": runner,
             }
 
-            hook_manager.hook.after_catalog_created(
-                catalog=io,
-                conf_catalog=None,
-                conf_creds=None,
-                feed_dict=None,
-                save_version=None,
-                load_versions=None
-            )
+            runner_kwargs = parameters.get("runner_kwargs", {})
 
-            runner_kwargs = conf_parameters.get("runner_kwargs", {})
-
-            logger.info(f"Initializing runner {runner} with kwargs: {runner_kwargs}")
-            runner_instance = init_runner(runner_import_path=runner, **runner_kwargs)
+            logger.info("Preparing runner %s with kwargs: %s", runner, runner_kwargs)
+            runner_class = get_runner_class(runner)
 
             # Filter the pipeline based on the slices and only_missing parameters
             if only_missing:
-                filtered_pipeline = filter_only_missing_pipeline(pipelines[name], io)
+                planning_catalog = build_catalog(catalog, parameters)
+                filtered_pipeline = filter_only_missing_pipeline(
+                    pipelines[name], planning_catalog
+                )
             else:
                 filtered_pipeline = filter_pipeline(
                     pipelines[name], slices
@@ -536,46 +575,45 @@ def run_pipeline(self,
                 filtered_pipeline,
                 catalog,
                 parameters,
-                getattr(runner_instance, "supports_memory_datasets", True),
+                getattr(runner_class, "supports_memory_datasets", True),
             )
-            hook_manager.hook.before_pipeline_run(
-                run_params=record_data,
-                pipeline=filtered_pipeline,
-                catalog=io,
+            p = self._persist_filtered_nodes(
+                id,
+                self.request.id,
+                [node.name for node in filtered_pipeline.nodes],
             )
-
-            p = run_sync(self.db.read(id=id))
-            expected_state = p.status[-1].state
-            p.status[-1].filtered_nodes = [node.name for node in filtered_pipeline.nodes]
-            if self._update_current(
-                p, expected_state, self.request.id, "filtered nodes"
-            ) is None:
-                return
+            if p is None:
+                return "aborted"
 
             # Use Celery's multiprocessing library (billiard) instead of multiprocessing
             # to avoid AssertionError: daemonic processes are not allowed to have children
             ctx = billiard.get_context("fork")
 
             # queue to communicate with the child process
-            result_queue = ctx.Queue(maxsize=1)
+            result_queue = ctx.Queue()
             child = ctx.Process(
                 target=_run_pipeline_in_child_process,
                 args=(
-                    runner_instance,
-                    filtered_pipeline,
+                    runner,
+                    runner_kwargs,
+                    name,
+                    [node.name for node in filtered_pipeline.nodes],
                     catalog,
-                    conf_parameters,
-                    hook_manager,
+                    parameters,
+                    hook_names,
                     session.session_id,
                     record_data,
-                    name,
+                    id,
                     self.request.id,
+                    {
+                        item.key: item.value
+                        for item in p.current_status.metadata
+                    },
                     self._app.conf["broker_url"],
                     result_queue,
                 ),
             )
             child.start()
-            child_owns_terminal_hook = True
 
             polling_interval = self.gql_config.celery_abort_polling_interval
             if polling_interval < 1:
@@ -594,6 +632,14 @@ def run_pipeline(self,
             
             sigint_sent_at = None
             sigterm_sent_at = None
+            child_result = None
+
+            def consume_child_event(event):
+                nonlocal child_result
+                if len(event) == 2 and event[0] == "metadata":
+                    self._persist_runner_metadata(id, self.request.id, event[1])
+                else:
+                    child_result = event
 
             while child.is_alive():
                 if self.is_aborted():
@@ -634,39 +680,50 @@ def run_pipeline(self,
                                 os.killpg(child_pgid, signal.SIGKILL)
                         except ProcessLookupError:
                             pass
-                    # Quick checks to see if the child process has exited
-                    child.join(timeout=1)
+                    wait_timeout = 1
                 else:
-                    # Interval to check if child process should be aborted
-                    child.join(timeout=polling_interval)
+                    wait_timeout = polling_interval
+                try:
+                    consume_child_event(result_queue.get(timeout=wait_timeout))
+                except queue.Empty:
+                    pass
+                if child_result is not None:
+                    child.join()
+                    break
 
             child.join()
-
-            child_result = (
-                State.FAILURE,
-                "Child process exited without returning a result",
-                None,
-            )
-            try:
-                child_result = result_queue.get_nowait()
-            except queue.Empty:
-                logger.warning("Child process pid=%s finished without posting a result", child.pid)
+            if child_result is None:
+                deadline = time.monotonic() + 1
+                while child_result is None and time.monotonic() < deadline:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        consume_child_event(result_queue.get(timeout=remaining))
+                    except queue.Empty:
+                        break
+                if child_result is None:
+                    child_result = (
+                        State.FAILURE,
+                        "Child process exited without returning a result",
+                        None,
+                    )
+                    logger.warning(
+                        "Child process pid=%s finished without posting a result",
+                        child.pid,
+                    )
 
             if self.is_aborted():
                 return "aborted"
 
-            outcome, error_message, _ = child_result
+            outcome, error_message, child_traceback = child_result
             if outcome is not State.SUCCESS:
-                raise RuntimeError(error_message or "Unknown child process error")
+                error_message = error_message or "Unknown child process error"
+                if child_traceback:
+                    error_message += f"\n\nChild process traceback:\n{child_traceback}"
+                raise RuntimeError(error_message)
 
             return "success"
         except Exception as e:
             logger.exception(f"Error running pipeline: {e}")
-            if not locals().get("child_owns_terminal_hook", False):
-                hook_manager.hook.on_pipeline_error(
-                    error=e,
-                    run_params=record_data,
-                    pipeline=pipelines.get(name, None),
-                    catalog=io
-                )
-            raise e
+            raise

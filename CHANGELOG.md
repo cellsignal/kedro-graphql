@@ -18,6 +18,8 @@ Added:
 - CLI flags `--celery-abort-polling-interval` and `--celery-abort-grace-period` on `kedro gql` to override the above settings
 - Schema mutation tests for aborting a running pipeline and rejecting abort requests for non-running pipelines
 - Documentation updates for log subscriptions, including custom log capture guidance and refreshed `pipelineLogs` examples
+- Runtime-supplied pipeline configuration sources for resolving server-managed catalogs and parameters while preserving explicit client overrides
+- Generic external-runner reconciliation and termination lifecycle hooks using persisted `x-` metadata for correlation
 
 Changed:
 
@@ -42,6 +44,14 @@ Changed:
 - Pipeline subscription events now map Celery `SUCCESS` with result `aborted` to `ABORTED` so streamed status aligns with pipeline abort semantics
 - Task-scoped log stream handlers are now attached to the root logger so propagated logs from Kedro and custom modules are captured consistently
 - Task subprocess logging reinitializes stream handlers in the child process to keep Redis stream publishing process-local after fork
+- Pipeline submission now resolves configuration before persistence, validates the selected pipeline slice (including slice-created free inputs), and publishes the same final payload that was stored
+- Pipeline publication now reserves and persists the Celery task ID before dispatch, with publication failures recorded explicitly
+- External-runner aborts remain `ABORTING` until reconciliation confirms a terminal outcome, and deletion retains correlation data until then
+- Pipeline create and update now generate final dataset paths before a single atomic persistence operation
+- Pipeline submissions reject embedded credential fields and payloads larger than the configured API limit
+- Pipeline tasks now load their persisted execution definition by ID; Celery messages carry only the ID and unstored slice controls
+- Pipeline sessions now use the worker's explicit project path and the selected pipeline's configuration source
+- Pipeline subprocesses now construct and own the runner, selected pipeline, hook manager, and execution catalog
 
 Fixed:
 
@@ -60,6 +70,12 @@ Fixed:
 - Celery config now sets `broker_connection_retry_on_startup=True` to suppress deprecation warning for future Celery 6.0 compatibility
 - Child pipeline process now handles `SIGINT`/`SIGTERM` gracefully during abort so logs flush and hook-based log persistence still run before exit
 - Tests now use an isolated Redis DB and flush it before/after the session to clean up Celery result keys and stream artifacts
+- Pipeline hooks now receive the same process-local catalog used by the runner throughout the execution lifecycle
+- Child-process failures now preserve their original traceback in the parent task failure
+
+Removed:
+
+- The unused in-tree Argo Workflows runner, templates, tests, and documentation; applications provide external runners through the generic runner lifecycle
 
 ## [1.5.1] - 2026-03-31
 

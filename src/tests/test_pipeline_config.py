@@ -8,6 +8,7 @@ from kedro_graphql.pipeline_config import (
     filter_only_missing_pipeline,
     filter_pipeline,
     normalize_pipeline_config,
+    validate_configuration_boundary,
     validate_pipeline_config,
 )
 
@@ -111,3 +112,29 @@ def test_only_missing_filter_is_isolated(factory_pipeline):
     filtered = filter_only_missing_pipeline(factory_pipeline, catalog)
 
     assert [pipeline_node.name for pipeline_node in filtered.nodes] == ["second"]
+
+
+def test_configuration_boundary_accepts_named_credential_reference():
+    validate_configuration_boundary(
+        {"raw": {"type": "example.Dataset", "credentials": "production-s3"}},
+        {},
+        1024,
+    )
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"credentials": {"key": "value"}},
+        {"storage_options": {"aws_secret_access_key": "value"}},
+        {"password": "value"},
+    ],
+)
+def test_configuration_boundary_rejects_inline_credentials(config):
+    with pytest.raises(InvalidPipeline, match="credential|Credential"):
+        validate_configuration_boundary({"raw": config}, {}, 1024)
+
+
+def test_configuration_boundary_rejects_oversized_payload():
+    with pytest.raises(InvalidPipeline, match="limit is 32 bytes"):
+        validate_configuration_boundary({}, {"payload": "x" * 64}, 32)

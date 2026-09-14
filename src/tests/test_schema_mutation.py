@@ -208,12 +208,13 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "create", new_callable=AsyncMock) as create, \
-             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={"pipeline": {
                     "name": "example00",
                     "state": "READY",
+                    "globals": {"message": "hello"},
                     "slices": [{"slice": "NODE_NAMES", "args": ["first"]}],
                     "dataCatalog": [{"name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": "/tmp/text_in.txt"})}],
                     "parameters": [{"name": "example", "value": "hello"}],
@@ -226,7 +227,7 @@ class TestSchemaMutations:
         assert response.data["createPipeline"]["nodes"] == [{"name": "first"}]
         assert "createdAt" in response.data["createPipeline"]
         create.assert_not_awaited()
-        delay.assert_not_called()
+        publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_pipeline_merges_always_and_requested_hooks(
@@ -270,7 +271,7 @@ class TestSchemaMutations:
             }
         """
         with patch.object(mock_app.state.services.backend, "update", new_callable=AsyncMock) as update, \
-             patch("kedro_graphql.pipeline_service.run_pipeline.delay") as delay:
+             patch("kedro_graphql.pipeline_service.run_pipeline.apply_async") as publish:
             response = await mock_app.state.services.schema.execute(
                 mutation,
                 variable_values={
@@ -289,7 +290,7 @@ class TestSchemaMutations:
         assert response.data["updatePipeline"]["id"] == str(mock_pipeline_staged.id)
         assert response.data["updatePipeline"]["status"][-1] == {"state": "READY"}
         update.assert_not_awaited()
-        delay.assert_not_called()
+        publish.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_pipeline_00(self,
@@ -468,10 +469,15 @@ class TestSchemaMutations:
             "name": "text_in", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_in)})}
         assert update_pipeline_resp.data["updatePipeline"]["dataCatalog"][1] == {
             "name": "text_out", "config": json.dumps({"type": "text.TextDataset", "filepath": str(mock_text_out)})}
-        assert update_pipeline_resp.data["updatePipeline"]["parameters"][0] == {
+        parameters = {
+            parameter["name"]: parameter
+            for parameter in update_pipeline_resp.data["updatePipeline"]["parameters"]
+        }
+        assert parameters["example"] == {
             "name": "example", "value": "hello", "type": "STRING"}
-        assert update_pipeline_resp.data["updatePipeline"]["parameters"][1] == {
+        assert parameters["duration"] == {
             "name": "duration", "value": "0.1", "type": "FLOAT"}
+        assert parameters["id"]["value"] == "placeholder"
         assert update_pipeline_resp.data["updatePipeline"]["tags"][0] == {
             "key": "author", "value": "opensean"}
         assert update_pipeline_resp.data["updatePipeline"]["tags"][1] == {
@@ -539,8 +545,15 @@ class TestSchemaMutations:
         assert started_event["id"] == pipeline_id
         assert started_event["status"] in UNREADY_STATES
         assert started_event["taskId"] is not None
-        p = await mock_app.state.services.backend.read(id=pipeline_id)
-        assert p is not None
+
+        async def wait_for_running_pipeline():
+            while True:
+                pipeline = await mock_app.state.services.backend.read(id=pipeline_id)
+                if pipeline.current_status.state is State.STARTED:
+                    return pipeline
+                await asyncio.sleep(0.05)
+
+        p = await asyncio.wait_for(wait_for_running_pipeline(), timeout=30.0)
 
         # Send an abort request
         abort_resp = await mock_app.state.services.schema.execute(
@@ -585,8 +598,14 @@ class TestSchemaMutations:
         assert events[-1]["status"] == "SUCCESS"
         assert str(events[-1]["result"]).lower() == "aborted"
 
-        updated = await mock_app.state.services.backend.read(id=pipeline_id)
-        assert updated is not None
+        async def wait_for_aborted_pipeline():
+            while True:
+                pipeline = await mock_app.state.services.backend.read(id=pipeline_id)
+                if pipeline.current_status.state is State.ABORTED:
+                    return pipeline
+                await asyncio.sleep(0.05)
+
+        updated = await asyncio.wait_for(wait_for_aborted_pipeline(), timeout=30.0)
         assert updated.status[-1].state == State.ABORTED
 
     @pytest.mark.asyncio

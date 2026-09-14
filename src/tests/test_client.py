@@ -14,6 +14,20 @@ from kedro_graphql.schema import encode_cursor
 import pytest_asyncio
 
 
+def _parameter_values(parameters):
+    return {
+        parameter.name: next(iter(parameter.serialize().values()))
+        for parameter in parameters
+    }
+
+
+def _assert_parameters_include(actual, expected):
+    actual_values = _parameter_values(actual)
+    assert {
+        name: actual_values[name] for name in _parameter_values(expected)
+    } == _parameter_values(expected)
+
+
 @pytest_asyncio.fixture
 async def mock_create_pipeline(mock_client, mock_text_in, mock_text_out):
 
@@ -146,7 +160,7 @@ class TestKedroGraphqlClient:
 
         assert pipeline.name == expected.name
         assert pipeline.data_catalog == expected.data_catalog
-        assert pipeline.parameters == expected.parameters
+        _assert_parameters_include(pipeline.parameters, expected.parameters)
         assert pipeline.tags == expected.tags
 
     @pytest.mark.asyncio
@@ -156,7 +170,7 @@ class TestKedroGraphqlClient:
         r = await mock_client.read_pipeline(id=pipeline.id)
         assert r.name == expected.name
         assert r.data_catalog == expected.data_catalog
-        assert r.parameters == expected.parameters
+        _assert_parameters_include(r.parameters, expected.parameters)
         assert r.tags == expected.tags
 
     @pytest.mark.asyncio
@@ -174,7 +188,7 @@ class TestKedroGraphqlClient:
         )
         assert r.pipelines[0].name == expected.name
         assert r.pipelines[0].data_catalog == expected.data_catalog
-        assert r.pipelines[0].parameters == expected.parameters
+        _assert_parameters_include(r.pipelines[0].parameters, expected.parameters)
         assert r.pipelines[0].tags == expected.tags
 
     @pytest.mark.asyncio

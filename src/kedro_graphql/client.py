@@ -66,6 +66,10 @@ PIPELINE_GQL = """{
                       taskTraceback
                       taskEinfo
                       taskResult
+                      metadata {
+                        key
+                        value
+                      }
                     }
                     tags {
                       key

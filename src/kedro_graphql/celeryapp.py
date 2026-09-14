@@ -4,7 +4,7 @@ from celery import signals
 from .config import KedroGraphQLConfig
 
 
-def celery_app(config: KedroGraphQLConfig, backend):
+def celery_app(config: KedroGraphQLConfig, backend, project_path):
     app = Celery()
 
     class Config:
@@ -24,6 +24,7 @@ def celery_app(config: KedroGraphQLConfig, backend):
     app.config_from_object(Config)
     app.kedro_graphql_backend = backend
     app.kedro_graphql_config = config
+    app.kedro_project_path = project_path
     return app
 
 
