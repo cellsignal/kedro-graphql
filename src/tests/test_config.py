@@ -65,7 +65,7 @@ def test_mapping_parsing():
     )
     assert config.permissions_role_to_action_map == value
 
-    sources = {"analysis": "/runtime/demeter"}
+    sources = {"example00": "/runtime/pipelines/example00"}
     config = KedroGraphQLConfig(pipeline_config_sources=json.dumps(sources))
     assert config.pipeline_config_sources == sources
 

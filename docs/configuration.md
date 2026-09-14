@@ -123,7 +123,7 @@ When using environment variables, list and dictionary values should be provided 
 export KEDRO_GRAPHQL_IMPORTS="module1,module2,module3"
 export KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS='["./data", "/tmp"]'
 export KEDRO_GRAPHQL_EVENTS_CONFIG='{"event1": {"source": "app"}}'
-export KEDRO_GRAPHQL_PIPELINE_CONFIG_SOURCES='{"analysis": "/runtime/pipelines/demeter"}'
+export KEDRO_GRAPHQL_PIPELINE_CONFIG_SOURCES='{"example00": "/runtime/pipelines/example00"}'
 ```
 
 ## Configuration Precedence
@@ -209,7 +209,7 @@ config:
       - "read_pipelines"
       - "read_dataset"
   pipeline_config_sources:
-    analysis: /runtime/pipelines/demeter
+    example00: /runtime/pipelines/example00
   pipeline_submission_max_bytes: 1048576
   project_version: "1.0.1"
   root_path: null
