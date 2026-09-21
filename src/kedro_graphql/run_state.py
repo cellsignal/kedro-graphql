@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import Pipeline, State
 
@@ -6,14 +6,15 @@ from .models import Pipeline, State
 TERMINAL_STATES = {State.ABORTED, State.FAILURE, State.SUCCESS}
 TRANSITIONS = {
     State.STAGED: {State.READY},
-    State.READY: {State.STARTED, State.ABORTING},
+    State.READY: {State.STARTED, State.ABORTING, State.FAILURE},
     State.STARTED: {
         State.RETRY,
         State.ABORTING,
+        State.ABORTED,
         State.FAILURE,
         State.SUCCESS,
     },
-    State.RETRY: {State.STARTED, State.ABORTING, State.FAILURE},
+    State.RETRY: {State.STARTED, State.ABORTING, State.ABORTED, State.FAILURE},
     State.ABORTING: {State.ABORTED},
 }
 
@@ -30,13 +31,17 @@ def transition_run(
     **fields,
 ) -> bool:
     """Apply one valid state change, returning false for duplicate delivery."""
-    status = pipeline.status[-1]
+    status = pipeline.current_status
     if status.state is target:
         return False
     if target not in TRANSITIONS.get(status.state, set()):
         raise InvalidRunTransition(f"Cannot transition {status.state.value} to {target.value}")
 
-    now = now or datetime.now()
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    else:
+        now = now.astimezone(timezone.utc)
     status.state = target
     if target is State.STARTED:
         status.started_at = now

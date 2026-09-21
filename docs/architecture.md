@@ -30,7 +30,7 @@ flowchart TD
 
   subgraph Kedro Runners
     runner00[SequentialRunner]
-    runner01[ArgoWorkflowsRunner]
+    runner01[ExternalRunner]
     runner02[etc...]
   end
 
@@ -67,4 +67,3 @@ flowchart TD
 ```
 
 - querying and mutating pipeline data in MongoDB
-

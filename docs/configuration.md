@@ -33,11 +33,30 @@ The following table describes each configuration attribute available:
 | `permissions`                          | string | `kedro_graphql.permissions.IsAuthenticatedAlways` | Python path to the permissions class used for authentication.                                    |
 | `permissions_group_to_role_map`        | dict | `{"EXTERNAL_GROUP_NAME": "admin"}` | Mapping of external group names to roles. Specify as JSON string when using CLI/environment variables. |
 | `permissions_role_to_action_map`       | dict | `{"admin": [...]}` | Mapping of roles to allowed actions. Specify as JSON string when using CLI/environment variables. |
+| `pipeline_config_sources`              | dict | `{}` | Required allowlist mapping API pipeline names to runtime-mounted Kedro configuration directories. |
+| `pipeline_submission_max_bytes`        | integer | `1048576` | Maximum UTF-8 JSON size of the resolved catalog and parameters. Configure through YAML or `KEDRO_GRAPHQL_PIPELINE_SUBMISSION_MAX_BYTES`. |
 | `project_version`                      | string | `None` | Version of the Kedro GraphQL project.                                                            |
 | `root_path`                            | string | `""` | Root path for all API endpoints (e.g., '/api/v1'). When set, all API routes will be prefixed with this path. |
 | `runner`                               | string | `kedro.runner.SequentialRunner` | Python path to the Kedro runner class.                                                           |
 | `signed_url_max_expires_in_sec`    | integer | `43200` | Maximum allowed expiration time (in seconds) for presigned URLs. Default: 12 hours. |
 | `signed_url_provider`                  | string | `kedro_graphql.signed_url.s3_provider.S3Provider` | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
+
+External runners that outlive the Celery worker should also inherit
+`kedro_graphql.runners.ExternalRunnerLifecycle`. Implement `terminate()` to
+request external cancellation and `reconcile()` to inspect the external system
+and return a confirmed `kedro_graphql.models.State`, or `None` while no state
+change is confirmed. Both methods receive the same `run_context` and
+`emit_metadata` attributes as `run()`. The context contains `pipeline_id`,
+`task_id`, and persisted `x-` metadata. Reads reconcile the stored state;
+aborts and deletes request termination and retain the pipeline in `ABORTING`
+until `reconcile()` confirms `ABORTED`.
+
+Resolved pipeline configuration may contain a named credential reference such
+as `credentials: production-s3`, but not an inline credentials mapping or
+fields such as `password`, `token`, `api_key`, `secret_key`, or AWS access-key
+values. Supply secrets through the referenced Kedro credential provider or
+workload identity. The API rejects configuration larger than
+`pipeline_submission_max_bytes` before persistence or task publication.
 
 
 Configuration can be supplied through one or more of the following methods:
@@ -104,6 +123,7 @@ When using environment variables, list and dictionary values should be provided 
 export KEDRO_GRAPHQL_IMPORTS="module1,module2,module3"
 export KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_DOWNLOAD_ALLOWED_ROOTS='["./data", "/tmp"]'
 export KEDRO_GRAPHQL_EVENTS_CONFIG='{"event1": {"source": "app"}}'
+export KEDRO_GRAPHQL_PIPELINE_CONFIG_SOURCES='{"example00": "/runtime/pipelines/example00"}'
 ```
 
 ## Configuration Precedence
@@ -188,6 +208,9 @@ config:
       - "read_pipeline"
       - "read_pipelines"
       - "read_dataset"
+  pipeline_config_sources:
+    example00: /runtime/pipelines/example00
+  pipeline_submission_max_bytes: 1048576
   project_version: "1.0.1"
   root_path: null
   runner: "kedro.runner.SequentialRunner"

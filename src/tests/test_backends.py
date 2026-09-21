@@ -1,8 +1,10 @@
 from copy import deepcopy
 
 import pytest
+from bson import ObjectId
 
-from kedro_graphql.models import State
+from kedro_graphql.exceptions import MissingPipelineStatus
+from kedro_graphql.models import ExtensionMetadata, State
 
 
 @pytest.mark.asyncio
@@ -11,6 +13,16 @@ async def test_backend_create(mock_app, mock_pipeline_no_task):
     assert p.id is not None
     p.id = None
     assert p == mock_pipeline_no_task
+
+
+@pytest.mark.asyncio
+async def test_backend_create_preserves_preallocated_id(mock_app, mock_pipeline_no_task):
+    pipeline_id = str(ObjectId())
+    mock_pipeline_no_task.id = pipeline_id
+
+    created = await mock_app.state.services.backend.create(mock_pipeline_no_task)
+
+    assert str(created.id) == pipeline_id
 
 
 @pytest.mark.asyncio
@@ -41,3 +53,34 @@ async def test_backend_update_if_current_rejects_stale_status(mock_app, mock_pip
 
     assert await backend.update_if_current(stale, State.STAGED, 1) is None
     assert (await backend.read(id=current.id)).status[-1].state is State.STARTED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["read", "list"])
+async def test_backend_rejects_pipeline_without_status(mock_app, operation):
+    backend = mock_app.state.services.backend
+    pipeline_id = ObjectId()
+    await backend._get_collection().insert_one(
+        {"_id": pipeline_id, "name": "malformed", "status": []}
+    )
+
+    with pytest.raises(
+        MissingPipelineStatus,
+        match=f"Pipeline {pipeline_id} has no status history",
+    ):
+        if operation == "read":
+            await backend.read(id=str(pipeline_id))
+        else:
+            await backend.list()
+
+
+@pytest.mark.asyncio
+async def test_backend_round_trips_status_metadata(mock_app, mock_pipeline_no_task):
+    mock_pipeline_no_task.current_status.metadata = [
+        ExtensionMetadata(key="x-runner-id", value="external-id")
+    ]
+
+    created = await mock_app.state.services.backend.create(mock_pipeline_no_task)
+    loaded = await mock_app.state.services.backend.read(id=created.id)
+
+    assert loaded.current_status.metadata == mock_pipeline_no_task.current_status.metadata

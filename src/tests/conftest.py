@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -163,6 +163,7 @@ def cleanup_test_redis():
 def mock_celery_session_app(mock_app, mock_info_context, celery_session_app):
     celery_session_app.kedro_graphql_backend = mock_app.state.services.backend
     celery_session_app.kedro_graphql_config = mock_app.state.services.config
+    celery_session_app.kedro_project_path = Path.cwd()
     return celery_session_app
 
 
@@ -265,20 +266,14 @@ def mock_pipeline(mock_celery_session_app,
         status=[PipelineStatus(state=State.READY,
                                runner=mock_app.state.services.config.runner,
                                session="test-session",
-                               started_at=datetime.now(),
+                               started_at=datetime.now(timezone.utc),
                                task_name=str(run_pipeline))]
     )
 
-    p.created_at = datetime.now()
+    p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.to_kedro()
-
-    result = run_pipeline.apply_async(kwargs={"id": str(p.id),
-                                              "name": "example00",
-                                              "data_catalog": serial["data_catalog"],
-                                              "parameters": serial["parameters"],
-                                              "runner": mock_app.state.services.config.runner},
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
@@ -306,11 +301,11 @@ def mock_pipeline_staged(mock_app):
         status=[PipelineStatus(state=State.STAGED,
                                runner=mock_app.state.services.config.runner,
                                session="test-session",
-                               started_at=datetime.now(),
+                               started_at=datetime.now(timezone.utc),
                                task_name=str(run_pipeline))]
     )
 
-    p.created_at = datetime.now()
+    p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
     return p
 
@@ -334,20 +329,14 @@ def mock_pipeline2(mock_app, tmp_path, mock_text_in, mock_text_out):
         status=[PipelineStatus(state=State.READY,
                                runner=mock_app.state.services.config.runner,
                                session="test-session",
-                               started_at=datetime.now(),
+                               started_at=datetime.now(timezone.utc),
                                task_name=str(run_pipeline))]
     )
 
-    p.created_at = datetime.now()
+    p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
 
-    serial = p.to_kedro()
-
-    result = run_pipeline.apply_async(kwargs={"id": str(p.id),
-                                              "name": "example00",
-                                              "data_catalog": serial["data_catalog"],
-                                              "parameters": serial["parameters"],
-                                              "runner": mock_app.state.services.config.runner},
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)},
                                       countdown=0.1)
 
     print(f'Starting {p.name} pipeline with task_id: ' + str(result.id))
@@ -377,10 +366,10 @@ def mock_pipeline_no_task(mock_app, mock_text_in, mock_text_out):
     p.status.append(PipelineStatus(state=State.READY,
                                    runner=mock_app.state.services.config.runner,
                                    session="test-session",
-                                   started_at=datetime.now(),
+                                   started_at=datetime.now(timezone.utc),
                                    task_name=str(run_pipeline)))
 
-    p.created_at = datetime.now()
+    p.created_at = datetime.now(timezone.utc)
     return p
 
 
@@ -415,11 +404,11 @@ def mock_example01(mock_app, mock_timestamped_partitioned_dir, mock_text_in):
         status=[PipelineStatus(state=State.STAGED,
                                runner=mock_app.state.services.config.runner,
                                session="test-session",
-                               started_at=datetime.now(),
+                               started_at=datetime.now(timezone.utc),
                                task_name=str(run_pipeline))]
     )
 
-    p.created_at = datetime.now()
+    p.created_at = datetime.now(timezone.utc)
     p = run_sync(mock_app.state.services.backend.create(p))
     return p
 

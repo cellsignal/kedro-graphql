@@ -6,7 +6,6 @@ from collections.abc import AsyncGenerator, Iterable
 from graphql.execution import ExecutionContext as GraphQLExecutionContext
 
 import strawberry
-from bson.objectid import ObjectId
 from celery.states import READY_STATES
 from strawberry.extensions import SchemaExtension
 from strawberry.permission import PermissionExtension
@@ -38,6 +37,8 @@ from .models import (
 )
 from .pipeline_service import (
     create_pipeline as create_pipeline_service,
+    delete_pipeline as delete_pipeline_service,
+    read_pipeline as read_pipeline_service,
     update_pipeline as update_pipeline_service,
 )
 from .permissions import AppPermission, permission_class
@@ -55,7 +56,7 @@ def _permission_class(info):
     return permission_class(info)
 
 
-def encode_cursor(id: int) -> str:
+def encode_cursor(id: str) -> str:
     """
     Encodes the given id into a cursor.
 
@@ -63,10 +64,10 @@ def encode_cursor(id: int) -> str:
 
     :return: The encoded cursor.
     """
-    return b64encode(f"cursor:{id}".encode("ascii")).decode("ascii")
+    return b64encode(f"cursor:{id}".encode()).decode("ascii")
 
 
-def decode_cursor(cursor: str) -> int:
+def decode_cursor(cursor: str) -> str:
     """
     Decodes the ID from the given cursor.
 
@@ -74,8 +75,11 @@ def decode_cursor(cursor: str) -> int:
 
     :return: The decoded user ID.
     """
-    cursor_data = b64decode(cursor.encode("ascii")).decode("ascii")
-    return cursor_data.split(":")[1]
+    cursor_data = b64decode(cursor.encode("ascii")).decode()
+    prefix, separator, id = cursor_data.partition(":")
+    if prefix != "cursor" or not separator:
+        raise ValueError("Invalid cursor")
+    return id
 
 
 class DataSetConfigException(Exception):
@@ -329,18 +333,11 @@ class Query:
 
     @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:
-        if cursor is not None:
-            # decode the user ID from the given cursor.
-            pipe_id = ObjectId(decode_cursor(cursor=cursor))
-        else:
-            # unix epoch Jan 1, 1970 as objectId
-            pipe_id = ObjectId("100000000000000000000000")
-
-        # filter the pipeline template data, going through the next set of results.
+        pipe_id = decode_cursor(cursor) if cursor is not None else ""
         filtered_data = [
             pipe
             for pipe in _services(info).metadata.templates
-            if ObjectId(pipe.id).generation_time >= pipe_id.generation_time
+            if pipe.id >= pipe_id
         ]
 
         # slice the relevant pipeline template data (Here, we also slice an
@@ -364,13 +361,7 @@ class Query:
 
     @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline")]), PipelineExtension()])
     async def read_pipeline(self, id: str, info: Info) -> Pipeline:
-        try:
-            p = await _services(info).backend.read(id=id)
-            if p is None:
-                raise InvalidPipeline(
-                    f"Pipeline {id} does not exist in the project.")
-        except Exception as e:
-            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
+        p = await read_pipeline_service(_services(info), id)
         logger.info(
             f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline, id={id}")
         return p
@@ -479,17 +470,11 @@ class Mutation:
 
     @strawberry.mutation(description="Delete a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="delete_pipeline")]), PipelineExtension()])
     async def delete_pipeline(self, id: str, info: Info) -> Optional[Pipeline]:
-        try:
-            p = await _services(info).backend.read(id=id)
-            if p is None:
-                raise InvalidPipeline(
-                    f"Pipeline {id} does not exist in the project.")
-        except Exception as e:
-            raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
-
-        await _services(info).backend.delete(id=id)
-        logger.info(f'Deleted {p.name} pipeline with id: ' + str(id))
-        return p
+        return await delete_pipeline_service(
+            _services(info),
+            id,
+            _permission_class(info).get_user_info(info),
+        )
 
     @strawberry.mutation(description="Create a dataset with a signed URL", extensions=[PermissionExtension(permissions=[AppPermission(action="create_dataset")])])
     async def create_datasets(self, id: str, info: Info, datasets: List[DataSetInput], expires_in_sec: Optional[int] = None) -> List[SignedUrl | SignedUrls | None]:
@@ -517,7 +502,7 @@ class Mutation:
         urls = []
         p = await _services(info).backend.read(id=id)
 
-        if p.status[-1].state.value != "STAGED":
+        if p.current_status.state.value != "STAGED":
             raise ValueError(
                 f"Pipeline {p.name} with id {id} must be staged before creating datasets.")
 
@@ -554,24 +539,24 @@ class Subscription:
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        while (not p.status[-1].task_id):
+        while not p.current_status.task_id:
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
             p = await _services(info).backend.read(id=id)
 
-        if p and p.status[-1].state.value not in READY_STATES:
-            async for e in PipelineEventMonitor(app=_services(info).celery, task_id=p.status[-1].task_id).start(interval=interval):
+        if p and p.current_status.state.value not in READY_STATES:
+            async for e in PipelineEventMonitor(app=_services(info).celery, task_id=p.current_status.task_id).start(interval=interval):
                 e["id"] = id
                 yield PipelineEvent(**e)
         else:
-            finished_at = p.status[-1].finished_at
+            finished_at = p.current_status.finished_at
             yield PipelineEvent(
                 id=id,
-                task_id=p.status[-1].task_id,
+                task_id=p.current_status.task_id,
                 timestamp=finished_at.isoformat() if finished_at is not None else None,
-                status=p.status[-1].state.value,
-                result=p.status[-1].task_result,
-                traceback=p.status[-1].task_traceback
+                status=p.current_status.state.value,
+                result=p.current_status.task_result,
+                traceback=p.current_status.task_traceback
             )
 
     @strawberry.subscription(description="Subscribe to pipeline logs.", extensions=[PermissionExtension(permissions=[AppPermission(action="subscribe_to_logs")])])
@@ -585,13 +570,13 @@ class Subscription:
         except Exception as e:
             raise InvalidPipeline(f"Error retrieving pipeline {id}: {e}")
 
-        while (not p.status[-1].task_id):
+        while not p.current_status.task_id:
             # Wait for the task to be assigned a task_id
             await asyncio.sleep(0.1)
             p = await _services(info).backend.read(id=id)
 
         if p:
-            stream = await PipelineLogStream().create(task_id=p.status[-1].task_id, broker_url=_config(info).broker)
+            stream = await PipelineLogStream().create(task_id=p.current_status.task_id, broker_url=_config(info).broker)
             async for e in stream.consume():
                 e["id"] = id
                 yield PipelineLogMessage(**e)

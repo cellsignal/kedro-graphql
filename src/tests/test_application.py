@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
 from strawberry.fastapi import BaseContext
 
 from kedro_graphql.commands import start_worker
@@ -10,24 +11,46 @@ from kedro_graphql.project import load_project_metadata
 
 
 def test_project_metadata_uses_configured_loader(monkeypatch):
-    calls = {}
+    calls = []
 
     class Loader:
         def __init__(self, **kwargs):
-            calls.update(kwargs)
+            calls.append(kwargs)
 
         def __getitem__(self, key):
             return {"catalog": {}, "parameters": {}}[key]
 
     monkeypatch.setattr("kedro_graphql.project.settings.CONFIG_LOADER_CLASS", Loader)
     monkeypatch.setattr("kedro_graphql.project.settings.CONFIG_LOADER_ARGS", {})
-    monkeypatch.setattr("kedro_graphql.project.settings.CONF_SOURCE", "conf")
+    config = KedroGraphQLConfig(
+        env="test",
+        pipeline_config_sources={
+            "example00": "mounted/first",
+            "example01": "/mounted/second",
+        },
+    )
+    metadata = load_project_metadata(Path("/project"), config)
 
-    metadata = load_project_metadata(Path("/project"), KedroGraphQLConfig(env="test"))
+    assert calls == [
+        {"conf_source": "/project/mounted/first", "env": "test"},
+        {"conf_source": "/mounted/second", "env": "test"},
+    ]
+    assert metadata.config_sources == {
+        "example00": Path("/project/mounted/first"),
+        "example01": Path("/mounted/second"),
+    }
+    assert set(metadata.pipelines) == {"example00", "example01"}
 
-    assert calls == {"conf_source": "/project/conf", "env": "test"}
-    assert metadata.catalog == {}
-    assert metadata.parameters == {}
+
+def test_project_metadata_requires_explicit_valid_sources():
+    with pytest.raises(ValueError, match="at least one"):
+        load_project_metadata(Path("/project"), KedroGraphQLConfig())
+
+    with pytest.raises(ValueError, match="Unknown configured pipelines"):
+        load_project_metadata(
+            Path("/project"),
+            KedroGraphQLConfig(pipeline_config_sources={"missing": "conf"}),
+        )
 
 
 def test_app_contains_typed_services_without_session(mock_app):

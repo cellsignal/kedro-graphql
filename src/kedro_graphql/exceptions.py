@@ -16,3 +16,9 @@ class InvalidPipeline(Exception):
     """Raised when a pipeline cannot be staged or executed safely."""
 
     pass
+
+
+class MissingPipelineStatus(ValueError):
+    """Raised when a pipeline has no current execution status."""
+
+    pass

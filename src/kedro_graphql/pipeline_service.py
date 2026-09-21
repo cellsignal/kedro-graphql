@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from celery.contrib.abortable import AbortableAsyncResult
 from celery.states import UNREADY_STATES
+from bson import ObjectId
 from fastapi.encoders import jsonable_encoder
+from starlette.concurrency import run_in_threadpool
 
 from . import __version__ as kedro_graphql_version
 from .exceptions import InvalidPipeline
@@ -25,11 +28,14 @@ from .models import (
 )
 from .pipeline_config import (
     filter_pipeline,
+    merge_parameters,
     normalize_pipeline_config,
+    validate_configuration_boundary,
     validate_pipeline_config,
 )
-from .runners import get_runner_class
-from .run_state import InvalidRunTransition, transition_run
+from .project import load_pipeline_configuration
+from .runners import ExternalRunnerLifecycle, get_runner_class, init_runner
+from .run_state import TERMINAL_STATES, InvalidRunTransition, transition_run
 from .tasks import run_pipeline
 from .utils import generate_unique_paths
 
@@ -43,6 +49,7 @@ def _normalize_pipeline(
     slices,
     only_missing: bool,
     runner: str,
+    globals: Mapping[str, Any] | None = None,
     validate: bool = False,
 ) -> Pipeline:
     full_pipeline = services.metadata.pipelines[pipeline.name]
@@ -56,15 +63,28 @@ def _normalize_pipeline(
         dataset.name: dataset.parse_config() for dataset in pipeline.data_catalog
     }
     submitted_parameters = pipeline.to_kedro()["parameters"]
+    try:
+        server_catalog, server_parameters = load_pipeline_configuration(
+            services.metadata, services.config, pipeline.name, globals
+        )
+    except Exception as error:
+        raise InvalidPipeline(
+            f"Unable to resolve configuration for pipeline {pipeline.name}: {error}"
+        ) from error
+    merged_catalog = {**server_catalog, **submitted_catalog}
+    merged_parameters = merge_parameters(server_parameters, submitted_parameters)
     catalog, parameters, sources = normalize_pipeline_config(
-        full_pipeline, submitted_catalog, submitted_parameters
+        selected_pipeline, merged_catalog, merged_parameters
     )
     parameters.update(
         {
             name: value
-            for name, value in submitted_parameters.items()
-            if name == "runner_kwargs" or name.startswith("runner_kwargs.")
+            for name, value in merged_parameters.items()
+            if name == "runner_kwargs"
         }
+    )
+    validate_configuration_boundary(
+        catalog, parameters, services.config.pipeline_submission_max_bytes
     )
 
     datasets = {dataset.name: dataset for dataset in pipeline.data_catalog}
@@ -77,7 +97,7 @@ def _normalize_pipeline(
         for name, config in catalog.items()
     ]
     pipeline.parameters = [
-        parameter for parameter in pipeline.parameters if parameter.name in parameters
+        Parameter.from_value(name, value) for name, value in sorted(parameters.items())
     ]
 
     if validate and not only_missing:
@@ -114,10 +134,71 @@ async def _read_pipeline(services: AppServices, id: str) -> Pipeline:
     return pipeline
 
 
-def _ready_status(runner: str) -> PipelineStatus:
+def _external_runner(pipeline: Pipeline) -> ExternalRunnerLifecycle | None:
+    status = pipeline.current_status
+    if not status.runner or not status.task_id:
+        return None
+    runner_class = get_runner_class(status.runner)
+    if not issubclass(runner_class, ExternalRunnerLifecycle):
+        return None
+    parameters = pipeline.to_kedro()["parameters"]
+    runner = init_runner(
+        status.runner, **(parameters.get("runner_kwargs") or {})
+    )
+    runner.emit_metadata = status.update_metadata
+    runner.run_context = {
+        "pipeline_id": str(pipeline.id),
+        "task_id": status.task_id,
+        "metadata": {item.key: item.value for item in status.metadata},
+    }
+    return runner
+
+
+async def _reconcile_external(
+    services: AppServices,
+    pipeline: Pipeline,
+    *,
+    terminate: bool = False,
+) -> Pipeline:
+    if pipeline.current_status.state in TERMINAL_STATES:
+        return pipeline
+    runner = _external_runner(pipeline)
+    if runner is None:
+        return pipeline
+
+    status = pipeline.current_status
+    expected_state = status.state
+    status_count = len(pipeline.status)
+    original_metadata = [(item.key, item.value) for item in status.metadata]
+    if terminate:
+        await run_in_threadpool(runner.terminate)
+    target = await run_in_threadpool(runner.reconcile)
+    if target is not None:
+        if not isinstance(target, State):
+            raise InvalidPipeline("External runner reconciliation must return a State")
+        try:
+            transition_run(pipeline, target)
+        except InvalidRunTransition as error:
+            raise InvalidPipeline(str(error)) from error
+
+    metadata = [(item.key, item.value) for item in status.metadata]
+    if status.state is expected_state and metadata == original_metadata:
+        return pipeline
+    updated = await services.backend.update_if_current(
+        pipeline, expected_state, status_count
+    )
+    return updated or await _read_pipeline(services, str(pipeline.id))
+
+
+async def read_pipeline(services: AppServices, id: str) -> Pipeline:
+    return await _reconcile_external(services, await _read_pipeline(services, id))
+
+
+def _ready_status(runner: str, task_id: str | None = None) -> PipelineStatus:
     return PipelineStatus(
         state=State.READY,
         runner=runner,
+        task_id=task_id,
         task_name=str(run_pipeline),
     )
 
@@ -138,7 +219,7 @@ def _prepare_new_pipeline(
 
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
-    pipeline = Pipeline.from_dict(values)
+    pipeline = Pipeline.from_input(pipeline_input)
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
     runner = values.get("runner") or services.config.runner
     pipeline = _normalize_pipeline(
@@ -147,9 +228,10 @@ def _prepare_new_pipeline(
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=validate_ready and requested_state is PipelineInputStatus.READY,
     )
-    pipeline.created_at = datetime.now()
+    pipeline.created_at = datetime.now(timezone.utc)
     pipeline.project_version = services.config.project_version
     pipeline.kedro_graphql_version = kedro_graphql_version
     pipeline.pipeline_version = None
@@ -165,20 +247,33 @@ def _prepare_new_pipeline(
     return pipeline, values, runner, requested_state
 
 
-def _publish_pipeline(
-    pipeline: Pipeline, values: dict[str, Any], runner: str
-):
-    serial = pipeline.to_kedro()
-    return run_pipeline.delay(
-        id=str(pipeline.id),
-        name=serial["name"],
-        parameters=serial["parameters"],
-        data_catalog=serial["data_catalog"],
-        runner=runner,
-        slices=values.get("slices"),
-        only_missing=values.get("only_missing", False),
-        hooks=pipeline.hooks,
+def _publish_pipeline(pipeline: Pipeline, values: dict[str, Any], task_id: str):
+    return run_pipeline.apply_async(
+        kwargs={
+            "id": str(pipeline.id),
+            "slices": values.get("slices"),
+            "only_missing": values.get("only_missing", False),
+        },
+        task_id=task_id,
     )
+
+
+async def _publish_or_record_failure(
+    services: AppServices,
+    pipeline: Pipeline,
+    values: dict[str, Any],
+) -> None:
+    task_id = pipeline.current_status.task_id
+    if not task_id:
+        raise RuntimeError("A durable task ID is required before publication")
+    try:
+        _publish_pipeline(pipeline, values, task_id)
+    except Exception as error:
+        transition_run(pipeline, State.FAILURE, task_exception=str(error))
+        await services.backend.update_if_current(
+            pipeline, State.READY, len(pipeline.status)
+        )
+        raise
 
 
 async def create_pipeline(
@@ -197,10 +292,10 @@ async def create_pipeline(
         if dry_run:
             return pipeline
         logger.info("Staging pipeline %s", pipeline.name)
-        pipeline = await services.backend.create(pipeline)
+        pipeline.id = str(ObjectId())
         if unique_paths:
             pipeline = generate_unique_paths(pipeline, unique_paths)
-            pipeline = await services.backend.update(pipeline)
+        pipeline = await services.backend.create(pipeline)
         logger.info(
             "user=%s, action=create_pipeline, id=%s, name=%s, state=STAGED",
             _caller_name(caller),
@@ -209,20 +304,21 @@ async def create_pipeline(
         )
         return pipeline
 
-    pipeline.status.append(_ready_status(runner))
+    task_id = str(uuid4())
+    pipeline.status.append(_ready_status(runner, None if dry_run else task_id))
     if dry_run:
         return pipeline
-    pipeline = await services.backend.create(pipeline)
+    pipeline.id = str(ObjectId())
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
-        pipeline = await services.backend.update(pipeline)
-    result = _publish_pipeline(pipeline, values, runner)
+    pipeline = await services.backend.create(pipeline)
+    await _publish_or_record_failure(services, pipeline, values)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),
         pipeline.id,
         pipeline.name,
-        result.task_id,
+        task_id,
     )
     return pipeline
 
@@ -232,9 +328,12 @@ async def abort_pipeline(
     id: str,
     caller: Mapping[str, Any] | None,
     dry_run: bool = False,
+    *,
+    pipeline: Pipeline | None = None,
 ) -> Pipeline:
-    pipeline = await _read_pipeline(services, id)
-    current = pipeline.status[-1]
+    if pipeline is None:
+        pipeline = await _read_pipeline(services, id)
+    current = pipeline.current_status
     if current.state is State.ABORTED:
         return pipeline
     if (
@@ -261,11 +360,13 @@ async def abort_pipeline(
         )
         if pipeline is None:
             pipeline = await _read_pipeline(services, id)
-            if pipeline.status[-1].state is not State.ABORTING:
+            if pipeline.current_status.state is not State.ABORTING:
                 raise InvalidPipeline(
                     f"Pipeline {id} changed while abort was requested."
                 )
-        current = pipeline.status[-1]
+        current = pipeline.current_status
+    pipeline = await _reconcile_external(services, pipeline, terminate=True)
+    current = pipeline.current_status
     AbortableAsyncResult(current.task_id, app=services.celery).abort()
     logger.info(
         "user=%s, action=abort_pipeline, id=%s, name=%s, task_id=%s",
@@ -287,23 +388,32 @@ async def update_pipeline(
 ) -> Pipeline:
     values = jsonable_encoder(pipeline_input)
     requested_state = PipelineInputStatus(values["state"])
+    pipeline = await read_pipeline(services, id)
+    if pipeline_input.name != pipeline.name:
+        raise InvalidPipeline(
+            f"Pipeline name cannot be changed from {pipeline.name} to {pipeline_input.name}."
+        )
     if requested_state is PipelineInputStatus.ABORTED:
-        return await abort_pipeline(services, id, caller, dry_run)
+        return await abort_pipeline(
+            services, id, caller, dry_run, pipeline=pipeline
+        )
 
-    pipeline = await _read_pipeline(services, id)
-    expected_state = pipeline.status[-1].state
+    expected_state = pipeline.current_status.state
     expected_status_count = len(pipeline.status)
     runner = values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
-        Pipeline.from_dict(values),
+        Pipeline.from_input(pipeline_input),
         services,
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=requested_state is PipelineInputStatus.READY,
     )
     pipeline.parameters = submitted.parameters
     pipeline.data_catalog = submitted.data_catalog
+    pipeline.describe = submitted.describe
+    pipeline.nodes = submitted.nodes
     pipeline.tags = submitted.tags
     pipeline.parent = values.get("parent")
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
@@ -311,18 +421,22 @@ async def update_pipeline(
     if unique_paths:
         pipeline = generate_unique_paths(pipeline, unique_paths)
 
-    current_state = pipeline.status[-1].state.value
+    current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})
     if requested_state is PipelineInputStatus.READY and current_state not in active_states:
+        task_id = str(uuid4())
         if current_state == "STAGED":
             transition_run(
                 pipeline,
                 State.READY,
                 runner=runner,
+                task_id=None if dry_run else task_id,
                 task_name=str(run_pipeline),
             )
         else:
-            pipeline.status.append(_ready_status(runner))
+            pipeline.status.append(
+                _ready_status(runner, None if dry_run else task_id)
+            )
         if dry_run:
             return pipeline
         pipeline = await services.backend.update_if_current(
@@ -330,13 +444,13 @@ async def update_pipeline(
         )
         if pipeline is None:
             raise InvalidPipeline(f"Pipeline {id} changed while it was submitted.")
-        result = _publish_pipeline(pipeline, values, runner)
+        await _publish_or_record_failure(services, pipeline, values)
         logger.info(
             "user=%s, action=run_pipeline, id=%s, name=%s, state=READY, task_id=%s",
             _caller_name(caller),
             pipeline.id,
             pipeline.name,
-            result.task_id,
+            task_id,
         )
         logger.info(
             "user=%s, action=update_pipeline, id=%s, name=%s",
@@ -369,6 +483,30 @@ async def update_pipeline(
     return pipeline
 
 
+async def delete_pipeline(
+    services: AppServices,
+    id: str,
+    caller: Mapping[str, Any] | None,
+) -> Pipeline:
+    pipeline = await read_pipeline(services, id)
+    if pipeline.current_status.state.value in UNREADY_STATES.union(
+        {"READY", "ABORTING"}
+    ):
+        pipeline = await abort_pipeline(services, id, caller, pipeline=pipeline)
+        if pipeline.current_status.state not in TERMINAL_STATES:
+            raise InvalidPipeline(
+                f"Pipeline {id} termination must be confirmed before deletion."
+            )
+    await services.backend.delete(id=id)
+    logger.info(
+        "user=%s, action=delete_pipeline, id=%s, name=%s",
+        _caller_name(caller),
+        pipeline.id,
+        pipeline.name,
+    )
+    return pipeline
+
+
 async def submit_event_pipeline(
     services: AppServices,
     name: str,
@@ -381,8 +519,9 @@ async def submit_event_pipeline(
     pipeline, values, runner, _ = _prepare_new_pipeline(
         services, pipeline_input, validate_ready=False
     )
-    pipeline.status.append(_ready_status(runner))
-    pipeline = await services.backend.create(pipeline)
+    task_id = str(uuid4())
+    pipeline.status.append(_ready_status(runner, task_id))
+    pipeline.id = str(ObjectId())
     pipeline.parameters.append(Parameter.from_value("id", str(pipeline.id)))
     pipeline = _normalize_pipeline(
         pipeline,
@@ -390,15 +529,16 @@ async def submit_event_pipeline(
         values.get("slices"),
         values.get("only_missing", False),
         runner,
+        values.get("globals"),
         validate=True,
     )
-    pipeline = await services.backend.update(pipeline)
-    result = _publish_pipeline(pipeline, values, runner)
+    pipeline = await services.backend.create(pipeline)
+    await _publish_or_record_failure(services, pipeline, values)
     logger.info(
         "user=%s, action=create_pipeline, id=%s, name=%s, state=READY, task_id=%s",
         _caller_name(caller),
         pipeline.id,
         pipeline.name,
-        result.task_id,
+        task_id,
     )
     return pipeline
