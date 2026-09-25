@@ -149,6 +149,7 @@ def _external_runner(pipeline: Pipeline) -> ExternalRunnerLifecycle | None:
     runner.run_context = {
         "pipeline_id": str(pipeline.id),
         "task_id": status.task_id,
+        "pipeline_name": pipeline.name,
         "metadata": {item.key: item.value for item in status.metadata},
     }
     return runner

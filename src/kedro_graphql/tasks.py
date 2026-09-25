@@ -442,6 +442,7 @@ def _run_pipeline_in_child_process(
         runner_instance.run_context = {
             "pipeline_id": pipeline_id,
             "task_id": task_id,
+            "pipeline_name": pipeline_name,
             "metadata": dict(runner_metadata),
         }
         filtered_pipeline = pipelines[pipeline_name].only_nodes(*node_names)

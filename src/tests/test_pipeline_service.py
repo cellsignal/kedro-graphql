@@ -573,6 +573,7 @@ async def test_read_pipeline_reconciles_external_execution(mock_app):
     assert context == {
         "pipeline_id": str(stored.id),
         "task_id": "task-id",
+        "pipeline_name": stored.name,
         "metadata": {"x-external-id": "execution-id"},
     }
     backend.update_if_current.assert_awaited_once()

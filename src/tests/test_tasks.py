@@ -467,5 +467,6 @@ def test_child_emits_runner_metadata_over_parent_queue():
     assert runner.run_context == {
         "pipeline_id": "pipeline-id",
         "task_id": "task-id",
+        "pipeline_name": "pipeline",
         "metadata": {"x-existing": "value"},
     }
