@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from kedro.framework.hooks import _create_hook_manager
 from unittest.mock import patch, MagicMock
 
 from kedro_graphql.models import (
@@ -22,6 +23,7 @@ from kedro_graphql.tasks import (
     _run_pipeline_in_child_process,
     run_pipeline,
 )
+from kedro_graphql.hooks import LOCAL_HOOK_CALLBACKS
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -201,6 +203,7 @@ def test_run_pipeline_child_process_recreates_catalog():
             mock_runner.run.assert_called_once()
             call_args = mock_runner.run.call_args
             assert call_args[1]['catalog'] == mock_catalog_instance
+            assert call_args[1]['hook_manager'] is mock_hook_manager
             for callback in (
                 mock_hook_manager.hook.after_catalog_created,
                 mock_hook_manager.hook.before_pipeline_run,
@@ -212,6 +215,63 @@ def test_run_pipeline_child_process_recreates_catalog():
             result_queue.put.assert_called_with((State.SUCCESS, None, None))
             mock_hook_manager.hook.after_pipeline_run.assert_called_once()
             mock_hook_manager.hook.on_pipeline_error.assert_not_called()
+
+
+def test_external_child_uses_local_hooks_and_assigns_remote_specs():
+    result_queue = MagicMock()
+    runner = MagicMock()
+    celery_hook_manager = MagicMock()
+    runner_hook_manager = _create_hook_manager()
+    specs = [
+        {
+            "name": "selected",
+            "module": "hooks",
+            "attribute": "plugin",
+            "callbacks": ["before_node_run"],
+        }
+    ]
+
+    with patch("kedro_graphql.tasks.has_external_lifecycle", return_value=True), patch(
+        "kedro_graphql.tasks.hook_manager_for", return_value=celery_hook_manager
+    ) as hook_manager_for, patch(
+        "kedro_graphql.tasks.remote_hook_specs_for", return_value=specs
+    ) as remote_hook_specs_for, patch(
+        "kedro_graphql.tasks.init_runner", return_value=runner
+    ), patch(
+        "kedro_graphql.tasks._create_hook_manager", return_value=runner_hook_manager
+    ), patch("kedro_graphql.tasks.build_catalog", return_value=MagicMock()), patch(
+        "kedro_graphql.tasks.pipelines"
+    ) as pipeline_registry, patch("kedro_graphql.tasks.KedroGraphQLLogHandler"):
+        pipeline_registry.__getitem__.return_value.only_nodes.return_value = MagicMock()
+        runner.run.return_value = {}
+
+        _run_pipeline_in_child_process(
+            "tests.test_tasks.LifecycleRunner",
+            {},
+            "pipeline",
+            ["node"],
+            {},
+            {},
+            ["selected"],
+            "session",
+            {},
+            "pipeline-id",
+            "task-id",
+            {},
+            "redis://localhost",
+            result_queue,
+        )
+
+    hook_manager_for.assert_called_once_with(
+        ["selected"], callbacks=LOCAL_HOOK_CALLBACKS
+    )
+    remote_hook_specs_for.assert_called_once_with(["selected"])
+    assert runner.remote_hook_specs == specs
+    assert runner.run.call_args.kwargs["hook_manager"] is runner_hook_manager
+    assert runner_hook_manager.get_plugins() == set()
+    celery_hook_manager.hook.after_catalog_created.assert_called_once()
+    celery_hook_manager.hook.before_pipeline_run.assert_called_once()
+    celery_hook_manager.hook.after_pipeline_run.assert_called_once()
 
 
 def test_run_pipeline_child_process_reports_abort_once():

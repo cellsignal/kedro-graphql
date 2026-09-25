@@ -8,34 +8,80 @@ from kedro.pipeline import Pipeline
 from kedro_graphql.logs.logger import logger
 
 from .exceptions import InvalidPipeline
+from .remote_hooks import (
+    REMOTE_HOOK_CALLBACKS,
+    RemoteHookSpec,
+    filtered_hook_plugin,
+    hook_callbacks_for,
+    validate_remote_hook_spec,
+)
+
+LOCAL_HOOK_CALLBACKS = (
+    "after_catalog_created",
+    "before_pipeline_run",
+    "after_pipeline_run",
+    "on_pipeline_error",
+)
 
 
 def available_hook_names() -> set[str]:
     """Return the installed Kedro hook entry-point names."""
-    names = [entry_point.name for entry_point in entry_points(group="kedro.hooks")]
+    return set(_entry_points_by_name())
+
+
+def _entry_points_by_name():
+    selected = list(entry_points(group="kedro.hooks"))
+    names = [entry_point.name for entry_point in selected]
     duplicates = {name for name in names if names.count(name) > 1}
     if duplicates:
         raise ValueError(f"Duplicate Kedro hook entry points: {sorted(duplicates)}")
-    return set(names)
+    return {entry_point.name: entry_point for entry_point in selected}
 
 
-def hook_manager_for(hook_names: list[str]):
-    """Build a Kedro hook manager containing exactly ``hook_names``."""
-    available_hook_names()
-    entry_points_by_name = {entry_point.name: entry_point for entry_point in entry_points(group="kedro.hooks")}
+def _selected_plugins(hook_names: list[str]):
+    entry_points_by_name = _entry_points_by_name()
     missing = sorted(set(hook_names) - entry_points_by_name.keys())
     if missing:
         raise ValueError(f"Unavailable Kedro hooks: {missing}")
 
-    manager = _create_hook_manager()
     plugins = []
     for name in dict.fromkeys(hook_names):
-        plugin = entry_points_by_name[name].load()
+        entry_point = entry_points_by_name[name]
+        plugin = entry_point.load()
         if any(plugin is registered for registered in plugins):
             raise ValueError(f"Kedro hook {name!r} resolves to a duplicate plugin")
         plugins.append(plugin)
-        manager.register(plugin, name=name)
+        yield name, entry_point, plugin
+
+
+def hook_manager_for(hook_names: list[str], callbacks=None):
+    """Build a Kedro hook manager containing exactly ``hook_names``."""
+    manager = _create_hook_manager()
+    for name, _entry_point, plugin in _selected_plugins(hook_names):
+        manager.register(
+            plugin if callbacks is None else filtered_hook_plugin(plugin, callbacks),
+            name=name,
+        )
     return manager
+
+
+def remote_hook_specs_for(hook_names: list[str]) -> list[RemoteHookSpec]:
+    specs = []
+    for name, entry_point, plugin in _selected_plugins(hook_names):
+        callbacks = hook_callbacks_for(plugin, REMOTE_HOOK_CALLBACKS)
+        if not callbacks:
+            continue
+        specs.append(
+            validate_remote_hook_spec(
+                {
+                    "name": name,
+                    "module": entry_point.module,
+                    "attribute": entry_point.attr,
+                    "callbacks": callbacks,
+                }
+            )
+        )
+    return specs
 
 
 class DataValidationHooks:

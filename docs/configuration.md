@@ -51,6 +51,12 @@ change is confirmed. Both methods receive the same `run_context` and
 aborts and deletes request termination and retain the pipeline in `ABORTING`
 until `reconcile()` confirms `ABORTED`.
 
+Before `run()`, external runners also receive `remote_hook_specs`, a list of
+serializable selected entry-point references containing `name`, `module`,
+`attribute`, and node/dataset callback names. The external execution image can
+load these specs with a standalone Kedro hook loader; it does not need to
+install `kedro-graphql`.
+
 Resolved pipeline configuration may contain a named credential reference such
 as `credentials: production-s3`, but not an inline credentials mapping or
 fields such as `password`, `token`, `api_key`, `secret_key`, or AWS access-key

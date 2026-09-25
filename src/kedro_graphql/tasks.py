@@ -13,6 +13,7 @@ from typing import Dict, List, Mapping
 from celery import shared_task
 from celery.contrib.abortable import AbortableTask
 from kedro import __version__ as kedro_version
+from kedro.framework.hooks import _create_hook_manager
 from kedro.framework.project import pipelines
 from kedro.io import AbstractDataset
 
@@ -32,7 +33,11 @@ from kedro_graphql.models import (
     PipelineInput,
     extension_metadata_entries,
 )
-from kedro_graphql.hooks import hook_manager_for
+from kedro_graphql.hooks import (
+    LOCAL_HOOK_CALLBACKS,
+    hook_manager_for,
+    remote_hook_specs_for,
+)
 from kedro_graphql.project import create_pipeline_session
 
 from .models import DataSet, State
@@ -421,8 +426,18 @@ def _run_pipeline_in_child_process(
         result_queue.put(("metadata", dict(values)))
 
     try:
-        hook_manager = hook_manager_for(hook_names)
+        external_runner = has_external_lifecycle(runner)
+        celery_hook_manager = (
+            hook_manager_for(hook_names, callbacks=LOCAL_HOOK_CALLBACKS)
+            if external_runner
+            else hook_manager_for(hook_names)
+        )
+        runner_hook_manager = (
+            _create_hook_manager() if external_runner else celery_hook_manager
+        )
         runner_instance = init_runner(runner_import_path=runner, **runner_kwargs)
+        if external_runner:
+            runner_instance.remote_hook_specs = remote_hook_specs_for(hook_names)
         runner_instance.emit_metadata = emit_metadata
         runner_instance.run_context = {
             "pipeline_id": pipeline_id,
@@ -432,7 +447,7 @@ def _run_pipeline_in_child_process(
         filtered_pipeline = pipelines[pipeline_name].only_nodes(*node_names)
         # Recreate catalog in child process to avoid fork-unsafe connections with S3.
         io = build_catalog(catalog_config, parameters)
-        hook_manager.hook.after_catalog_created(
+        celery_hook_manager.hook.after_catalog_created(
             catalog=io,
             conf_catalog=None,
             conf_creds=None,
@@ -440,7 +455,7 @@ def _run_pipeline_in_child_process(
             save_version=None,
             load_versions=None,
         )
-        hook_manager.hook.before_pipeline_run(
+        celery_hook_manager.hook.before_pipeline_run(
             run_params=record_data,
             pipeline=filtered_pipeline,
             catalog=io,
@@ -448,7 +463,7 @@ def _run_pipeline_in_child_process(
         run_result = runner_instance.run(
             filtered_pipeline,
             catalog=io,
-            hook_manager=hook_manager,
+            hook_manager=runner_hook_manager,
             session_id=session_id,
         )
     except BaseException as error:
@@ -459,14 +474,14 @@ def _run_pipeline_in_child_process(
         if io is not None:
             try:
                 if outcome is State.SUCCESS:
-                    hook_manager.hook.after_pipeline_run(
+                    celery_hook_manager.hook.after_pipeline_run(
                         run_params=record_data,
                         run_result=run_result,
                         pipeline=filtered_pipeline,
                         catalog=io,
                     )
                 else:
-                    hook_manager.hook.on_pipeline_error(
+                    celery_hook_manager.hook.on_pipeline_error(
                         error=child_error,
                         run_params=record_data,
                         pipeline=filtered_pipeline,
