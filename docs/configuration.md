@@ -25,8 +25,8 @@ The following table describes each configuration attribute available:
 | `local_file_provider_server_url`       | string | `http://localhost:5000` | Base URL for the local file server.                             |
 | `local_file_provider_upload_allowed_roots`   | list | `["./data"]` | List of allowed root directories for uploads. Can be specified as comma-separated string or JSON array. |
 | `local_file_provider_upload_max_file_size_mb` | integer | `10` | Maximum allowed upload file size in megabytes. |
-| `log_path_prefix`                      | string | `None` | Optional prefix for log file paths.                                                              |
-| `log_tmp_dir`                          | string | `tempfile.TemporaryDirectory().name` | Directory path for temporary log files.                                                          |
+| `log_path_prefix`                      | string | `None` | Persistent local directory or S3 prefix for worker-owned `runs/<pipeline-id>/<task-id>/manifest.json` and `events.jsonl`. |
+| `log_tmp_dir`                          | string | `tempfile.TemporaryDirectory().name` | Local task log spool and recovery files. Use persistent storage when worker replacement must preserve failed uploads. |
 | `mongo_db_collection`                   | string | `pipelines` | Name of the MongoDB collection to use.                                                           |
 | `mongo_db_name`                        | string | `pipelines` | Name of the MongoDB database to use.                                                             |
 | `mongo_uri`                            | string | `mongodb://root:example@localhost:27017/` | MongoDB connection URI string.                                                                   |

@@ -23,7 +23,7 @@
 # SOFTWARE.
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 BUILTIN_ATTRS = {
     'args',
@@ -141,11 +141,14 @@ class JSONFormatter(logging.Formatter):
 
         """
         extra['message'] = message
-        if 'time' not in extra:
-            extra['time'] = datetime.utcnow()
+        extra['time'] = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        extra['level'] = record.levelname
+        extra['logger'] = record.name
 
         if record.exc_info:
             extra['exc_info'] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            extra['exc_info'] = record.exc_text
 
         return extra
 
@@ -163,6 +166,13 @@ class JSONFormatter(logging.Formatter):
 
 
 def _json_serializable(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, BaseException):
+        return {
+            'type': type(obj).__name__,
+            'message': str(obj),
+        }
     try:
         return obj.__dict__
     except AttributeError:

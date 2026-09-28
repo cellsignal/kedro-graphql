@@ -19,6 +19,26 @@ API pipeline runs execute only hooks listed in the pipeline's `hooks` input and 
 
 ## Why Use kedro-graphql?
 
+Execution archives are owned by the worker. Set `KEDRO_GRAPHQL_LOG_PATH_PREFIX`
+to a persistent directory or S3 prefix to write
+`runs/<pipeline-id>/<task-id>/manifest.json` and `events.jsonl`.
+The manifest records resolved configuration, selected nodes, versions, runner
+metadata, and execution outcome. JSONL events retain structured log fields.
+MongoDB remains authoritative for current pipeline status.
+
+In 1.5.2.dev6, remove `kedro-graphql-logging` from configured and submitted hook
+lists. Archiving no longer requires a hook or injects `gql_meta`/`gql_logs`
+datasets. Historical archives can remain in storage. Mount persistent storage
+for local archives and `KEDRO_GRAPHQL_LOG_TMP_DIR` so recovery files survive
+worker replacement if an upload fails. The live `pipelineLogs` subscription
+continues to expose messages and timestamps; the archive retains the full
+structured records.
+
+Events are spooled locally and uploaded once after the task's log handlers
+close. An external cancellation can leave the manifest at `ABORTING` with no
+`finished_at`; `worker_finished_at` only marks the worker's exit. Consult MongoDB
+for the reconciled external result.
+
 - **Unified API for Data Pipelines:** Interact with all your Kedro pipelines, datasets, and parameters through a single GraphQL endpoint with fllexible queries, mutations, and subscriptions—ideal for frontend, automation, and integration use cases.
 - **Track & Audit Pipeline Runs:** Persist and track all pipeline executions, parameters, data catalogs, and results.
 - **Distributed & Scalable Execution:** Offload pipeline runs to distributed workers with support for custom runners, enabling horizontal scaling and robust task management.

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 1.5.2.dev6
+
+- Move execution archives into the worker lifecycle, keyed by pipeline and task
+  ID, with `manifest.json` and structured `events.jsonl`.
+- Remove catalog-injected logging datasets and the `kedro-graphql-logging`
+  hook. Remove that hook from API specs and submission hook lists when upgrading.
+- Preserve nested log fields in Redis transport and JSONL archives.
+- Retain local recovery logs when archive storage fails.
+
 Added:
 
 - Explicit model conversion methods (`from_dict`, `from_graphql`, `to_graphql`, `to_input`, and `to_kedro`) with typed client return values, including `DataSetPartitions`

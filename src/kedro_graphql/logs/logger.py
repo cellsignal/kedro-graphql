@@ -35,18 +35,18 @@ class RedisLogStreamPublisher(object):
                     )
                 )
             )
-            bootstrap_payload.setdefault("level", "INFO")
-            bootstrap_payload.setdefault("logger", "kedro_graphql")
-            self.connection.xadd(
-                self.topic,
-                bootstrap_payload,
-            )
-            # stream will expire in 24 hours (safety mechanism in case task_postrun fails to delete)
+            self._xadd(bootstrap_payload)
+            # Safety net if task cleanup fails to delete the stream.
             self.connection.expire(self.topic, 86400)
 
     def publish(self, data):
-        data = {k: (str(v) if isinstance(v, bool) else v) for k, v in data.items()}
-        self.connection.xadd(self.topic, data)
+        self._xadd(data)
+
+    def _xadd(self, data):
+        self.connection.xadd(
+            self.topic,
+            {"payload": json.dumps(data, separators=(",", ":"), default=str)},
+        )
 
 
 class RedisLogStreamSubscriber(object):
@@ -71,15 +71,24 @@ class KedroGraphQLLogHandler(logging.StreamHandler):
         logging.StreamHandler.__init__(self)
         self.broker_url = broker_url
         self.topic = topic
-        self.broker = RedisLogStreamPublisher(topic, broker_url=broker_url)
+        try:
+            self.broker = RedisLogStreamPublisher(topic, broker_url=broker_url)
+        except Exception:
+            self.broker = None
+            self.handleError(logging.LogRecord(
+                __name__, logging.ERROR, __file__, 0,
+                "Unable to initialize pipeline log stream", (), None,
+            ))
         self.setFormatter(JSONFormatter())
 
     def emit(self, record):
-        msg = self.format(record)
-        payload = json.loads(msg)
-        payload["level"] = record.levelname
-        payload["logger"] = record.name
-        self.broker.publish(payload)
+        if self.broker is None:
+            return
+        try:
+            payload = json.loads(self.format(record))
+            self.broker.publish(payload)
+        except Exception:
+            self.handleError(record)
 
 
 class PipelineLogStream():
@@ -101,13 +110,23 @@ class PipelineLogStream():
                 stream_data = await self.broker.consume(count=1, start_id=start_id)
                 if len(stream_data) > 0:
                     for id, value in stream_data[0][1]:
-                        message = value.get(b"message", b"").decode()
-                        timestamp = value.get(b"time", b"").decode()
+                        try:
+                            payload = json.loads(value[b"payload"])
+                            if not isinstance(payload, dict):
+                                raise ValueError(
+                                    "pipeline log payload must be an object"
+                                )
+                        except (KeyError, TypeError, UnicodeDecodeError, ValueError):
+                            logger.warning(
+                                "Skipping malformed pipeline log stream entry"
+                            )
+                            continue
+
                         yield {
                             "task_id": self.task_id,
                             "message_id": id.decode(),
-                            "message": message,
-                            "time": timestamp,
+                            "message": payload.get("message", ""),
+                            "time": payload.get("time", ""),
                         }
                     # https://redis-py.readthedocs.io/en/stable/examples/redis-stream-example.html#read-more-data-from-the-stream
                     start_id = stream_data[0][1][-1][0]

@@ -248,13 +248,13 @@ class TestSchemaMutations:
             mutation,
             variable_values={"pipeline": {
                 "name": "example00",
-                "hooks": ["kedro-graphql-logging", "kedro-graphql-validation"],
+                "hooks": ["kedro-graphql-validation", "kedro-graphql-validation"],
             }},
         )
 
         assert response.errors is None
         assert response.data["createPipeline"]["hooks"] == [
-            "kedro-graphql-validation", "kedro-graphql-logging",
+            "kedro-graphql-validation",
         ]
 
     @pytest.mark.asyncio
@@ -637,7 +637,7 @@ class TestSchemaMutations:
         assert delete_pipeline_resp.errors is None
 
     @pytest.mark.asyncio
-    async def test_pipeline_data_catalog_modified_with_log_datasets(self,
+    async def test_pipeline_data_catalog_preserves_user_datasets(self,
                                                                     mock_app,
                                                                     mock_celery_session_app,
                                                                     celery_session_worker,
@@ -676,8 +676,7 @@ class TestSchemaMutations:
         dataset_names = {ds.name for ds in (await mock_app.state.services.backend.read(
             create_pipeline_resp.data["createPipeline"]["id"])).data_catalog}
 
-        assert "gql_meta" in dataset_names
-        assert "gql_logs" in dataset_names
+        assert dataset_names == {"text_in", "text_out"}
 
     @pytest.mark.asyncio
     async def test_pipeline_slicing(self,

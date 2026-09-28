@@ -47,7 +47,6 @@ kedro-graphql = "kedro_graphql.commands:commands"
 
 [project.entry-points."kedro.hooks"]
 kedro-graphql-validation = "kedro_graphql.hooks:validation_hooks"
-kedro-graphql-logging = "kedro_graphql.hooks:logging_hooks"
 
 [project.entry-points."panel.auth"]
 pkce = "kedro_graphql.ui.auth:PKCELoginHandler"

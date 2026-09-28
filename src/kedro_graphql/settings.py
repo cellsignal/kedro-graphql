@@ -4,8 +4,8 @@ https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html."""
 
 # Instantiated project hooks for native Kedro commands such as `kedro run`.
 # API pipeline runs use PipelineInput.hooks and config.always_hooks.
-# from kedro_graphql.hooks import DataValidationHooks, DataLoggingHooks
-# HOOKS = (DataValidationHooks(), DataLoggingHooks())
+# from kedro_graphql.hooks import DataValidationHooks
+# HOOKS = (DataValidationHooks(),)
 
 # Installed plugins for which to disable hook auto-registration.
 # DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)

@@ -2,7 +2,9 @@ import json
 import signal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
+import fsspec
 import pytest
 from kedro.framework.hooks import _create_hook_manager
 from unittest.mock import patch, MagicMock
@@ -24,6 +26,7 @@ from kedro_graphql.tasks import (
     run_pipeline,
 )
 from kedro_graphql.hooks import LOCAL_HOOK_CALLBACKS
+from kedro_graphql.archive import AttemptArchive
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -64,6 +67,7 @@ async def test_run_pipeline(mock_app,
     parameters = [{"name": "example", "value": "hello"}]
     tags = [{"key": "author", "value": "opensean"}, {
         "key": "package", "value": "kedro-graphql"}]
+    task_id = str(uuid4())
 
     p = Pipeline(
         name="example00",
@@ -75,12 +79,12 @@ async def test_run_pipeline(mock_app,
                                session=None,
                                started_at=None,
                                finished_at=None,
-                               task_id=None,
+                               task_id=task_id,
                                task_name=None)]
     )
 
     p = await mock_app.state.services.backend.create(p)
-    result = run_pipeline.delay(id=str(p.id))
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)}, task_id=task_id)
     assert result.wait(timeout=None, interval=0.5) == "success"
     stored = await mock_app.state.services.backend.read(id=p.id)
     assert stored.current_status.metadata == [
@@ -118,12 +122,15 @@ async def test_run_pipeline_preserves_child_traceback(
             PipelineStatus(
                 state=State.STAGED,
                 runner="tests.test_tasks.FailingRunner",
+                task_id=(task_id := str(uuid4())),
             )
         ],
     )
     pipeline = await mock_app.state.services.backend.create(pipeline)
 
-    result = run_pipeline.delay(id=str(pipeline.id))
+    result = run_pipeline.apply_async(
+        kwargs={"id": str(pipeline.id)}, task_id=task_id
+    )
 
     with pytest.raises(RuntimeError) as error:
         result.wait(timeout=None, interval=0.5)
@@ -324,7 +331,7 @@ def test_duplicate_and_missing_callback_delivery_is_idempotent():
     pipeline = Pipeline(
         id="000000000000000000000001",
         name="example",
-        status=[PipelineStatus(state=State.SUCCESS)],
+        status=[PipelineStatus(state=State.SUCCESS, task_id="task")],
     )
     backend = SimpleNamespace(
         read=AsyncMock(side_effect=[pipeline, None]),
@@ -398,6 +405,86 @@ def test_external_runner_local_exit_does_not_confirm_abort():
 
     assert pipeline.current_status.state is State.ABORTING
     backend.update_if_current.assert_not_awaited()
+
+
+def test_archive_failure_preserves_task_logs(tmp_path):
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.SUCCESS)],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+    task._gql_config = SimpleNamespace(log_tmp_dir=str(tmp_path))
+    task_log_dir = tmp_path / "task-id"
+    task_log_dir.mkdir()
+    (task_log_dir / "info.log").write_text("recovery log")
+
+    archive = AttemptArchive(
+        str(tmp_path / "archive"),
+        str(pipeline.id),
+        "task-id",
+        task_log_dir,
+    )
+    archive.failed = True
+    task._archives = {"task-id": archive}
+
+    task.after_return(
+        "SUCCESS",
+        "success",
+        "task-id",
+        (),
+        {"id": str(pipeline.id)},
+        None,
+    )
+
+    assert task_log_dir.exists()
+    assert (task_log_dir / "info.log").read_text() == "recovery log"
+
+
+def test_on_retry_finalizes_archive_and_retains_task_logs(tmp_path):
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.STARTED, task_id="task-id")],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(return_value=pipeline),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+    task._gql_config = SimpleNamespace(log_tmp_dir=str(tmp_path))
+    task_log_dir = tmp_path / "task-id"
+    task_log_dir.mkdir()
+    (task_log_dir / "info.log").write_text('{"message":"retry"}\n')
+
+    prefix = f"memory://task-retry-{uuid4()}"
+    archive = AttemptArchive(prefix, str(pipeline.id), "task-id", task_log_dir)
+    archive.start_attempt({"started_at": "now"})
+    task._archives = {"task-id": archive}
+
+    task.on_retry(
+        RuntimeError("retry"),
+        "task-id",
+        (),
+        {"id": str(pipeline.id)},
+        None,
+    )
+
+    assert task_log_dir.exists()
+    fs, root = fsspec.core.url_to_fs(prefix)
+    with fs.open(
+        f"{root}/runs/{pipeline.id}/task-id/manifest.json",
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        manifest = json.load(stream)
+    assert manifest["outcome"] == "RETRY"
 
 
 @pytest.mark.parametrize(

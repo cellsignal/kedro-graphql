@@ -1,11 +1,9 @@
-import os
 from importlib.metadata import entry_points
 from typing import Any
 
 from kedro.framework.hooks import _create_hook_manager, hook_impl
 from kedro.io import CatalogProtocol
 from kedro.pipeline import Pipeline
-from kedro_graphql.logs.logger import logger
 
 from .exceptions import InvalidPipeline
 from .remote_hooks import (
@@ -111,55 +109,4 @@ class DataValidationHooks:
                 raise InvalidPipeline(f"Input dataset {input} does not exist.")
 
 
-class DataLoggingHooks:
-    """
-    A Kedro hook class to save pipeline logs to S3 bucket. 
-    """
-
-    def save_meta(self, run_params: dict[str, Any], catalog: CatalogProtocol):
-        d = catalog.load("gql_meta")
-        d["run_params"] = run_params
-        catalog.save("gql_meta", d)
-
-    def save_logs(self, catalog: CatalogProtocol, run_params: dict[str, Any]):
-        log_dir = os.path.join(run_params["log_tmp_dir"], run_params["celery_task_id"])
-        log_files = ["info.log", "errors.log"]
-
-        for log_file in log_files:
-            log_path = os.path.join(log_dir, log_file)
-            if os.path.exists(log_path) and os.path.getsize(log_path) > 0:
-                with open(log_path, "r") as file:
-                    logs = file.read()
-                d = catalog._get_dataset("gql_logs")
-                d.save({f"logs/{run_params['session_id']}/{log_file}": logs})
-
-    @hook_impl
-    def before_pipeline_run(self, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        # Clear previous logs before pipeline run
-        log_dir = os.path.join(run_params["log_tmp_dir"], run_params["celery_task_id"])
-        log_files = ["info.log", "errors.log"]
-
-        for log_file in log_files:
-            log_path = os.path.join(log_dir, log_file)
-            if os.path.exists(log_path):
-                open(log_path, 'w').close()
-
-        if run_params.get("log_path_prefix"):
-            self.save_meta(run_params, catalog)
-
-    @hook_impl
-    def after_pipeline_run(
-            self, run_params: dict[str, Any],
-            run_result: dict[str, Any],
-            pipeline: Pipeline, catalog: CatalogProtocol):
-        if run_params.get("log_path_prefix"):
-            self.save_logs(catalog, run_params)
-
-    @hook_impl
-    def on_pipeline_error(self, error: Exception, run_params: dict[str, Any], pipeline: Pipeline, catalog: CatalogProtocol):
-        if run_params.get("log_path_prefix"):
-            self.save_logs(catalog, run_params)
-
-
 validation_hooks = DataValidationHooks()
-logging_hooks = DataLoggingHooks()

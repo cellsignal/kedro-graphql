@@ -19,7 +19,6 @@
   * [hook\_manager\_for](#hooks.hook_manager_for)
   * [DataValidationHooks](#hooks.DataValidationHooks)
     * [before\_pipeline\_run](#hooks.DataValidationHooks.before_pipeline_run)
-  * [DataLoggingHooks](#hooks.DataLoggingHooks)
 * [\_\_init\_\_](#__init__)
 * [settings](#settings)
 * [pipeline\_config](#pipeline_config)
@@ -492,16 +491,6 @@ Hook to be invoked before a pipeline runs.
 - `run_params` - The params used to run the pipeline.
 - `pipeline` - The ``Pipeline`` that will be run.
 - `catalog` - An implemented instance of ``CatalogProtocol`` to be used during the run.
-
-<a id="hooks.DataLoggingHooks"></a>
-
-## DataLoggingHooks Objects
-
-```python
-class DataLoggingHooks()
-```
-
-A Kedro hook class to save pipeline logs to S3 bucket.
 
 <a id="__init__"></a>
 
