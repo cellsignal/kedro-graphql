@@ -171,6 +171,7 @@ class TestSchemaQuery:
             ... on SignedUrl {
               url
               file
+              size
               fields {
                 name
                 value
@@ -180,6 +181,7 @@ class TestSchemaQuery:
               urls {
                 url
                 file
+                size
                 fields {
                   name
                   value
@@ -206,6 +208,7 @@ class TestSchemaQuery:
         assert resp.data["readDatasets"][0].get("url", False)
         assert resp.data["readDatasets"][0].get("fields", False)
         assert resp.data["readDatasets"][0].get("file", False)
+        assert resp.data["readDatasets"][0].get("size") is not None
         assert resp.data["readDatasets"][1]["__typename"] == "SignedUrl"
         assert resp.errors is None
 

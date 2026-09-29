@@ -14,6 +14,7 @@ class TestS3Provider:
         """Fixture to mock boto3 S3 client"""
         mock_boto3 = mocker.patch("kedro_graphql.signed_url.s3_provider.boto3")
         mock_s3 = mock_boto3.client.return_value
+        mock_s3.head_object.return_value = {"ContentLength": 123}
         mock_s3.generate_presigned_url.return_value = "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
         mock_s3.generate_presigned_post.return_value = {
             "url": "https://your-bucket-name.s3.amazonaws.com/",
@@ -54,6 +55,7 @@ class TestS3Provider:
         assert isinstance(output, SignedUrl)
 
         assert output.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
+        assert output.size == 123
 
     def test_read_partitions(self, mock_s3_client, mock_info, mock_partitioned_dataset):
         """Test reading multiple partitions from a PartitionedDataset"""

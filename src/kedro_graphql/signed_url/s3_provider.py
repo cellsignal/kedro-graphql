@@ -38,12 +38,16 @@ class S3Provider(SignedUrlProvider):
         }
 
         try:
-            return SignedUrl(url=s3_client.generate_presigned_url(
-                'get_object',
-                Params=params,
-                ExpiresIn=expires_in_sec
-            ),
-                file=filename)
+            size = s3_client.head_object(**params)["ContentLength"]
+            return SignedUrl(
+                url=s3_client.generate_presigned_url(
+                    'get_object',
+                    Params=params,
+                    ExpiresIn=expires_in_sec
+                ),
+                file=filename,
+                size=size,
+            )
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")
             return None

@@ -57,7 +57,12 @@ class LocalFileProvider(SignedUrlProvider):
             algorithm=config.local_file_provider_jwt_algorithm,
         )
 
-        return SignedUrl(url=url, file=path.name, fields=[SignedUrlField(name="token", value=token)])
+        return SignedUrl(
+            url=url,
+            file=path.name,
+            size=path.stat().st_size if path.is_file() else None,
+            fields=[SignedUrlField(name="token", value=token)],
+        )
 
     @staticmethod
     def read(info: Info, dataset: DataSet, expires_in_sec: int, partitions: list | None = None) -> SignedUrl | SignedUrls:

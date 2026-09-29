@@ -848,6 +848,7 @@ class SignedUrlField:
 class SignedUrl:
     url: str
     file: str
+    size: int | None = None
     fields: list[SignedUrlField] = strawberry.field(default_factory=list)
 
     @classmethod
@@ -856,6 +857,7 @@ class SignedUrl:
         return cls(
             url=result["url"],
             file=result["file"],
+            size=result.get("size"),
             fields=[SignedUrlField(**field) for field in result.get("fields") or []],
         )
 

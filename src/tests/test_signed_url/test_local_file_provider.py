@@ -82,6 +82,7 @@ class TestLocalFileProvider:
 
         c = json.loads(mock_dataset.config)
         assert Path(payload["filepath"]).resolve() == Path(c["filepath"]).resolve()
+        assert output.size == Path(c["filepath"]).stat().st_size
 
     def test_read_partitioned_local_00(self, mock_info, mock_partitioned_dataset):
         """Test reading all partitions from a PartitionedDataset"""

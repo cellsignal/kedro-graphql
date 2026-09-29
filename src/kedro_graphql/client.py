@@ -334,6 +334,7 @@ class KedroGraphqlClient:
                 ... on SignedUrl {
                   url
                   file
+                  size
                   fields {
                     name
                     value
@@ -343,6 +344,7 @@ class KedroGraphqlClient:
                   urls {
                     url
                     file
+                    size
                     fields {
                       name
                       value
