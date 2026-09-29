@@ -53,7 +53,11 @@ class S3Provider(SignedUrlProvider):
             return None
 
     @staticmethod
-    def presigned_post(filepath: str, expires_in_sec: int) -> SignedUrl | None:
+    def presigned_post(
+        filepath: str,
+        expires_in_sec: int,
+        max_bytes: int | None = None,
+    ) -> SignedUrl | None:
         """
         Generate a presigned POST URL for uploading to S3.
         Args:
@@ -67,11 +71,16 @@ class S3Provider(SignedUrlProvider):
 
         s3_client = boto3.client('s3')
         try:
-            resp = s3_client.generate_presigned_post(bucket_name,
-                                                     f"{key}/{filename}",
-                                                     Fields=None,
-                                                     Conditions=None,
-                                                     ExpiresIn=expires_in_sec)
+            conditions = None
+            if max_bytes is not None:
+                conditions = [["content-length-range", 1, max_bytes]]
+            resp = s3_client.generate_presigned_post(
+                bucket_name,
+                f"{key}/{filename}",
+                Fields=None,
+                Conditions=conditions,
+                ExpiresIn=expires_in_sec,
+            )
             return SignedUrl(url=resp["url"], file=filename, fields=[SignedUrlField(name=k, value=v) for k, v in resp["fields"].items()])
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")

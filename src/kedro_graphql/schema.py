@@ -28,6 +28,7 @@ from .models import (
     Pipeline,
     PipelineEvent,
     PipelineInput,
+    PipelineSlice,
     PipelineLogMessage,
     Pipelines,
     PipelineTemplate,
@@ -40,6 +41,16 @@ from .pipeline_service import (
     delete_pipeline as delete_pipeline_service,
     read_pipeline as read_pipeline_service,
     update_pipeline as update_pipeline_service,
+)
+from .pipeline_submission import (
+    PipelineSubmissionForm,
+    PipelineSubmissionInput,
+    SubmissionUpload,
+    SubmissionValidationResult,
+    build_submission_form,
+    create_submission_upload,
+    submit_pipeline as submit_pipeline_service,
+    validate_pipeline_submission,
 )
 from .permissions import AppPermission, permission_class
 
@@ -322,6 +333,15 @@ class PipelineSanitizer:
 
 @strawberry.type
 class Query:
+    @strawberry.field(description="Describe the inputs and parameters for a pipeline submission.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template")])])
+    def pipeline_submission_form(
+        self,
+        name: str,
+        info: Info,
+        slices: Optional[List[PipelineSlice]] = None,
+    ) -> PipelineSubmissionForm:
+        return build_submission_form(_services(info), name, slices)
+
     @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in _services(info).metadata.templates:
@@ -447,6 +467,33 @@ class Query:
 
 @strawberry.type
 class Mutation:
+    @strawberry.mutation(description="Allocate a server-controlled pipeline input upload.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")])])
+    def create_pipeline_submission_upload(
+        self,
+        name: str,
+        input_name: str,
+        filename: str,
+        info: Info,
+        slices: Optional[List[PipelineSlice]] = None,
+    ) -> SubmissionUpload:
+        return create_submission_upload(_services(info), name, input_name, filename, slices)
+
+    @strawberry.mutation(description="Validate a pipeline submission without starting it.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")])])
+    async def validate_pipeline_submission(
+        self, submission: PipelineSubmissionInput, info: Info
+    ) -> SubmissionValidationResult:
+        return await validate_pipeline_submission(_services(info), submission)
+
+    @strawberry.mutation(description="Submit a pipeline using server-controlled catalog configuration.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")])])
+    async def submit_pipeline(
+        self, submission: PipelineSubmissionInput, info: Info
+    ) -> Pipeline:
+        return await submit_pipeline_service(
+            _services(info),
+            submission,
+            _permission_class(info).get_user_info(info),
+        )
+
     @strawberry.mutation(description="Execute a pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")]), PipelineInputExtension()])
     async def create_pipeline(self, pipeline: PipelineInput, info: Info, unique_paths: Optional[List[str]] = None, dry_run: bool = False) -> Pipeline:
         return await create_pipeline_service(

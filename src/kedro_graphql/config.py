@@ -75,6 +75,9 @@ class KedroGraphQLConfig(BaseModel):
     )
     pipeline_config_sources: dict[str, str] = Field(default_factory=dict)
     pipeline_submission_max_bytes: int = Field(default=1_048_576, gt=0)
+    pipeline_submission_s3_allowed_prefixes: list[str] = Field(default_factory=list)
+    pipeline_submission_upload_expires_in_sec: int = Field(default=3600, gt=0)
+    pipeline_submission_upload_root: str = "./data/submissions"
     project_name: str | None = Field(default=None, alias="KEDRO_PROJECT_NAME")
     project_version: str = "None"
     root_path: str = ""
@@ -87,6 +90,7 @@ class KedroGraphQLConfig(BaseModel):
         "imports",
         "local_file_provider_download_allowed_roots",
         "local_file_provider_upload_allowed_roots",
+        "pipeline_submission_s3_allowed_prefixes",
         mode="before",
     )
     @classmethod
