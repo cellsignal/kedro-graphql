@@ -78,9 +78,11 @@ class KedroGraphQLConfig(BaseModel):
     pipeline_submission_s3_allowed_prefixes: list[str] = Field(default_factory=list)
     pipeline_submission_upload_expires_in_sec: int = Field(default=3600, gt=0)
     pipeline_submission_upload_root: str = "./data/submissions"
+    pipeline_submission_upload_roots: dict[str, str] = Field(default_factory=dict)
     project_name: str | None = Field(default=None, alias="KEDRO_PROJECT_NAME")
     project_version: str = "None"
     root_path: str = ""
+    pipeline_runners: dict[str, str] = Field(default_factory=dict)
     runner: str = "kedro.runner.SequentialRunner"
     signed_url_max_expires_in_sec: int = 43200
     signed_url_provider: str = "kedro_graphql.signed_url.s3_provider.S3Provider"
@@ -110,6 +112,8 @@ class KedroGraphQLConfig(BaseModel):
         "permissions_group_to_role_map",
         "permissions_role_to_action_map",
         "pipeline_config_sources",
+        "pipeline_runners",
+        "pipeline_submission_upload_roots",
         mode="before",
     )
     @classmethod

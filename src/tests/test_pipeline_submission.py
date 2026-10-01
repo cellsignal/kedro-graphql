@@ -8,6 +8,7 @@ from kedro.pipeline import Pipeline, node
 
 from kedro_graphql.config import load_config
 from kedro_graphql.models import PipelineSlice, PipelineSliceType
+from kedro_graphql.exceptions import InvalidPipeline
 from kedro_graphql.pipeline_submission import (
     PipelineSubmissionInput,
     SubmissionDatasetInput,
@@ -244,3 +245,47 @@ def test_submission_schema_contains_new_operations():
     assert "pipelineSubmissionForm" in rendered
     assert "submitPipeline" in rendered
     assert "pipelineSubmissionChoices" not in rendered
+
+
+def test_form_reports_effective_server_runner(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    assert build_submission_form(services, "toy").runner == "kedro.runner.SequentialRunner"
+    services.config.pipeline_runners = {"toy": "ab_discovery.runners.argo.ArgoRunner"}
+    assert build_submission_form(services, "toy").runner == "ab_discovery.runners.argo.ArgoRunner"
+
+
+def test_pipeline_upload_root_override_is_used(tmp_path, monkeypatch):
+    from kedro_graphql.pipeline_submission import _upload_root
+    services = _services(tmp_path, monkeypatch)
+    services.config.pipeline_submission_upload_roots = {"toy": "s3://allowed/input/toy"}
+    assert _upload_root(services.config, "toy") == "s3://allowed/input/toy"
+    assert _upload_root(services.config, "aggregate") == services.config.pipeline_submission_upload_root
+    assert SubmissionInputMethod.UPLOAD in build_submission_form(services, "toy").inputs[0].methods
+
+
+def test_s3_upload_uses_pipeline_root_and_rejects_changed_root(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    services = _services(tmp_path, monkeypatch)
+    services.config.pipeline_submission_upload_roots = {"toy": "s3://allowed/input/toy"}
+    sign = Mock(return_value=SimpleNamespace(url="https://s3.example", file="input.txt", fields=[]))
+    monkeypatch.setattr("kedro_graphql.pipeline_submission.S3Provider.presigned_post", sign)
+    upload = create_submission_upload(services, "toy", "raw", "input.txt")
+    assert sign.call_args.args[0].startswith("s3://allowed/input/toy/")
+    head = Mock(return_value={"ContentLength": 3})
+    monkeypatch.setattr("kedro_graphql.pipeline_submission.boto3.client", lambda *_args: SimpleNamespace(head_object=head))
+    source = SubmissionDatasetInput(name="raw", method=SubmissionInputMethod.UPLOAD, upload_id=upload.upload_id)
+    submission = PipelineSubmissionInput(name="toy", inputs=[source])
+    assert _decode_upload(services, submission, source).startswith("s3://allowed/input/toy/")
+    services.config.pipeline_submission_upload_roots["toy"] = "s3://allowed/input/other"
+    with pytest.raises(InvalidPipeline, match="outside the configured upload root"):
+        _decode_upload(services, submission, source)
+
+
+def test_local_upload_cannot_be_used_after_pipeline_switches_to_s3(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    upload = create_submission_upload(services, "toy", "raw", "input.txt")
+    source = SubmissionDatasetInput(name="raw", method=SubmissionInputMethod.UPLOAD, upload_id=upload.upload_id)
+    services.config.pipeline_submission_upload_roots = {"toy": "s3://allowed/input/toy"}
+    with pytest.raises(InvalidPipeline, match="outside the configured upload root"):
+        _decode_upload(services, PipelineSubmissionInput(name="toy", inputs=[source]), source)

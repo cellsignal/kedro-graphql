@@ -557,3 +557,21 @@ def test_child_emits_runner_metadata_over_parent_queue():
         "pipeline_name": "pipeline",
         "metadata": {"x-existing": "value"},
     }
+
+
+def test_external_termination_is_reported_as_aborted_by_child():
+    from kedro_graphql.runners import ExternalRunnerAborted
+    result_queue = MagicMock()
+    runner = MagicMock()
+    runner.run.side_effect = ExternalRunnerAborted("Workflow terminated")
+    with patch("kedro_graphql.tasks.signal.signal"), patch(
+        "kedro_graphql.tasks.init_runner", return_value=runner
+    ), patch("kedro_graphql.tasks.hook_manager_for", return_value=MagicMock()), patch(
+        "kedro_graphql.tasks.pipelines"
+    ) as registry, patch("kedro_graphql.tasks.KedroGraphQLLogHandler"):
+        registry.__getitem__.return_value.only_nodes.return_value = MagicMock()
+        _run_pipeline_in_child_process(
+            "tests.test_tasks.MetadataRunner", {}, "pipeline", ["node"], {}, {}, [],
+            "session", {}, "pipeline-id", "task", {}, "redis://localhost", result_queue,
+        )
+    assert result_queue.put.call_args.args[0][0] is State.ABORTED

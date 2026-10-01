@@ -222,7 +222,7 @@ def _prepare_new_pipeline(
     requested_state = PipelineInputStatus(values["state"])
     pipeline = Pipeline.from_input(pipeline_input)
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
-    runner = values.get("runner") or services.config.runner
+    runner = services.config.pipeline_runners.get(pipeline.name) or values.get("runner") or services.config.runner
     pipeline = _normalize_pipeline(
         pipeline,
         services,
@@ -401,7 +401,7 @@ async def update_pipeline(
 
     expected_state = pipeline.current_status.state
     expected_status_count = len(pipeline.status)
-    runner = values.get("runner") or services.config.runner
+    runner = services.config.pipeline_runners.get(pipeline.name) or values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
         Pipeline.from_input(pipeline_input),
         services,

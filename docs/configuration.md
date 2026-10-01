@@ -37,6 +37,7 @@ The following table describes each configuration attribute available:
 | `pipeline_submission_max_bytes`        | integer | `1048576` | Maximum UTF-8 JSON size of the resolved catalog and parameters. Configure through YAML or `KEDRO_GRAPHQL_PIPELINE_SUBMISSION_MAX_BYTES`. |
 | `project_version`                      | string | `None` | Version of the Kedro GraphQL project.                                                            |
 | `root_path`                            | string | `""` | Root path for all API endpoints (e.g., '/api/v1'). When set, all API routes will be prefixed with this path. |
+| `pipeline_runners` | dict | `{}` | Server-owned mapping of pipeline names to runner class paths. Takes precedence over an input runner; unmapped pipelines use the input runner or `runner`. |
 | `runner`                               | string | `kedro.runner.SequentialRunner` | Python path to the Kedro runner class.                                                           |
 | `signed_url_max_expires_in_sec`    | integer | `43200` | Maximum allowed expiration time (in seconds) for presigned URLs. Default: 12 hours. |
 | `signed_url_provider`                  | string | `kedro_graphql.signed_url.s3_provider.S3Provider` | Python path to the presigned URL provider class (e.g., for S3 or local file support). |
@@ -360,3 +361,18 @@ KEDRO_GRAPHQL_LOCAL_FILE_PROVIDER_UPLOAD_ALLOWED_ROOTS='["./data", "./uploads"]'
 KEDRO_GRAPHQL_EVENTS_CONFIG='{"event1": {"source": "app", "type": "test"}}'
 KEDRO_GRAPHQL_PERMISSIONS_ROLE_TO_ACTION_MAP='{"admin": ["create_pipeline", "read_pipeline"]}'
 ```
+
+## Live pipeline status
+
+`pipelineUpdates(id)` sends persisted run history and dataset existence, initially
+and whenever they change. Mongo is authoritative for run state; existence is
+checked in storage. Checks run every two seconds while active and once at the
+end of a run. Failed existence checks return null. The subscription requires
+`read_pipeline` and `subscribe_to_events`; it remains open for subsequent runs.
+API startup also starts external-run reconciliation every five seconds, using
+the shared runner lifecycle and conditional Mongo updates independently of clients.
+
+`pipelineSubmissionForm` includes the effective server-selected `runner` for review
+before submission. `pipeline_submission_upload_roots` maps pipeline names to
+upload roots, taking precedence over `pipeline_submission_upload_root`; this
+allows remote-runner uploads to use S3 alongside local-runner uploads.

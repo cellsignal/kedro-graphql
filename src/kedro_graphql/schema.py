@@ -18,6 +18,7 @@ from strawberry.schema.config import StrawberryConfig
 from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
+from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
 from .logs.logger import PipelineLogStream, logger
@@ -574,6 +575,17 @@ class Mutation:
 
 @strawberry.type
 class Subscription:
+    @strawberry.subscription(
+        description="Subscribe to persisted pipeline state and dataset existence.",
+        extensions=[PermissionExtension(permissions=[
+            AppPermission(action="subscribe_to_events"),
+            AppPermission(action="read_pipeline"),
+        ])],
+    )
+    async def pipeline_updates(self, id: str, info: Info) -> AsyncGenerator[PipelineUpdate, None]:
+        async for snapshot in pipeline_updates(_services(info), id):
+            yield snapshot
+
     @strawberry.subscription(description="Subscribe to pipeline events.", extensions=[PermissionExtension(permissions=[AppPermission(action="subscribe_to_events")])])
     async def pipeline(self, id: str, info: Info, interval: float = 0.5) -> AsyncGenerator[PipelineEvent]:
         """Subscribe to pipeline events.

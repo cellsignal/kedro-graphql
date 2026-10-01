@@ -7,6 +7,10 @@ from kedro_graphql.models import State
 logger = logging.getLogger("kedro")
 
 
+class ExternalRunnerAborted(Exception):
+    """The external execution has confirmed termination."""
+
+
 class ExternalRunnerLifecycle(ABC):
     """Operations required to manage execution outside the Celery worker.
 

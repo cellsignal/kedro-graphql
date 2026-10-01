@@ -92,6 +92,7 @@ class SubmissionOutput:
 @strawberry.type
 class PipelineSubmissionForm:
     pipeline_name: str
+    runner: str
     nodes: list[Node]
     inputs: list[SubmissionDataset]
     parameters: list[SubmissionParameter]
@@ -278,6 +279,10 @@ def _dataset_location_key(config: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _upload_root(config, name):
+    return config.pipeline_submission_upload_roots.get(name) or config.pipeline_submission_upload_root
+
+
 def _upload_root_is_usable(config) -> bool:
     """Check whether the configured upload root is usable."""
     root = config.pipeline_submission_upload_root
@@ -373,11 +378,14 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
         for dataset in selected.inputs() - produced
         if not dataset.startswith("params:") and dataset != "parameters"
     )
+    upload_config = services.config.model_copy(update={
+        "pipeline_submission_upload_root": _upload_root(services.config, name),
+    })
     inputs = [
         _dataset_descriptor(
             name,
             resolved_catalog.get(name) or catalog.get(name),
-            services.config,
+            upload_config,
         )
         for name in free_inputs
     ]
@@ -415,6 +423,7 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
     ]
     return PipelineSubmissionForm(
         pipeline_name=name,
+        runner=services.config.pipeline_runners.get(name) or services.config.runner,
         nodes=nodes,
         inputs=inputs,
         parameters=parameter_rows,
@@ -549,7 +558,7 @@ def create_submission_upload(services, name: str, input_name: str, filename: str
     expires = config.pipeline_submission_upload_expires_in_sec
     max_bytes = _upload_max_bytes(config)
     upload_id = str(uuid4())
-    root = config.pipeline_submission_upload_root.rstrip("/")
+    root = _upload_root(config, name).rstrip("/")
     if root.startswith("s3://"):
         uri = f"{root}/{upload_id}/inputs/{_safe_component(input_name)}/{filename}"
         _s3_parts(uri)
@@ -572,7 +581,7 @@ def create_submission_upload(services, name: str, input_name: str, filename: str
             max_bytes=max_bytes,
         )
 
-    root_path = Path(config.pipeline_submission_upload_root).resolve()
+    root_path = Path(_upload_root(config, name)).resolve()
     destination = root_path / upload_id / "inputs" / _safe_component(input_name) / filename
     allowed_roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
     if not any(destination.is_relative_to(allowed) for allowed in allowed_roots):
@@ -616,9 +625,10 @@ def _decode_upload(services, submission: PipelineSubmissionInput, source: Submis
     if payload.get("kind") != "pipeline-submission-upload" or payload.get("pipeline") != submission.name or payload.get("input") != source.name:
         raise InvalidPipeline("Upload ID does not belong to this pipeline input.")
     max_bytes = _upload_max_bytes(config)
+    root = _upload_root(config, submission.name)
     if payload.get("s3_uri"):
         uri = payload["s3_uri"]
-        if not _within_s3_scope(uri, [config.pipeline_submission_upload_root]):
+        if not _within_s3_scope(uri, [root]):
             raise InvalidPipeline("Upload destination is outside the configured upload root.")
         bucket, key = _s3_parts(uri)
         try:
@@ -632,6 +642,8 @@ def _decode_upload(services, submission: PipelineSubmissionInput, source: Submis
     if not filepath:
         raise InvalidPipeline("Upload ID has no destination.")
     path = Path(filepath).resolve()
+    if root.startswith("s3://") or not path.is_relative_to(Path(root).resolve()):
+        raise InvalidPipeline("Upload destination is outside the configured upload root.")
     roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
     if not any(path.is_relative_to(root) for root in roots):
         raise InvalidPipeline("Upload destination is outside the configured local root.")

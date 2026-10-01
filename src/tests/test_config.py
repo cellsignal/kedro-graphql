@@ -87,3 +87,10 @@ def test_unknown_yaml_setting_fails(tmp_path):
         "kedro_graphql.config.dotenv_values", return_value={}
     ), pytest.raises(ValidationError):
         load_config(api_spec=spec)
+
+
+def test_pipeline_runners_parse_json_and_default_to_sequential():
+    config = KedroGraphQLConfig(pipeline_runners='{"toy": "custom.ArgoRunner"}')
+    assert config.pipeline_runners == {"toy": "custom.ArgoRunner"}
+    assert config.runner == "kedro.runner.SequentialRunner"
+    assert KedroGraphQLConfig().pipeline_runners == {}

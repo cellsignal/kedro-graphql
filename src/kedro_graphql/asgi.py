@@ -1,5 +1,6 @@
+import asyncio
 import shutil
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -22,6 +23,7 @@ from .context import GraphQLContext
 from .decorators import TYPE_PLUGINS, discover_plugins
 from .hooks import available_hook_names, hook_manager_for
 from .logs.logger import logger
+from .pipeline_updates import reconcile_active_pipelines
 from .pipeline_service import submit_event_pipeline
 from .permissions import get_permissions
 from .project import ProjectMetadata
@@ -63,8 +65,14 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await backend.startup()
-        yield
-        await backend.shutdown()
+        reconciler = asyncio.create_task(reconcile_active_pipelines(app.state.services))
+        try:
+            yield
+        finally:
+            reconciler.cancel()
+            with suppress(asyncio.CancelledError):
+                await reconciler
+            await backend.shutdown()
 
     app = FastAPI(
         title=config.app_title,

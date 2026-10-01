@@ -18,7 +18,7 @@ from kedro_graphql.logs.logger import KedroGraphQLLogHandler
 from kedro_graphql.logs.json_log_formatter import JSONFormatter
 from kedro_graphql import __version__ as kedro_graphql_version
 from kedro_graphql.utils import run_sync
-from kedro_graphql.runners import get_runner_class, has_external_lifecycle, init_runner
+from kedro_graphql.runners import ExternalRunnerAborted, get_runner_class, has_external_lifecycle, init_runner
 from kedro_graphql.pipeline_config import (
     build_catalog,
     filter_only_missing_pipeline,
@@ -590,7 +590,7 @@ def _run_pipeline_in_child_process(
     except BaseException as error:
         child_error = error
         child_traceback = traceback.format_exc()
-        outcome = State.ABORTED if abort_triggered else State.FAILURE
+        outcome = State.ABORTED if abort_triggered or isinstance(error, ExternalRunnerAborted) else State.FAILURE
     finally:
         if io is not None:
             try:
@@ -884,6 +884,8 @@ def run_pipeline(self,
                 return "aborted"
 
             outcome, error_message, child_traceback = child_result
+            if outcome is State.ABORTED:
+                return "aborted"
             if outcome is not State.SUCCESS:
                 error_message = error_message or "Unknown child process error"
                 if child_traceback:

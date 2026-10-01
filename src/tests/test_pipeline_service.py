@@ -678,3 +678,19 @@ async def test_event_service_creates_ready_pipeline_with_typed_id(mock_app):
         "slices": [],
         "only_missing": False,
     }
+
+
+@pytest.mark.parametrize("configured, requested, expected", [
+    ({}, None, "kedro.runner.SequentialRunner"),
+    ({"example00": "custom.ArgoRunner"}, None, "custom.ArgoRunner"),
+    ({"example00": "custom.ArgoRunner"}, "custom.OtherRunner", "custom.ArgoRunner"),
+    ({"other": "custom.ArgoRunner"}, None, "kedro.runner.SequentialRunner"),
+])
+@pytest.mark.asyncio
+async def test_pipeline_runner_selection(mock_app, configured, requested, expected):
+    services = _services(mock_app, _backend())
+    services.config.pipeline_runners = configured
+    pipeline_input = _pipeline_input("STAGED")
+    pipeline_input.runner = requested
+    result = await create_pipeline(services, pipeline_input, None, dry_run=True)
+    assert result.current_status.runner == expected
