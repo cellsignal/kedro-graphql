@@ -160,6 +160,7 @@ _PARTITIONED_TYPES = {
 
 
 def _slice_payload(slices: list[PipelineSlice] | None) -> list[dict[str, Any]]:
+    """Serialize GraphQL slices for pipeline filtering."""
     payload = []
     for item in slices or []:
         value = item.slice.value if hasattr(item.slice, "value") else item.slice
@@ -168,10 +169,12 @@ def _slice_payload(slices: list[PipelineSlice] | None) -> list[dict[str, Any]]:
 
 
 def _simple(value: Any) -> bool:
+    """Return whether a value is a supported scalar."""
     return value is None or type(value) in {bool, str, int, float}
 
 
 def _value_type(value: Any) -> SubmissionValueType:
+    """Classify a Python value for submission input."""
     if value is None:
         return SubmissionValueType.NULL
     if type(value) is bool:
@@ -192,6 +195,7 @@ def _flatten_parameter(
     segments: tuple[str, ...],
     specs: dict[tuple[str, ...], _ParameterSpec],
 ) -> None:
+    """Collect editable leaf parameters from nested values."""
     if isinstance(value, Mapping):
         if not value:
             specs[segments] = _ParameterSpec(
@@ -219,6 +223,7 @@ def _flatten_parameter(
 
 
 def _resolve_parameter(parameters: Mapping[str, Any], path: str) -> tuple[Any, tuple[str, ...]]:
+    """Resolve a dotted parameter path."""
     if path in parameters:
         return parameters[path], (path,)
     value: Any = parameters
@@ -231,6 +236,7 @@ def _resolve_parameter(parameters: Mapping[str, Any], path: str) -> tuple[Any, t
 
 
 def _parameter_specs(selected, parameters: Mapping[str, Any]) -> dict[tuple[str, ...], _ParameterSpec]:
+    """Build parameter specs required by the selected pipeline."""
     specs: dict[tuple[str, ...], _ParameterSpec] = {}
     required = sorted(
         name.removeprefix("params:")
@@ -257,12 +263,14 @@ def _parameter_specs(selected, parameters: Mapping[str, Any]) -> dict[tuple[str,
 
 
 def _dataset_kind(config: Mapping[str, Any]) -> SubmissionDatasetKind:
+    """Classify a dataset as partitioned or single-file."""
     if config.get("type") in _PARTITIONED_TYPES:
         return SubmissionDatasetKind.PARTITIONED
     return SubmissionDatasetKind.SINGLE_FILE
 
 
 def _dataset_location_key(config: Mapping[str, Any]) -> str | None:
+    """Return the catalog key containing a dataset location."""
     if isinstance(config.get("filepath"), str):
         return "filepath"
     if isinstance(config.get("path"), str):
@@ -271,6 +279,7 @@ def _dataset_location_key(config: Mapping[str, Any]) -> str | None:
 
 
 def _upload_root_is_usable(config) -> bool:
+    """Check whether the configured upload root is usable."""
     root = config.pipeline_submission_upload_root
     if not root:
         return False
@@ -285,6 +294,7 @@ def _upload_root_is_usable(config) -> bool:
 def _dataset_descriptor(
     name: str, config: Mapping[str, Any] | None, server_config
 ) -> SubmissionDataset:
+    """Describe how a dataset can be supplied to a submission."""
     if not config:
         return SubmissionDataset(
             name=name,
@@ -343,6 +353,7 @@ def _dataset_descriptor(
 
 
 def _form_context(services, name: str, slices: list[PipelineSlice] | None):
+    """Load and normalize the selected pipeline context."""
     if name not in services.metadata.pipelines:
         raise InvalidPipeline(f"Pipeline {name} does not exist in the project.")
     selected = filter_pipeline(services.metadata.pipelines[name], _slice_payload(slices))
@@ -354,6 +365,7 @@ def _form_context(services, name: str, slices: list[PipelineSlice] | None):
 
 
 def build_submission_form(services, name: str, slices: list[PipelineSlice] | None = None) -> PipelineSubmissionForm:
+    """Build submission metadata for a selected pipeline."""
     selected, catalog, resolved_catalog, parameters = _form_context(services, name, slices)
     produced = set(selected.outputs())
     free_inputs = sorted(
@@ -411,6 +423,7 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
 
 
 def _validate_parameter_value(value: Any, value_type: SubmissionValueType) -> bool:
+    """Check a value against its declared submission type."""
     if value_type is SubmissionValueType.NULL:
         return value is None
     if value_type is SubmissionValueType.BOOLEAN:
@@ -427,6 +440,7 @@ def _validate_parameter_value(value: Any, value_type: SubmissionValueType) -> bo
 
 
 def _set_parameter(parameters: dict[str, Any], segments: tuple[str, ...], value: Any) -> None:
+    """Set a nested parameter value."""
     target = parameters
     for segment in segments[:-1]:
         child = target.get(segment)
@@ -439,6 +453,7 @@ def _set_parameter(parameters: dict[str, Any], segments: tuple[str, ...], value:
 
 
 def _parameter_inputs(parameters: Mapping[str, Any]) -> list[ParameterInput]:
+    """Convert parameter values to Kedro inputs."""
     result = []
     for name, value in parameters.items():
         if value is None or isinstance(value, (dict, list)):
@@ -459,6 +474,7 @@ def _parameter_inputs(parameters: Mapping[str, Any]) -> list[ParameterInput]:
 
 
 def _s3_parts(uri: str) -> tuple[str, str]:
+    """Parse and validate an S3 URI."""
     parsed = urlparse(uri)
     if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
         raise InvalidPipeline("S3 inputs must be full s3://bucket/key URIs.")
@@ -466,6 +482,7 @@ def _s3_parts(uri: str) -> tuple[str, str]:
 
 
 def _within_s3_scope(uri: str, roots: list[str]) -> bool:
+    """Check whether an S3 URI falls under a configured root."""
     normalized = uri.rstrip("/")
     return any(
         normalized == root.rstrip("/")
@@ -475,6 +492,7 @@ def _within_s3_scope(uri: str, roots: list[str]) -> bool:
 
 
 def _check_s3_uri(config, uri: str) -> str:
+    """Verify that an S3 URI is allowed and accessible."""
     _s3_parts(uri)
     if not config.pipeline_submission_s3_allowed_prefixes:
         raise InvalidPipeline("No permitted S3 input scope is configured.")
@@ -489,20 +507,24 @@ def _check_s3_uri(config, uri: str) -> str:
 
 
 def _safe_filename(filename: str) -> str:
+    """Validate an upload filename."""
     if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename:
         raise InvalidPipeline("Upload filename must be a single file name.")
     return filename
 
 
 def _safe_component(value: str) -> str:
+    """Convert a value into a safe path component."""
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
 
 
 def _upload_max_bytes(config) -> int:
+    """Return the configured upload size limit in bytes."""
     return config.local_file_provider_upload_max_file_size_mb * 1024 * 1024
 
 
 def _jwt_payload(config, **values) -> str:
+    """Create a signed upload token."""
     payload = {
         **values,
         "exp": int((datetime.now(timezone.utc) + timedelta(seconds=config.pipeline_submission_upload_expires_in_sec)).timestamp()),
@@ -515,6 +537,7 @@ def _jwt_payload(config, **values) -> str:
 
 
 def create_submission_upload(services, name: str, input_name: str, filename: str, slices=None) -> SubmissionUpload:
+    """Allocate an upload destination and signed upload details."""
     form = build_submission_form(services, name, slices)
     dataset = next((item for item in form.inputs if item.name == input_name), None)
     if dataset is None or not dataset.supported:
@@ -578,6 +601,7 @@ def create_submission_upload(services, name: str, input_name: str, filename: str
 
 
 def _decode_upload(services, submission: PipelineSubmissionInput, source: SubmissionDatasetInput) -> str:
+    """Validate an upload token and resolve its uploaded file."""
     if not source.upload_id:
         raise InvalidPipeline("An upload ID is required.")
     config = services.config
@@ -619,6 +643,7 @@ def _decode_upload(services, submission: PipelineSubmissionInput, source: Submis
 
 
 def _replace_location(config: Mapping[str, Any], location: str) -> dict[str, Any]:
+    """Replace a catalog dataset location."""
     result = copy.deepcopy(dict(config))
     key = _dataset_location_key(result)
     if key is None:
@@ -628,6 +653,7 @@ def _replace_location(config: Mapping[str, Any], location: str) -> dict[str, Any
 
 
 def _prepare_submission(services, submission: PipelineSubmissionInput):
+    """Validate and materialize a pipeline submission request."""
     selected, catalog, resolved_catalog, defaults = _form_context(
         services, submission.name, submission.slices
     )
@@ -714,6 +740,7 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
 
 
 async def validate_pipeline_submission(services, submission: PipelineSubmissionInput) -> SubmissionValidationResult:
+    """Validate a submission without persisting or running it."""
     try:
         pipeline_input, errors, managed_outputs = _prepare_submission(services, submission)
     except (InvalidPipeline, ValueError) as error:
@@ -742,6 +769,7 @@ async def validate_pipeline_submission(services, submission: PipelineSubmissionI
 
 
 async def submit_pipeline(services, submission: PipelineSubmissionInput, caller) -> Any:
+    """Create and start a validated pipeline submission."""
     pipeline_input, errors, managed_outputs = _prepare_submission(services, submission)
     if errors:
         raise InvalidPipeline("; ".join(error.message for error in errors))
