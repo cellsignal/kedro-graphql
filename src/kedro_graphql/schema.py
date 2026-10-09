@@ -20,7 +20,6 @@ from strawberry.extensions import FieldExtension
 
 from .archived_logs import ArchivedLogChunk, pipeline_archived_logs
 from .autocomplete import InputSuggestions, dataset_input_suggestions
-
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
@@ -406,7 +405,7 @@ class Query:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)
         else:
-            pipe_id = "000000000000000000000000"  # unix epoch Jan 1, 1970 as objectId
+            pipe_id = None
 
         results = await _services(info).backend.list(
             cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
