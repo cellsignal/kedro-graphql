@@ -6,11 +6,19 @@ from typing import Any, Mapping
 
 import yaml
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
 
 def _alias(name: str) -> str:
     return f"KEDRO_GRAPHQL_{name.upper()}"
+
+
+class InputProviderRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: str
+    pipeline_name: str = Field(min_length=1)
+    dataset_name: str = Field(min_length=1)
+    options: dict[str, Any] = Field(default_factory=dict)
 
 
 class KedroGraphQLConfig(BaseModel):
@@ -21,6 +29,7 @@ class KedroGraphQLConfig(BaseModel):
     app: str = "kedro_graphql.asgi.create_app"
     app_description: str = "A tool for serving kedro projects as a GraphQL API"
     app_title: str = "Kedro GraphQL API"
+    pipeline_submission_transform: str | None = None
     always_hooks: list[str] = Field(default_factory=list)
     backend: str = "kedro_graphql.backends.mongodb.MongoBackend"
     broker: str = "redis://localhost"
@@ -75,6 +84,9 @@ class KedroGraphQLConfig(BaseModel):
         }
     )
     pipeline_config_sources: dict[str, str] = Field(default_factory=dict)
+    pipeline_submission_batch_max_size: PositiveInt = 10
+    pipeline_submission_batch_max_sizes: dict[str, PositiveInt] = Field(default_factory=dict)
+    dataset_input_providers: list[InputProviderRegistration] = Field(default_factory=list)
     pipeline_submission_max_bytes: int = Field(default=1_048_576, gt=0)
     pipeline_submission_s3_allowed_prefixes: list[str] = Field(default_factory=list)
     pipeline_submission_upload_expires_in_sec: int = Field(default=3600, gt=0)
@@ -108,6 +120,7 @@ class KedroGraphQLConfig(BaseModel):
 
     @field_validator(
         "mongo_indexes",
+        "dataset_input_providers",
         "events_config",
         "dataset_filepath_masks",
         "dataset_filepath_allowed_roots",
@@ -116,6 +129,7 @@ class KedroGraphQLConfig(BaseModel):
         "pipeline_config_sources",
         "pipeline_runners",
         "pipeline_submission_upload_roots",
+        "pipeline_submission_batch_max_sizes",
         mode="before",
     )
     @classmethod

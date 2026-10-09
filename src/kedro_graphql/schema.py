@@ -19,6 +19,7 @@ from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
 from .archived_logs import ArchivedLogChunk, pipeline_archived_logs
+from .autocomplete import InputSuggestions, dataset_input_suggestions
 
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
@@ -336,6 +337,11 @@ class PipelineSanitizer:
 
 @strawberry.type
 class Query:
+    @strawberry.field(description="Suggest values for a configured dataset input.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template"), AppPermission(action="read_dataset")])])
+    async def dataset_input_suggestions(self, name: str, dataset_name: str, query: str, info: Info, slices: Optional[List[PipelineSlice]] = None, limit: int = 10) -> InputSuggestions:
+        caller = _permission_class(info).get_user_info(info)
+        return await dataset_input_suggestions(_services(info), name, dataset_name, slices, query, limit, caller)
+
     @strawberry.field(description="Describe the inputs and parameters for a pipeline submission.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template")])])
     def pipeline_submission_form(
         self,
@@ -474,7 +480,7 @@ class Query:
 
 @strawberry.type
 class Mutation:
-    @strawberry.mutation(description="Allocate a server-controlled pipeline input upload.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline")])])
+    @strawberry.mutation(description="Allocate a server-controlled pipeline input upload.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline"), AppPermission(action="create_dataset")])])
     def create_pipeline_submission_upload(
         self,
         name: str,

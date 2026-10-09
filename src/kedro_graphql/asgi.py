@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from strawberry.fastapi import GraphQLRouter
 from strawberry.permission import BasePermission
 
+from .autocomplete import InputProviderBinding, load_input_providers
 from .backends import init_backend
 from .backends.base import BaseBackend
 from .celeryapp import celery_app
@@ -41,11 +42,13 @@ class AppServices:
     permission_class: type[BasePermission]
     signed_url_provider: type[SignedUrlProvider]
     available_hooks: set[str]
+    input_providers: tuple[InputProviderBinding, ...] = ()
 
 
 def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI:
     """Build the web application from validated configuration and project metadata."""
 
+    input_providers = load_input_providers(config.dataset_input_providers)
     hooks = available_hook_names()
     unknown_hooks = sorted(set(config.always_hooks) - hooks)
     if unknown_hooks:
@@ -91,6 +94,7 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
         permission_class,
         signed_url_provider,
         hooks,
+        input_providers,
     )
 
     def get_context() -> GraphQLContext:

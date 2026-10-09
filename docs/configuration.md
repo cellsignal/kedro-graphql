@@ -378,6 +378,92 @@ before submission. `pipeline_submission_upload_roots` maps pipeline names to
 upload roots, taking precedence over `pipeline_submission_upload_root`; this
 allows remote-runner uploads to use S3 alongside local-runner uploads.
 
+
+## UI batch submission limits
+
+`pipeline_submission_batch_max_size` defaults to 10. Set
+`pipeline_submission_batch_max_sizes` to a mapping of pipeline names to positive
+integer limits to override it for individual pipelines. Both settings use the
+existing API-spec/environment configuration loader; the environment mapping is JSON.
+
+The submission form exposes `maxBatchSize` and `batchLimitReason`. These are UI
+limits, not resource quotas: the UI validates all entries, then calls the existing
+single-pipeline submission API for each entry. Persistent outputs without a
+server-managed `filepath` or `path` restrict the form to one entry.
+
+Server-managed paths are scoped by pipeline ID for every produced catalog dataset,
+including intermediate datasets. Free input locations remain shared. Node side
+effects outside the Data Catalog are not isolated by this mechanism.
+
+## Dataset input autocomplete
+
+`dataset_input_providers` registers application providers by Python import path,
+required `pipeline_name` and `dataset_name`, and an `options` mapping passed as
+constructor keyword arguments. The framework matches both names before calling
+provider eligibility or search methods. Each registration serves one input;
+other inputs cannot invoke it, even through direct GraphQL queries. Providers
+inherit `kedro_graphql.autocomplete.DatasetInputProvider`, identify their input
+`method`, and implement cheap `supports(context)` and blocking
+`search(context, query, limit)` methods. Context contains pipeline/dataset names,
+server catalog configuration, slices, and caller identity (absent during form
+discovery). Eligibility must not depend on caller identity; search must enforce
+caller access where required. Search returns `InputSuggestions` with
+`InputSuggestion(label, value)` entries and a `truncated` flag. Values are JSON;
+consumers map them to the advertised existing input method.
+
+Providers are loaded once at application startup. No providers are registered
+by default. Overlapping registrations for the same input are an error. The
+submission form exposes nullable `autocomplete { method }`; the query
+`datasetInputSuggestions(name, datasetName, slices, query, limit)` checks the
+selected free input and both template-read and dataset-read permissions. Limit defaults to 10 and must
+be 1–50. Search requires two characters. Searches run in a thread pool; errors
+do not change pipeline state or submission validation.
+
+### Multiple-file collection inputs
+
+A dataset class may advertise `submission_input_location_key = "paths"`.
+Subclasses inherit this capability. The submission form reports `kind: COLLECTION`
+and accepts `S3_URI` inputs containing a nonempty `s3Uris` list rather than
+`s3Uri`. Each URI is scope/access validated; duplicate URIs and scalar/list
+shape mismatches are rejected. The resolved catalog receives `paths: [...]`
+while retaining its original dataset type, nested dataset configuration, and
+other options. Collection uploads are not exposed by this submission form.
+Dataset constructors retain their own format/protocol restrictions. Ordinary
+partitioned inputs remain distinct and unsupported by this form.
+
+### Application submission transformation
+
+`pipeline_submission_transform` is an optional dotted Python callable. The API
+calls it after validating frontend inputs and parameters, before constructing
+or persisting a pipeline, for both validation and submission. Its signature is
+`transform(pipeline_input, merged_parameters, managed_outputs)` and it returns
+`(pipeline_input, managed_outputs)`. Applications can set run-specific globals
+and runner parameters here. Return an empty managed-output list when the
+application already assigns an isolated directory for the entire run. Raise
+`InvalidPipeline` or `ValueError` for invalid application inputs. Validation
+must not write data or launch work; transformations may generate a fresh run ID.
+
+### Archived log reads
+
+`pipelineArchivedLogs(id, before, maxBytes)` reads the latest saved execution
+attempt under `log_path_prefix/runs/<pipeline-id>/<task-id>/events.jsonl`.
+It requires `read_pipeline` and `subscribe_to_logs` permissions. The client
+cannot supply a storage path. Completed attempts (success, failure, aborted,
+or revoked) return an `ArchivedLogChunk` with `availability`, `taskId`, `text`,
+`earlierCursor`, `skippedContent`, and an optional user-facing `message`.
+
+The first request reads the final 64 KiB; `maxBytes` accepts 1–262144 bytes.
+Pass `earlierCursor` as `before` to read the preceding chunk. Cursors are bound
+to both pipeline and latest task ID; reopening the view is required after an
+attempt changes. Reads preserve complete JSONL records where possible; damaged
+or oversized records are skipped with `skippedContent=true`. Empty archives
+are available with empty text. Missing or unconfigured archives are
+`UNAVAILABLE`, and storage failures are `UNREADABLE`; callers may retry.
+Local and S3 paths use the existing fsspec filesystem support and API-process
+credentials. Local archives must be shared with the API; remote archive reads
+require object-read permission. This query does not change archive creation or
+migrate historical logs stored in a different format.
+
 ## Mongo index provisioning
 
 Applications own their index definitions. `mongo_indexes` defaults to an empty
@@ -420,13 +506,3 @@ Application across collections is not transactional: earlier successful creation
 can remain after an error. Always provision before starting writers that depend
 on uniqueness constraints. Indexes alone do not make unanchored, case-insensitive
 substring searches efficient; query changes are a separate concern.
-
-## Archived pipeline logs
-
-`pipelineArchivedLogs(id, before, maxBytes)` reads the latest completed attempt from
-`log_path_prefix/runs/<pipeline-id>/<task-id>/events.jsonl`. The query requires
-`read_pipeline` and `subscribe_to_logs` permissions. It returns bounded JSONL
-chunks; use `earlierCursor` to page backwards. Cursors are bound to the pipeline
-and task. Reads support fsspec storage such as local filesystems and S3. Missing
-archives return `UNAVAILABLE`; storage errors return `UNREADABLE` without exposing
-storage details. The first read defaults to 64 KiB; `maxBytes` accepts 1–262144.

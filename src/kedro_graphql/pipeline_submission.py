@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+from importlib import import_module
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ import jwt
 import strawberry
 from botocore.exceptions import BotoCoreError, ClientError
 from strawberry.scalars import JSON
+from kedro.io import AbstractDataset, MemoryDataset
+from kedro.io.core import parse_dataset_definition
 
 from .exceptions import InvalidPipeline
 from .models import (
@@ -35,6 +38,7 @@ from .models import (
 from .pipeline_config import filter_pipeline, normalize_pipeline_config
 from .project import load_pipeline_configuration
 from .signed_url.s3_provider import S3Provider
+from .autocomplete import DatasetInputContext, InputAutocomplete, find_input_provider
 
 
 @strawberry.enum
@@ -58,6 +62,7 @@ class SubmissionInputMethod(Enum):
 class SubmissionDatasetKind(Enum):
     SINGLE_FILE = "SINGLE_FILE"
     PARTITIONED = "PARTITIONED"
+    COLLECTION = "COLLECTION"
 
 
 @strawberry.type
@@ -79,6 +84,7 @@ class SubmissionDataset:
     methods: list[SubmissionInputMethod]
     supported: bool
     reason: str | None = None
+    autocomplete: InputAutocomplete | None = None
 
 
 @strawberry.type
@@ -97,6 +103,8 @@ class PipelineSubmissionForm:
     inputs: list[SubmissionDataset]
     parameters: list[SubmissionParameter]
     outputs: list[SubmissionOutput]
+    max_batch_size: int
+    batch_limit_reason: str | None = None
 
 
 @strawberry.type
@@ -133,6 +141,7 @@ class SubmissionDatasetInput:
     name: str
     method: SubmissionInputMethod
     s3_uri: str | None = None
+    s3_uris: list[str] | None = None
     upload_id: str | None = None
 
 
@@ -263,15 +272,28 @@ def _parameter_specs(selected, parameters: Mapping[str, Any]) -> dict[tuple[str,
     return specs
 
 
+def _collection_location_key(config: Mapping[str, Any]) -> str | None:
+    """Read an inherited dataset capability without instantiating the dataset."""
+    if not config.get("type"):
+        return None
+    dataset_class, _ = parse_dataset_definition(dict(config))
+    key = getattr(dataset_class, "submission_input_location_key", None)
+    return "paths" if key == "paths" else None
+
+
 def _dataset_kind(config: Mapping[str, Any]) -> SubmissionDatasetKind:
-    """Classify a dataset as partitioned or single-file."""
+    """Classify the supported submission input shape."""
+    if _collection_location_key(config):
+        return SubmissionDatasetKind.COLLECTION
     if config.get("type") in _PARTITIONED_TYPES:
         return SubmissionDatasetKind.PARTITIONED
     return SubmissionDatasetKind.SINGLE_FILE
 
 
 def _dataset_location_key(config: Mapping[str, Any]) -> str | None:
-    """Return the catalog key containing a dataset location."""
+    """Return the catalog key containing dataset locations."""
+    if _collection_location_key(config):
+        return "paths"
     if isinstance(config.get("filepath"), str):
         return "filepath"
     if isinstance(config.get("path"), str):
@@ -335,7 +357,7 @@ def _dataset_descriptor(
     methods = []
     if server_config.pipeline_submission_s3_allowed_prefixes:
         methods.append(SubmissionInputMethod.S3_URI)
-    if _upload_root_is_usable(server_config):
+    if kind is not SubmissionDatasetKind.COLLECTION and _upload_root_is_usable(server_config):
         methods.append(SubmissionInputMethod.UPLOAD)
     if not methods:
         return SubmissionDataset(
@@ -389,6 +411,12 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
         )
         for name in free_inputs
     ]
+    for descriptor in inputs:
+        if descriptor.supported:
+            context = DatasetInputContext(name, descriptor.name, resolved_catalog.get(descriptor.name) or catalog.get(descriptor.name) or {}, tuple(slices or []), None)
+            provider = find_input_provider(services, context, [method.value for method in descriptor.methods])
+            if provider is not None:
+                descriptor.autocomplete = InputAutocomplete(method=provider.method)
     specs = _parameter_specs(selected, parameters)
     parameter_rows = [
         SubmissionParameter(
@@ -410,13 +438,26 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
                     "type", "unknown"
                 )
             ),
-            free=True,
+            free=dataset in selected.outputs(),
             managed=_dataset_location_key(resolved_catalog.get(dataset) or catalog.get(dataset) or {})
-            is not None,
+            in {"filepath", "path"},
         )
-        for dataset in sorted(selected.outputs())
+        for dataset in sorted(selected.all_outputs())
         if not dataset.startswith("params:") and dataset != "parameters"
     ]
+    unsafe_outputs = [
+        output.name for output in outputs
+        if not output.managed
+        and (config := resolved_catalog.get(output.name))
+        and not isinstance(AbstractDataset.from_config(output.name, config), MemoryDataset)
+    ]
+    max_batch_size = services.config.pipeline_submission_batch_max_sizes.get(
+        name, services.config.pipeline_submission_batch_max_size
+    )
+    batch_limit_reason = None
+    if unsafe_outputs:
+        max_batch_size = 1
+        batch_limit_reason = "Outputs cannot be isolated for multiple runs: " + ", ".join(unsafe_outputs)
     nodes = [
         Node(name=node.name, inputs=node.inputs, outputs=node.outputs, tags=node.tags)
         for node in selected.nodes
@@ -428,6 +469,8 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
         inputs=inputs,
         parameters=parameter_rows,
         outputs=outputs,
+        max_batch_size=max_batch_size,
+        batch_limit_reason=batch_limit_reason,
     )
 
 
@@ -654,7 +697,7 @@ def _decode_upload(services, submission: PipelineSubmissionInput, source: Submis
     return str(path)
 
 
-def _replace_location(config: Mapping[str, Any], location: str) -> dict[str, Any]:
+def _replace_location(config: Mapping[str, Any], location: str | list[str]) -> dict[str, Any]:
     """Replace a catalog dataset location."""
     result = copy.deepcopy(dict(config))
     key = _dataset_location_key(result)
@@ -723,9 +766,16 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
             continue
         try:
             if source.method is SubmissionInputMethod.S3_URI:
-                if not source.s3_uri:
-                    raise InvalidPipeline("An S3 URI is required.")
-                location = _check_s3_uri(services.config, source.s3_uri)
+                if descriptor.kind is SubmissionDatasetKind.COLLECTION:
+                    if source.s3_uri or not source.s3_uris:
+                        raise InvalidPipeline("Supply a nonempty S3 URI list for this collection input.")
+                    if len(set(source.s3_uris)) != len(source.s3_uris):
+                        raise InvalidPipeline("Collection input contains duplicate S3 URIs.")
+                    location = [_check_s3_uri(services.config, uri) for uri in source.s3_uris]
+                else:
+                    if source.s3_uris or not source.s3_uri:
+                        raise InvalidPipeline("Supply one S3 URI for this input.")
+                    location = _check_s3_uri(services.config, source.s3_uri)
             else:
                 location = _decode_upload(services, submission, source)
             original = resolved_catalog.get(name) or catalog.get(name)
@@ -748,6 +798,12 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
         data_catalog=catalog_inputs,
         slices=list(submission.slices),
     )
+    transform = services.config.pipeline_submission_transform
+    if transform:
+        module, name = transform.rsplit(".", 1)
+        pipeline_input, managed_outputs = getattr(import_module(module), name)(
+            pipeline_input, merged_parameters, managed_outputs
+        )
     return pipeline_input, [], managed_outputs
 
 

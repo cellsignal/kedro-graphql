@@ -80,6 +80,7 @@ def _services(tmp_path, monkeypatch):
         }
     )
     return SimpleNamespace(
+        input_providers=(),
         metadata=SimpleNamespace(pipelines={"toy": pipeline, "aggregate": aggregate_pipeline}),
         config=config,
     )
@@ -289,3 +290,68 @@ def test_local_upload_cannot_be_used_after_pipeline_switches_to_s3(tmp_path, mon
     services.config.pipeline_submission_upload_roots = {"toy": "s3://allowed/input/toy"}
     with pytest.raises(InvalidPipeline, match="outside the configured upload root"):
         _decode_upload(services, PipelineSubmissionInput(name="toy", inputs=[source]), source)
+
+
+def test_batch_limit_defaults_and_per_name_override(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    assert build_submission_form(services, "toy").max_batch_size == 10
+    services.config.pipeline_submission_batch_max_sizes = {"toy": 3}
+    assert build_submission_form(services, "toy").max_batch_size == 3
+    assert build_submission_form(services, "aggregate").max_batch_size == 10
+
+
+def test_submission_isolates_intermediate_outputs_and_keeps_shared_input(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    services.metadata.pipelines["toy"] = Pipeline([
+        node(lambda raw: raw, "raw", "middle", name="first"),
+        node(lambda middle: middle, "middle", "out", name="second"),
+    ])
+    catalog = {name: {"type": "text.TextDataset", "filepath": f"/tmp/{name}.txt"}
+               for name in ("raw", "middle", "out")}
+    monkeypatch.setattr("kedro_graphql.pipeline_submission.load_pipeline_configuration",
+                        lambda *args: (catalog, {}))
+    form = build_submission_form(services, "toy")
+    assert [(output.name, output.free) for output in form.outputs] == [("middle", False), ("out", True)]
+    assert [item.name for item in form.inputs] == ["raw"]
+    monkeypatch.setattr("kedro_graphql.pipeline_submission._check_s3_uri", lambda config, uri: uri)
+    submission = PipelineSubmissionInput(name="toy", inputs=[SubmissionDatasetInput(
+        name="raw", method=SubmissionInputMethod.S3_URI, s3_uri="s3://allowed/input/shared.txt")])
+    pipeline_input, errors, managed = _prepare_submission(services, submission)
+    assert not errors
+    assert managed == ["middle", "out"]
+    from kedro_graphql.models import DataSet, Pipeline as PipelineModel
+    from kedro_graphql.utils import generate_unique_paths
+    for pipeline_id in ("first", "second"):
+        record = PipelineModel(id=pipeline_id, name="toy", data_catalog=[
+            DataSet(name=name, config=json.dumps(config)) for name, config in catalog.items()])
+        generate_unique_paths(record, managed)
+        locations = record.to_kedro()["data_catalog"]
+        assert locations["raw"]["filepath"] == "/tmp/raw.txt"
+        assert locations["middle"]["filepath"] == f"/tmp/{pipeline_id}/middle.txt"
+        assert locations["out"]["filepath"] == f"/tmp/{pipeline_id}/out.txt"
+
+
+def test_batch_limits_reject_nonpositive_values():
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        load_config({"pipeline_submission_batch_max_size": 0})
+    with pytest.raises(ValidationError):
+        load_config({"pipeline_submission_batch_max_sizes": {"toy": -1}})
+
+
+def test_locationless_memory_outputs_allow_batch_but_persistent_outputs_do_not(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    catalog = {"raw": {"type": "text.TextDataset", "filepath": "/tmp/raw.txt"},
+               "out": {"type": "MemoryDataset"}}
+    monkeypatch.setattr("kedro_graphql.pipeline_submission.load_pipeline_configuration",
+                        lambda *args: (catalog, {}))
+    form = build_submission_form(services, "toy")
+    assert form.max_batch_size == 10
+    assert form.batch_limit_reason is None
+    # Simulate a custom persistent dataset with no standard location, keeping
+    # catalog resolution itself on Kedro's real implementation.
+    monkeypatch.setattr("kedro_graphql.pipeline_submission.AbstractDataset",
+                        SimpleNamespace(from_config=Mock(return_value=object())))
+    form = build_submission_form(services, "toy")
+    assert form.max_batch_size == 1
+    assert "out" in form.batch_limit_reason

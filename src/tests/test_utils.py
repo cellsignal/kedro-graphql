@@ -61,3 +61,14 @@ def test_unique_paths_partitioned_datasests():
     assert datasets["partitioned_dataset"]["path"] != "./data/02_intermediate/partitioned_dataset"
     assert datasets["partitioned_dataset"]["path"] == "./data/02_intermediate/{id}/partitioned_dataset".format(
         id=p.id)
+
+
+@pytest.mark.parametrize("location,expected", [
+    ("result.json", "run/result.json"),
+    ("s3://bucket/result.json", "s3://bucket/run/result.json"),
+    ("s3://bucket/", "s3://bucket/run/"),
+    ("/tmp/partitions/", "/tmp/run/partitions/"),
+])
+def test_unique_location_relative_and_partition_roots(location, expected):
+    from kedro_graphql.utils import _unique_location
+    assert _unique_location(location, "run") == expected
