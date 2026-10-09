@@ -37,7 +37,48 @@ def commands():
     pass
 
 
-@commands.command()
+@click.command(name="mongo-indexes")
+@click.pass_context
+@click.option("--apply", "apply_indexes", is_flag=True, help="Create configured indexes; never drop indexes.")
+def mongo_indexes(ctx, apply_indexes):
+    """List Mongo indexes, or explicitly create the configured definitions."""
+    import json
+
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+
+    from .mongo_indexes import index_models
+
+    config = ctx.meta["gql_config"]
+    try:
+        collections = index_models(config)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if apply_indexes and not collections:
+        click.echo("No indexes configured; nothing to apply.")
+        return
+    collection = config.mongo_db_collection
+    try:
+        with MongoClient(config.mongo_uri, serverSelectionTimeoutMS=10000) as client:
+            database = client[config.mongo_db_name]
+            for collection in collections or {config.mongo_db_collection: []}:
+                if apply_indexes:
+                    names = database[collection].create_indexes(collections[collection])
+                    click.echo(f"{collection}: ensured {', '.join(names)}")
+                else:
+                    indexes = list(database[collection].list_indexes())
+                    click.echo(json.dumps({"collection": collection, "indexes": indexes}, default=str))
+    except (PyMongoError, ValueError) as exc:
+        # Driver errors can contain credentials from the connection URI.
+        code = getattr(exc, "code", None)
+        detail = f", code {code}" if code is not None else ""
+        raise click.ClickException(
+            f"Mongo index operation failed for {collection} ({type(exc).__name__}{detail}). "
+            "No indexes were dropped; check Mongo diagnostics. Earlier creations may remain."
+        ) from exc
+
+
+@commands.group(invoke_without_command=True)
 @click.pass_obj
 @click.option("--app", "-a", default=None, help="Application import path")
 @click.option("--app-title", default=None, help="Title of the Kedro GraphQL application")
@@ -138,7 +179,16 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
     overrides = {
         name: value for name, value in option_values.items() if value is not None
     }
-    config = load_config(overrides, api_spec)
+    ctx = click.get_current_context()
+    try:
+        config = load_config(overrides, api_spec)
+    except (ValueError, TypeError) as exc:
+        if ctx.invoked_subcommand:
+            raise click.ClickException("Invalid configuration: check mongo_indexes and Mongo settings.") from exc
+        raise
+    if ctx.invoked_subcommand:
+        ctx.meta["gql_config"] = config
+        return
     logger.debug("configuration loaded by {s}".format(s=__name__))
 
     if not reload_path:
@@ -167,3 +217,6 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
             run_process(reload_path, target=start_app, args=(config, metadata.project_path))
         else:
             start_app(config, metadata.project_path)
+
+
+gql.add_command(mongo_indexes)

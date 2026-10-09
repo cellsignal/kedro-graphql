@@ -29,6 +29,7 @@ The following table describes each configuration attribute available:
 | `log_tmp_dir`                          | string | `tempfile.TemporaryDirectory().name` | Local task log spool and recovery files. Use persistent storage when worker replacement must preserve failed uploads. |
 | `mongo_db_collection`                   | string | `pipelines` | Name of the MongoDB collection to use.                                                           |
 | `mongo_db_name`                        | string | `pipelines` | Name of the MongoDB database to use.                                                             |
+| `mongo_indexes`                        | list | `[]` | Application-owned Mongo index definitions; provision explicitly with `kedro gql mongo-indexes --apply`. |
 | `mongo_uri`                            | string | `mongodb://root:example@localhost:27017/` | MongoDB connection URI string.                                                                   |
 | `permissions`                          | string | `kedro_graphql.permissions.IsAuthenticatedAlways` | Python path to the permissions class used for authentication.                                    |
 | `permissions_group_to_role_map`        | dict | `{"EXTERNAL_GROUP_NAME": "admin"}` | Mapping of external group names to roles. Specify as JSON string when using CLI/environment variables. |
@@ -376,3 +377,46 @@ the shared runner lifecycle and conditional Mongo updates independently of clien
 before submission. `pipeline_submission_upload_roots` maps pipeline names to
 upload roots, taking precedence over `pipeline_submission_upload_root`; this
 allows remote-runner uploads to use S3 alongside local-runner uploads.
+
+## Mongo index provisioning
+
+Applications own their index definitions. `mongo_indexes` defaults to an empty
+list; neither API startup nor workers create these indexes automatically.
+
+```yaml
+config:
+  mongo_indexes:
+    - keys: [[created_at, -1], [_id, -1]]
+      name: created_at_-1__id_-1
+    - collection: fastq_files
+      keys: [[uri, 1]]
+      name: uri_1
+      unique: true
+```
+
+`keys` is an ordered list of field/direction pairs. `collection` is optional and
+uses `mongo_db_collection` when omitted. All remaining fields are passed directly
+to PyMongo's `IndexModel`, including `name`, `unique`, `partialFilterExpression`,
+`expireAfterSeconds`, and `collation`. Mongo validates supported index types and
+options; the application does not maintain a separate Mongo option schema.
+The same list can be supplied as JSON in `KEDRO_GRAPHQL_MONGO_INDEXES`, using the
+existing configuration precedence. No additional connection settings are needed.
+
+Run from the application's Kedro project with its normal Mongo environment:
+
+```bash
+kedro gql --api-spec /path/to/api-spec.yaml mongo-indexes
+kedro gql --api-spec /path/to/api-spec.yaml mongo-indexes --apply
+```
+
+The first command lists current indexes for configured collections, or the
+pipeline collection if no indexes are configured. It performs no writes and is
+not a drift comparison. `--apply` creates the declared indexes; an empty list is
+a no-op. Reapplying matching definitions leaves existing indexes unchanged.
+Conflicts fail with a nonzero exit code and Mongo's error code. Other indexes
+are untouched, including definitions removed from configuration. Changes that
+require dropping an index must be handled as an explicit database migration.
+Application across collections is not transactional: earlier successful creations
+can remain after an error. Always provision before starting writers that depend
+on uniqueness constraints. Indexes alone do not make unanchored, case-insensitive
+substring searches efficient; query changes are a separate concern.

@@ -51,6 +51,7 @@ class KedroGraphQLConfig(BaseModel):
     mongo_db_collection: str = "pipelines"
     mongo_db_name: str = "pipelines"
     mongo_uri: str = "mongodb://root:example@localhost:27017/"
+    mongo_indexes: list[dict[str, Any]] = Field(default_factory=list)
     permissions: str = "kedro_graphql.permissions.IsAuthenticatedAlways"
     permissions_group_to_role_map: dict[str, str] = Field(
         default_factory=lambda: {"EXTERNAL_GROUP_NAME": "admin"}
@@ -106,6 +107,7 @@ class KedroGraphQLConfig(BaseModel):
         return [item.strip() for item in value.split(",") if item.strip()]
 
     @field_validator(
+        "mongo_indexes",
         "events_config",
         "dataset_filepath_masks",
         "dataset_filepath_allowed_roots",
