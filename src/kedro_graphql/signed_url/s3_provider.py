@@ -57,6 +57,7 @@ class S3Provider(SignedUrlProvider):
         filepath: str,
         expires_in_sec: int,
         max_bytes: int | None = None,
+        min_bytes: int = 1,
     ) -> SignedUrl | None:
         """
         Generate a presigned POST URL for uploading to S3.
@@ -73,7 +74,7 @@ class S3Provider(SignedUrlProvider):
         try:
             conditions = None
             if max_bytes is not None:
-                conditions = [["content-length-range", 1, max_bytes]]
+                conditions = [["content-length-range", min_bytes, max_bytes]]
             resp = s3_client.generate_presigned_post(
                 bucket_name,
                 f"{key}/{filename}",

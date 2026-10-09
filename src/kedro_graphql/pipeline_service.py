@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import __version__ as kedro_graphql_version
 from .exceptions import InvalidPipeline
+from .pipeline_visibility import require_pipeline_name_allowed
 from .logs.logger import logger
 from .models import (
     DataSet,
@@ -284,6 +285,7 @@ async def create_pipeline(
     unique_paths: list[str] | None = None,
     dry_run: bool = False,
 ) -> Pipeline:
+    require_pipeline_name_allowed(services.config, pipeline_input.name)
     pipeline, values, runner, requested_state = _prepare_new_pipeline(
         services, pipeline_input
     )

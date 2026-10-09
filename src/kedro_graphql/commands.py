@@ -78,6 +78,42 @@ def mongo_indexes(ctx, apply_indexes):
         ) from exc
 
 
+@click.group(name="dataset-search")
+def dataset_search_commands():
+    """Inspect or rebuild catalog/tag search fields without changing their sources."""
+
+
+def _maintain_dataset_search(ctx, rebuild):
+    import json
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+    from .dataset_search_maintenance import maintain_dataset_search
+
+    config = ctx.meta["gql_config"]
+    try:
+        with MongoClient(config.mongo_uri, serverSelectionTimeoutMS=10000) as client:
+            counts = maintain_dataset_search(client[config.mongo_db_name][config.mongo_db_collection], rebuild)
+        click.echo(json.dumps(counts))
+        if counts["failed"]:
+            raise click.ClickException("Some records could not be inspected or rebuilt; see the reported counts.")
+    except PyMongoError as error:
+        raise click.ClickException(f"Dataset search maintenance failed ({type(error).__name__}); check Mongo diagnostics.") from error
+
+
+@dataset_search_commands.command(name="check")
+@click.pass_context
+def dataset_search_check(ctx):
+    """Report missing, unsupported, or inconsistent search projections."""
+    _maintain_dataset_search(ctx, False)
+
+
+@dataset_search_commands.command(name="rebuild")
+@click.pass_context
+def dataset_search_rebuild(ctx):
+    """Recompute projections, retrying catalog or tag changes up to three times."""
+    _maintain_dataset_search(ctx, True)
+
+
 @commands.group(invoke_without_command=True)
 @click.pass_obj
 @click.option("--app", "-a", default=None, help="Application import path")
@@ -105,6 +141,7 @@ def mongo_indexes(ctx, apply_indexes):
 @click.option("--local-file-provider-upload-max-file-size-mb", default=None, type=int, help="Maximum allowed upload file size in megabytes")
 @click.option("--log-path-prefix", default=None, help="Prefix of path to save logs")
 @click.option("--log-tmp-dir", default=None, help="Temporary directory for logs")
+@click.option("--dataset-search-timeout-seconds", default=None, type=float, help="Maximum duration of a dataset search, including unenriched records")
 @click.option("--mongo-db-collection", default=None, help="Name of the MongoDB collection to use")
 @click.option("--mongo-db-name", default=None, help="Name to use for collection in mongo e.g. 'pipelines'")
 @click.option("--mongo-uri", default=None, help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'")
@@ -127,7 +164,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         local_file_provider_download_allowed_roots,
         local_file_provider_jwt_algorithm, local_file_provider_jwt_secret_key, local_file_provider_server_url,
         local_file_provider_upload_allowed_roots, local_file_provider_upload_max_file_size_mb,
-        log_path_prefix, log_tmp_dir, mongo_db_collection, mongo_db_name, mongo_uri, permissions,
+        log_path_prefix, log_tmp_dir, dataset_search_timeout_seconds, mongo_db_collection, mongo_db_name, mongo_uri, permissions,
         permissions_group_to_role_map, permissions_role_to_action_map, project_version, root_path, runner,
         signed_url_max_expires_in_sec, signed_url_provider,
         reload, reload_path, api_spec, ui, ui_spec, worker):
@@ -159,6 +196,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         "local_file_provider_upload_max_file_size_mb": local_file_provider_upload_max_file_size_mb,
         "log_path_prefix": log_path_prefix,
         "log_tmp_dir": log_tmp_dir,
+        "dataset_search_timeout_seconds": dataset_search_timeout_seconds,
         "mongo_db_collection": mongo_db_collection,
         "mongo_db_name": mongo_db_name,
         "mongo_uri": mongo_uri,
@@ -220,3 +258,4 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
 
 
 gql.add_command(mongo_indexes)
+gql.add_command(dataset_search_commands)

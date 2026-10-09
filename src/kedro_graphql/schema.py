@@ -18,11 +18,13 @@ from strawberry.schema.config import StrawberryConfig
 from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
+from .catalog_search import CatalogSearchInput, DatasetSearchResults, search_catalog
 from .archived_logs import ArchivedLogChunk, pipeline_archived_logs
 from .autocomplete import InputSuggestions, dataset_input_suggestions
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
+from .pipeline_visibility import pipeline_name_allowed, pipeline_search_filter
 from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
@@ -49,9 +51,12 @@ from .pipeline_submission import (
     PipelineSubmissionForm,
     PipelineSubmissionInput,
     SubmissionUpload,
+    SubmissionFolderUpload,
+    SubmissionFolderFileInput,
     SubmissionValidationResult,
     build_submission_form,
     create_submission_upload,
+    create_submission_folder_upload,
     submit_pipeline as submit_pipeline_service,
     validate_pipeline_submission,
 )
@@ -336,6 +341,18 @@ class PipelineSanitizer:
 
 @strawberry.type
 class Query:
+    @strawberry.field(description="Search pipelines by tags or configured dataset locations.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipelines"), AppPermission(action="read_dataset")])])
+    async def search_catalog_pipelines(self, info: Info, search: CatalogSearchInput, limit: int = 10,
+                                      cursor: str | None = None) -> Pipelines:
+        return (await search_catalog(_services(info), search, pipeline_limit=limit,
+                                     pipeline_cursor=cursor, connection="pipelines")).pipelines
+
+    @strawberry.field(description="Search datasets by parent pipeline tags or configured locations.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipelines"), AppPermission(action="read_dataset")])])
+    async def search_catalog_datasets(self, info: Info, search: CatalogSearchInput, limit: int = 50,
+                                     cursor: str | None = None) -> DatasetSearchResults:
+        return (await search_catalog(_services(info), search, dataset_limit=limit,
+                                     dataset_cursor=cursor, connection="datasets")).datasets
+
     @strawberry.field(description="Suggest values for a configured dataset input.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template"), AppPermission(action="read_dataset")])])
     async def dataset_input_suggestions(self, name: str, dataset_name: str, query: str, info: Info, slices: Optional[List[PipelineSlice]] = None, limit: int = 10) -> InputSuggestions:
         caller = _permission_class(info).get_user_info(info)
@@ -353,7 +370,7 @@ class Query:
     @strawberry.field(description="Get a pipeline template.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_template")])])
     def pipeline_template(self, info: Info, id: str) -> PipelineTemplate:
         for p in _services(info).metadata.templates:
-            if str(p.id) == id:
+            if str(p.id) == id and pipeline_name_allowed(_config(info), p.name):
                 logger.info(
                     f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
@@ -365,7 +382,7 @@ class Query:
         filtered_data = [
             pipe
             for pipe in _services(info).metadata.templates
-            if pipe.id >= pipe_id
+            if pipe.id >= pipe_id and pipeline_name_allowed(_config(info), pipe.name)
         ]
 
         # slice the relevant pipeline template data (Here, we also slice an
@@ -408,7 +425,7 @@ class Query:
             pipe_id = None
 
         results = await _services(info).backend.list(
-            cursor=pipe_id, limit=limit + 1, filter=filter, sort=sort)
+            cursor=pipe_id, limit=limit + 1, filter=pipeline_search_filter(_config(info), filter), sort=sort)
         if len(results) > limit:
 
             # calculate the client's next cursor.
@@ -479,6 +496,13 @@ class Query:
 
 @strawberry.type
 class Mutation:
+    @strawberry.mutation(description="Allocate a complete folder upload for a partitioned input.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline"), AppPermission(action="create_dataset")])])
+    def create_pipeline_submission_folder_upload(
+        self, name: str, input_name: str, files: List[SubmissionFolderFileInput], info: Info,
+        slices: Optional[List[PipelineSlice]] = None,
+    ) -> SubmissionFolderUpload:
+        return create_submission_folder_upload(_services(info), name, input_name, files, slices)
+
     @strawberry.mutation(description="Allocate a server-controlled pipeline input upload.", extensions=[PermissionExtension(permissions=[AppPermission(action="create_pipeline"), AppPermission(action="create_dataset")])])
     def create_pipeline_submission_upload(
         self,

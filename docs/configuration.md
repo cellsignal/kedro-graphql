@@ -36,6 +36,8 @@ The following table describes each configuration attribute available:
 | `permissions_role_to_action_map`       | dict | `{"admin": [...]}` | Mapping of roles to allowed actions. Specify as JSON string when using CLI/environment variables. |
 | `pipeline_config_sources`              | dict | `{}` | Required allowlist mapping API pipeline names to runtime-mounted Kedro configuration directories. |
 | `pipeline_submission_max_bytes`        | integer | `1048576` | Maximum UTF-8 JSON size of the resolved catalog and parameters. Configure through YAML or `KEDRO_GRAPHQL_PIPELINE_SUBMISSION_MAX_BYTES`. |
+| `pipeline_submission_parameter_allowlists` | dict | `{}` | Per-pipeline lists of parameter paths shown as submission form controls. An omitted pipeline entry allows all paths; an empty list allows none. |
+| `pipeline_submission_parameter_disallowlists` | dict | `{}` | Per-pipeline lists of parameter paths hidden from submission form controls. The deepest matching rule wins; disallow wins ties. |
 | `project_version`                      | string | `None` | Version of the Kedro GraphQL project.                                                            |
 | `root_path`                            | string | `""` | Root path for all API endpoints (e.g., '/api/v1'). When set, all API routes will be prefixed with this path. |
 | `pipeline_runners` | dict | `{}` | Server-owned mapping of pipeline names to runner class paths. Takes precedence over an input runner; unmapped pipelines use the input runner or `runner`. |
@@ -379,6 +381,54 @@ upload roots, taking precedence over `pipeline_submission_upload_root`; this
 allows remote-runner uploads to use S3 alongside local-runner uploads.
 
 
+## Submission parameter visibility
+
+Configure parameter visibility by pipeline name in the API spec:
+
+```yaml
+config:
+  pipeline_submission_parameter_allowlists:
+    example_pipeline:
+      - settings
+      - enabled
+      - settings.internal.threshold
+  pipeline_submission_parameter_disallowlists:
+    example_pipeline:
+      - settings.internal
+```
+
+Paths use dot notation and match the named parameter and its entire subtree.
+Here, `settings` and `enabled` are allowed, `settings.internal` is hidden,
+and the more specific allow rule exposes `settings.internal.threshold` again.
+A more specific disallow rule would hide a child of an allowed subtree.
+If the same exact path appears in both lists, disallow wins. List order does not
+matter, and `settings` does not match `settings_extra`.
+
+Without an allowlist entry for a pipeline, all its form parameters start visible.
+An explicit empty allowlist hides all parameter controls. The submission form API
+returns every parameter for the selected graph, with `visibleInForm` indicating
+which controls the UI should show. Hidden parameters remain visible with their
+defaults on the confirmation page and with their resolved values on the pipeline
+page. The UI omits hidden parameters from submitted overrides. These rules also
+hide read-only form rows. Arrays remain
+whole values; paths do not address individual array elements.
+
+Hidden parameters retain their server defaults when omitted. A hidden required
+parameter without a server default makes form generation fail with the pipeline
+name and parameter path. Null, false, zero, and empty collections are valid
+defaults. These settings control UI visibility, not API permissions: explicit
+API overrides of hidden parameters still undergo the existing validation and
+remain accepted when valid.
+
+Environment values use JSON mappings through
+`KEDRO_GRAPHQL_PIPELINE_SUBMISSION_PARAMETER_ALLOWLISTS` and
+`KEDRO_GRAPHQL_PIPELINE_SUBMISSION_PARAMETER_DISALLOWLISTS`, for example:
+
+```bash
+KEDRO_GRAPHQL_PIPELINE_SUBMISSION_PARAMETER_ALLOWLISTS='{"example_pipeline":["settings","enabled"]}'
+KEDRO_GRAPHQL_PIPELINE_SUBMISSION_PARAMETER_DISALLOWLISTS='{"example_pipeline":["settings.internal"]}'
+```
+
 ## UI batch submission limits
 
 `pipeline_submission_batch_max_size` defaults to 10. Set
@@ -429,7 +479,7 @@ shape mismatches are rejected. The resolved catalog receives `paths: [...]`
 while retaining its original dataset type, nested dataset configuration, and
 other options. Collection uploads are not exposed by this submission form.
 Dataset constructors retain their own format/protocol restrictions. Ordinary
-partitioned inputs remain distinct and unsupported by this form.
+partitioned inputs use a directory prefix or folder upload rather than a list of file URIs.
 
 ### Application submission transformation
 
@@ -506,3 +556,262 @@ Application across collections is not transactional: earlier successful creation
 can remain after an error. Always provision before starting writers that depend
 on uniqueness constraints. Indexes alone do not make unanchored, case-insensitive
 substring searches efficient; query changes are a separate concern.
+
+## Partitioned submission inputs
+
+`pipelineSubmissionForm` supports `PartitionedDataset`, `IncrementalDataset`, and
+subclasses, including fully qualified catalog type names. Supply an S3 directory
+prefix or upload a folder; the server retains the dataset's other catalog settings.
+S3 prefixes accept an omitted trailing slash and must fall within
+`pipeline_submission_s3_allowed_prefixes`. A bucket root is allowed only when the
+configured scope includes that bucket root. Prefix boundaries exclude sibling
+names such as `input-other` when the allowed scope is `input`.
+
+Validation requires at least one actual file matching the catalog's
+`filename_suffix` (an empty suffix accepts any file). Incremental inputs must
+contain a partition eligible after checkpoint filtering. Discovery uses Kedro's
+settings without loading partition contents or advancing checkpoints, and runs
+again before submission. Storage and checkpoints can still change before execution.
+
+`createPipelineSubmissionFolderUpload` accepts the pipeline, free input, selected
+slices, and `files: [{relativePath, size}]`. Byte sizes use GraphQL `Float` because
+GraphQL `Int` is limited to signed 32-bit values. The result contains one bundle
+`uploadId` and per-file upload instructions. Upload each file, then use the bundle
+ID in the existing `UPLOAD` submission input. Relative paths preserve subfolders;
+absolute paths, traversal, duplicates, and invalid sizes are rejected. All declared
+files must exist with their declared sizes before the folder can be submitted.
+Local files are published atomically after a complete transfer.
+
+Folder limits are configured centrally:
+
+- `pipeline_submission_partition_upload_max_files`: 1,000 by default.
+- `pipeline_submission_partition_upload_max_size_mb`: 1,024 MiB total by default.
+- `local_file_provider_upload_max_file_size_mb`: the existing per-file limit
+  (10 MiB by default).
+- `pipeline_submission_upload_expires_in_sec`: the existing upload expiry.
+
+The browser selects folders directly, strips the chosen top-level folder name,
+and uploads all files while preserving nested paths. No ZIP archive is required.
+Use an existing S3 prefix for folders exceeding browser upload limits. Upload
+expiry invalidates signing tokens; it does not delete stored files or introduce
+cleanup of abandoned uploads. API and worker processes using local uploads must
+share the upload filesystem and have permission to read the files.
+
+## Derived dataset submission inputs
+
+Declare suffix appending, suffix replacement, or Python regex substitution in API configuration:
+
+```yaml
+config:
+  dataset_input_derivations:
+    - pipeline_name: analysis
+      dataset_name: full.bam_index
+      source_dataset: full.bam
+      append_suffix: .bai
+```
+
+Use exactly one operation per rule. For replacement, declare the suffix to match
+and its replacement explicitly:
+
+```yaml
+config:
+  dataset_input_derivations:
+    - pipeline_name: analysis
+      dataset_name: full.bam_index
+      source_dataset: full.bam
+      replace_suffix:
+        from_suffix: .bam
+        to_suffix: .bai
+```
+
+This maps `sample.bam` to `sample.bai`. Matching is case-sensitive and applies
+only at the end of the filename. Compound suffixes such as `.bam.gz` are supported;
+a source that does not match is rejected under the target input. Directory names
+and earlier occurrences are retained. CSTEP-I keeps its append rules because its
+indexes use `sample.bam.bai`.
+
+Derivation models and dependency validation live in
+`kedro_graphql.dataset_input_derivations`; configuration loading invokes them.
+Registrations require nonempty names and nonempty filename suffixes. Duplicate
+pipeline/target pairs, self-references, cycles, unknown exposed
+pipelines, and unknown graph datasets are rejected. Sources and targets must be
+single-file datasets when the rule applies. Independent pipelines may use the
+same target name.
+
+Acyclic chains are supported and resolved in dependency order, regardless of
+registration order. An explicit override of an intermediate dataset becomes the
+source for its downstream derivations. For CSTEP-I, `full.bam_index` appends
+`.bai` to `full.bam`; `dedup.bam` and `dedup.bam_index` replace `full` with
+`dedup` in `full.bam` and `full.bam_index`, respectively.
+
+The form advertises `inputs.derivation { sourceDataset appendSuffix replaceSuffix { fromSuffix toSuffix } regexSub { pattern replacement } }` only when
+both datasets are external inputs of the selected slice. A dataset produced by
+the selected slice is never replaced. If the target is external but its source
+is produced by the slice or absent from its inputs, supply the target explicitly.
+
+When the source uses `S3_URI`, omit the target to use derivation, or supply an
+explicit target to override the rule. An append rule appends the
+suffix to the entire object URI (`sample.bam` becomes `sample.bam.bai`). All
+operations run the existing scope and S3 HEAD checks on both objects. Explicit
+targets bypass derivation and use normal dataset validation, including S3 scopes
+or upload-token checks; they can override a replacement rule even if the source
+does not match its configured suffix. Validation and submission use the same resolution and populate
+both existing catalog entries with concrete locations. Neither the Kedro graph
+nor the stored pipeline model changes.
+
+`validatePipelineSubmission` returns `resolvedInputs { name s3Uri }` for derived
+candidates, including candidates that fail accessibility checks; the associated
+error remains in `errors` under the target dataset's name. The UI defaults to derivation, showing the resolved target read-only. Turn off
+"Derive from" to use the regular S3 or upload controls. Turning derivation back
+on clears the previous derived result and validates again. Source changes clear
+only automatic target results; explicit targets remain independent.
+CSV templates include optional target columns: blank or omitted values derive,
+while filled values override the rule for that row. Every row is validated and
+both automatic and explicit paths appear in the report and confirmation.
+
+Derivation is initially S3-only. Uploaded sources retain explicit target inputs,
+which may use the existing S3 or upload methods. Checking accessibility does not
+prove that a BAM index matches its BAM, and files may change after validation.
+
+### Python regex derivations
+
+Choose exactly one of `append_suffix`, `replace_suffix`, or `regex_sub` per rule:
+
+```yaml
+config:
+  dataset_input_derivations:
+    - pipeline_name: analysis
+      dataset_name: full.bam_index
+      source_dataset: full.bam
+      regex_sub:
+        pattern: '(?P<stem>[^/]+)\.bam$'
+        replacement: '\g<stem>.bai'
+```
+
+The backend calls Python `re.sub(pattern, replacement, source_uri)` on the entire
+S3 URI. Python capture groups, named references, and inline flags such as `(?i)`
+are supported; all matches are replaced. An empty replacement is allowed. If the
+pattern does not match, the URI is unchanged, following Python's standard behavior.
+Use YAML single quotes to preserve backslashes. Invalid patterns or replacement
+references are rejected when configuration loads.
+
+The resulting URI must still pass the existing S3 URI, allowed-scope, and
+accessibility checks. Explicit targets bypass the regex rule and receive normal
+dataset validation. The browser displays backend-resolved paths without applying
+JavaScript regex rules.
+
+### Pipeline name visibility
+
+Use the same exact-name policy for submission choices and pipeline search:
+
+```yaml
+config:
+  pipeline_name_allowlist:
+    - analysis
+    - prepare_reads
+  pipeline_name_disallowlist:
+    - prepare_reads
+```
+
+With this example, only `analysis` is available for submission and visible in
+pipeline search. An omitted allowlist starts with all pipeline names; an empty
+allowlist permits none. Disallow removes names from that working set and wins
+when a name appears in both lists. Matching is exact, without regex or wildcards.
+Environment equivalents are `KEDRO_GRAPHQL_PIPELINE_NAME_ALLOWLIST` and
+`KEDRO_GRAPHQL_PIPELINE_NAME_DISALLOWLIST`; use JSON arrays or comma-separated names.
+
+The backend filters templates and search before pagination and rejects direct
+submission attempts for excluded names. Existing records are retained and remain
+accessible by ID; this setting controls visibility and submission, not record
+access permissions. Search includes historical names unless the policy excludes
+them, independently of the pipelines currently configured for submission.
+
+## Catalog search
+
+The shared API provides two independent connections accepting `CatalogSearchInput`:
+`searchCatalogPipelines(search:, limit: 10, cursor:)` and
+`searchCatalogDatasets(search:, limit: 50, cursor:)`. Clients can request them
+concurrently and render either table without waiting for the other. Both require
+`read_pipelines` and `read_dataset`, apply pipeline-name visibility, and mask all
+configured locations in returned catalogs. General `readPipelines` remains available.
+
+```graphql
+query {
+  searchCatalogPipelines(search: {text: "12345"}, limit: 10) {
+    pipelines { id name createdAt tags { key value } }
+    pageMeta { nextCursor }
+  }
+  searchCatalogDatasets(search: {text: "12345", datasetType: "BamDataset"}, limit: 50) {
+    datasets { dataset { name config } pipelineId pipelineName catalogIndex }
+    pageMeta { nextCursor }
+  }
+}
+```
+
+Text is a literal case-insensitive substring of pipeline tag values or configured
+`filepath`, `path`, and string entries in `paths`. File names match as part of those
+locations. Logical dataset names, pipeline names/descriptions, and dataset tags
+are not searched. Partition prefixes are searched without listing partition files.
+A pipeline matches a tag or any dataset location. A dataset matches its parent
+pipeline's tag or its own location. Dataset type accepts exact full or short class
+names and filters only dataset rows, never pipeline inclusion. Optional `pipelineId`
+is an exact Mongo ObjectId filter. Empty text with an ID returns the pipeline and
+its datasets. Otherwise text must contain at least three trimmed characters.
+
+Pipeline ordering is created date descending then ID descending; datasets sort by
+normalized logical name, pipeline ID, and catalog position ascending. Duplicate
+names retain distinct catalog positions. Each page accepts 1–200 rows and exposes
+only a next cursor, not an exact total. Pass cursors unchanged; query expansion,
+filters, tag keys, visibility, and masks are included in their fingerprint.
+Catalog changes during selection return a retry error; pages are not snapshots.
+
+### App-specific configuration
+
+`catalog_search_tag_keys` selects searchable pipeline tag keys: omitted means all,
+an explicit list restricts them, and an empty list searches only locations.
+`catalog_search_term_expander` optionally names a synchronous Python callable that
+accepts trimmed text and returns a list of equivalent text strings. The original
+text is always included. This hook returns no Mongo predicates, performs no storage
+lookup, and is limited to 20 distinct terms of at most 1024 characters each.
+CSTEP-I uses this hook to include canonical L-prefixed and bare barcode digits;
+the shared API owns the matching algorithm and permission rules.
+
+### Stored projection and maintenance
+
+The optional internal `dataset_search` field has version `2`, normalized catalog
+entries (`catalog_index`, `name_folded`, `type_folded`, `type_short_folded`,
+`locations_folded`), and `pipeline_tags` entries (`key`, `value_folded`). All Mongo
+create, update, and conditional-update writers use the same document builder and
+persist the projection from the exact catalog and tags being written. Failed
+projection building logs a warning and removes stale enrichment in the same update
+without blocking valid pipeline persistence. Public readers strip this field.
+
+Missing or unsupported projection versions are processed from their catalog and
+tags using the current matching rules. This permits existing on-disk records to
+remain searchable without retaining superseded query modes. Version-2 candidate
+queries use normalized fields; full catalogs are fetched only for selected records.
+Candidate selection retains at most one extra row per page. Existing unprocessed
+records and unanchored substring queries can still require significant scanning.
+The whole database search is bounded by `dataset_search_timeout_seconds` (default
+10), its environment variable `KEDRO_GRAPHQL_DATASET_SEARCH_TIMEOUT_SECONDS`, or
+CLI `--dataset-search-timeout-seconds`. Timeouts return an explicit error, never a
+partial page presented as complete. Narrow text or supply a pipeline ID.
+
+Declare indexes through `mongo_indexes`, including separate multikey indexes for
+`dataset_search.pipeline_tags.value_folded` and
+`dataset_search.datasets.locations_folded`. Do not combine the independent tag
+and dataset arrays in one compound index. The version index helps find unprocessed
+records; dataset name/type indexes can support other catalog queries. Substring
+matching is not guaranteed to be selective: inspect representative Mongo explain
+plans before making performance assumptions. Sorting candidate pages is bounded
+in application memory and may still require examining all matching candidates.
+
+`kedro gql mongo-indexes --apply` explicitly provisions configured indexes.
+`kedro gql dataset-search check` reports consistent, missing, unsupported,
+inconsistent, and failed projections. `kedro gql dataset-search rebuild`
+recomputes projections without modifying source catalogs or tags. Each write
+compares both source fields, including their presence, and retries up to three
+times after concurrent changes. No maintenance runs at startup. Direct Mongo
+writers bypass the builder; check/rebuild detects and repairs their stale data.
+No new collection or mandatory migration is required. Deploy API and workers
+together; index application, record rebuilds, and restarts are separate operations.

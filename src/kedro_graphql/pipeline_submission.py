@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from importlib import import_module
 import re
 from collections.abc import Mapping
@@ -20,10 +21,12 @@ import jwt
 import strawberry
 from botocore.exceptions import BotoCoreError, ClientError
 from strawberry.scalars import JSON
-from kedro.io import AbstractDataset, MemoryDataset
+from kedro.io import AbstractDataset, MemoryDataset, DatasetError
 from kedro.io.core import parse_dataset_definition
+from kedro_datasets.partitions import PartitionedDataset
 
 from .exceptions import InvalidPipeline
+from .pipeline_visibility import require_pipeline_name_allowed
 from .models import (
     DataSetInput,
     Node,
@@ -73,6 +76,34 @@ class SubmissionParameter:
     default_value: JSON | None
     editable: bool
     reason: str | None = None
+    visible_in_form: bool = True
+
+
+@strawberry.type
+class SubmissionFolderUploadLimits:
+    max_files: int
+    max_total_bytes: float
+    max_file_bytes: float
+
+
+@strawberry.type
+class SubmissionSuffixReplacement:
+    from_suffix: str
+    to_suffix: str
+
+
+@strawberry.type
+class SubmissionRegexSubstitution:
+    pattern: str
+    replacement: str
+
+
+@strawberry.type
+class SubmissionInputDerivation:
+    source_dataset: str
+    append_suffix: str | None = None
+    replace_suffix: SubmissionSuffixReplacement | None = None
+    regex_sub: SubmissionRegexSubstitution | None = None
 
 
 @strawberry.type
@@ -85,6 +116,9 @@ class SubmissionDataset:
     supported: bool
     reason: str | None = None
     autocomplete: InputAutocomplete | None = None
+    filename_suffix: str | None = None
+    folder_upload_limits: SubmissionFolderUploadLimits | None = None
+    derivation: SubmissionInputDerivation | None = None
 
 
 @strawberry.type
@@ -114,9 +148,16 @@ class SubmissionValidationError:
 
 
 @strawberry.type
+class ResolvedSubmissionInput:
+    name: str
+    s3_uri: str
+
+
+@strawberry.type
 class SubmissionValidationResult:
     valid: bool
     errors: list[SubmissionValidationError]
+    resolved_inputs: list[ResolvedSubmissionInput] = strawberry.field(default_factory=list)
 
 
 @strawberry.type
@@ -127,6 +168,24 @@ class SubmissionUpload:
     fields: list[SignedUrlField]
     expires_at: datetime
     max_bytes: int
+
+
+@strawberry.input
+class SubmissionFolderFileInput:
+    relative_path: str
+    size: float
+
+
+@strawberry.type
+class SubmissionFolderFileUpload:
+    relative_path: str
+    upload: SubmissionUpload
+
+
+@strawberry.type
+class SubmissionFolderUpload:
+    upload_id: str
+    files: list[SubmissionFolderFileUpload]
 
 
 @strawberry.input
@@ -163,10 +222,6 @@ class _ParameterSpec:
 
 
 _MISSING = object()
-_PARTITIONED_TYPES = {
-    "partitions.PartitionedDataset",
-    "partitions.IncrementalDataset",
-}
 
 
 def _slice_payload(slices: list[PipelineSlice] | None) -> list[dict[str, Any]]:
@@ -272,6 +327,21 @@ def _parameter_specs(selected, parameters: Mapping[str, Any]) -> dict[tuple[str,
     return specs
 
 
+def _parameter_visible(path: str, allowlist: list[str] | None, disallowlist: list[str]) -> bool:
+    """Use the deepest matching visibility rule; disallow wins ties."""
+    allow_depth = max(
+        (rule.count(".") for rule in allowlist or [] if path == rule or path.startswith(rule + ".")),
+        default=-1,
+    )
+    disallow_depth = max(
+        (rule.count(".") for rule in disallowlist if path == rule or path.startswith(rule + ".")),
+        default=-1,
+    )
+    if allow_depth == disallow_depth == -1:
+        return allowlist is None
+    return allow_depth > disallow_depth
+
+
 def _collection_location_key(config: Mapping[str, Any]) -> str | None:
     """Read an inherited dataset capability without instantiating the dataset."""
     if not config.get("type"):
@@ -285,7 +355,7 @@ def _dataset_kind(config: Mapping[str, Any]) -> SubmissionDatasetKind:
     """Classify the supported submission input shape."""
     if _collection_location_key(config):
         return SubmissionDatasetKind.COLLECTION
-    if config.get("type") in _PARTITIONED_TYPES:
+    if config.get("type") and issubclass(parse_dataset_definition(dict(config))[0], PartitionedDataset):
         return SubmissionDatasetKind.PARTITIONED
     return SubmissionDatasetKind.SINGLE_FILE
 
@@ -334,16 +404,6 @@ def _dataset_descriptor(
         )
     dataset_type = str(config.get("type", "unknown"))
     kind = _dataset_kind(config)
-    if kind is SubmissionDatasetKind.PARTITIONED:
-        return SubmissionDataset(
-            name=name,
-            dataset_type=dataset_type,
-            kind=kind,
-            required=True,
-            methods=[],
-            supported=False,
-            reason="Partitioned inputs are visible but are not supported by this form.",
-        )
     if _dataset_location_key(config) is None:
         return SubmissionDataset(
             name=name,
@@ -376,11 +436,18 @@ def _dataset_descriptor(
         required=True,
         methods=methods,
         supported=True,
+        filename_suffix=config.get("filename_suffix", "") if kind is SubmissionDatasetKind.PARTITIONED else None,
+        folder_upload_limits=SubmissionFolderUploadLimits(
+            max_files=server_config.pipeline_submission_partition_upload_max_files,
+            max_total_bytes=server_config.pipeline_submission_partition_upload_max_size_mb * 1024 * 1024,
+            max_file_bytes=_upload_max_bytes(server_config),
+        ) if kind is SubmissionDatasetKind.PARTITIONED and SubmissionInputMethod.UPLOAD in methods else None,
     )
 
 
 def _form_context(services, name: str, slices: list[PipelineSlice] | None):
     """Load and normalize the selected pipeline context."""
+    require_pipeline_name_allowed(services.config, name)
     if name not in services.metadata.pipelines:
         raise InvalidPipeline(f"Pipeline {name} does not exist in the project.")
     selected = filter_pipeline(services.metadata.pipelines[name], _slice_payload(slices))
@@ -411,6 +478,22 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
         )
         for name in free_inputs
     ]
+    input_specs = {item.name: item for item in inputs}
+    for rule in services.config.dataset_input_derivations:
+        if rule.pipeline_name != name or rule.dataset_name not in input_specs or rule.source_dataset not in input_specs:
+            continue
+        target, source = input_specs[rule.dataset_name], input_specs[rule.source_dataset]
+        if target.kind is not SubmissionDatasetKind.SINGLE_FILE or source.kind is not SubmissionDatasetKind.SINGLE_FILE:
+            raise InvalidPipeline("Dataset input derivations require single-file source and target datasets.")
+        target.derivation = SubmissionInputDerivation(
+            source_dataset=rule.source_dataset, append_suffix=rule.append_suffix,
+            replace_suffix=SubmissionSuffixReplacement(
+                from_suffix=rule.replace_suffix.from_suffix, to_suffix=rule.replace_suffix.to_suffix,
+            ) if rule.replace_suffix else None,
+            regex_sub=SubmissionRegexSubstitution(
+                pattern=rule.regex_sub.pattern, replacement=rule.regex_sub.replacement,
+            ) if rule.regex_sub else None,
+        )
     for descriptor in inputs:
         if descriptor.supported:
             context = DatasetInputContext(name, descriptor.name, resolved_catalog.get(descriptor.name) or catalog.get(descriptor.name) or {}, tuple(slices or []), None)
@@ -418,17 +501,27 @@ def build_submission_form(services, name: str, slices: list[PipelineSlice] | Non
             if provider is not None:
                 descriptor.autocomplete = InputAutocomplete(method=provider.method)
     specs = _parameter_specs(selected, parameters)
-    parameter_rows = [
-        SubmissionParameter(
-            path=".".join(spec.segments),
-            segments=list(spec.segments),
-            type=spec.value_type,
-            default_value=spec.default,
-            editable=spec.editable,
-            reason=spec.reason,
+    allowlist = services.config.pipeline_submission_parameter_allowlists.get(name)
+    disallowlist = services.config.pipeline_submission_parameter_disallowlists.get(name, [])
+    parameter_rows = []
+    for spec in specs.values():
+        path = ".".join(spec.segments)
+        visible_in_form = _parameter_visible(path, allowlist, disallowlist)
+        if not visible_in_form and _resolve_parameter(parameters, path)[0] is _MISSING:
+            raise InvalidPipeline(
+                f"Hidden parameter {path!r} for pipeline {name!r} has no server default."
+            )
+        parameter_rows.append(
+            SubmissionParameter(
+                path=path,
+                segments=list(spec.segments),
+                type=spec.value_type,
+                default_value=spec.default,
+                editable=spec.editable,
+                reason=spec.reason,
+                visible_in_form=visible_in_form,
+            )
         )
-        for spec in specs.values()
-    ]
     parameter_rows.sort(key=lambda item: item.path)
     outputs = [
         SubmissionOutput(
@@ -485,7 +578,7 @@ def _validate_parameter_value(value: Any, value_type: SubmissionValueType) -> bo
     if value_type is SubmissionValueType.INTEGER:
         return type(value) is int
     if value_type is SubmissionValueType.FLOAT:
-        return type(value) is float
+        return type(value) is int or (type(value) is float and math.isfinite(value))
     if value_type is SubmissionValueType.ARRAY:
         return type(value) is list and all(_simple(item) for item in value)
     return False
@@ -528,7 +621,8 @@ def _parameter_inputs(parameters: Mapping[str, Any]) -> list[ParameterInput]:
 def _s3_parts(uri: str) -> tuple[str, str]:
     """Parse and validate an S3 URI."""
     parsed = urlparse(uri)
-    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
+    if (parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/")
+            or parsed.query or parsed.fragment or "@" in parsed.netloc or ":" in parsed.netloc):
         raise InvalidPipeline("S3 inputs must be full s3://bucket/key URIs.")
     return parsed.netloc, parsed.path.lstrip("/")
 
@@ -560,7 +654,7 @@ def _check_s3_uri(config, uri: str) -> str:
 
 def _safe_filename(filename: str) -> str:
     """Validate an upload filename."""
-    if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename:
+    if not filename or filename in {".", ".."} or "/" in filename or "\\" in filename or "\0" in filename:
         raise InvalidPipeline("Upload filename must be a single file name.")
     return filename
 
@@ -588,113 +682,199 @@ def _jwt_payload(config, **values) -> str:
     )
 
 
-def create_submission_upload(services, name: str, input_name: str, filename: str, slices=None) -> SubmissionUpload:
-    """Allocate an upload destination and signed upload details."""
-    form = build_submission_form(services, name, slices)
-    dataset = next((item for item in form.inputs if item.name == input_name), None)
-    if dataset is None or not dataset.supported:
-        raise InvalidPipeline(f"Input {input_name} is not available for submission.")
-    if SubmissionInputMethod.UPLOAD not in dataset.methods:
-        raise InvalidPipeline(f"Uploads are not supported for input {input_name}.")
-    filename = _safe_filename(filename)
-    config = services.config
+def _allocate_upload(config, name: str, input_name: str, destination: str, filename: str,
+                     expected_size: int | None = None) -> SubmissionUpload:
+    """Sign an upload to an already allocated destination."""
     expires = config.pipeline_submission_upload_expires_in_sec
     max_bytes = _upload_max_bytes(config)
-    upload_id = str(uuid4())
-    root = _upload_root(config, name).rstrip("/")
-    if root.startswith("s3://"):
-        uri = f"{root}/{upload_id}/inputs/{_safe_component(input_name)}/{filename}"
-        _s3_parts(uri)
-        token = _jwt_payload(
-            config,
-            kind="pipeline-submission-upload",
-            pipeline=name,
-            input=input_name,
-            s3_uri=uri,
-        )
-        signed = S3Provider.presigned_post(uri, expires, max_bytes=max_bytes)
+    payload = dict(kind="pipeline-submission-upload", pipeline=name, input=input_name)
+    if expected_size is not None:
+        payload["expected_size"] = expected_size
+    if destination.startswith("s3://"):
+        _s3_parts(destination)
+        if len(_s3_parts(destination)[1].encode()) > 1024:
+            raise InvalidPipeline("Upload path exceeds the S3 key length limit.")
+        token = _jwt_payload(config, **payload, s3_uri=destination)
+        options = {"min_bytes": 0} if expected_size is not None else {}
+        signed = S3Provider.presigned_post(destination, expires, max_bytes=max_bytes, **options)
         if signed is None:
             raise InvalidPipeline("Unable to allocate an S3 upload.")
-        return SubmissionUpload(
-            upload_id=token,
-            url=signed.url,
-            file=signed.file,
-            fields=signed.fields,
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires),
-            max_bytes=max_bytes,
+    else:
+        path = Path(destination).resolve()
+        roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
+        if not any(path.is_relative_to(root) for root in roots):
+            raise InvalidPipeline("Pipeline upload root is not an allowed local upload root.")
+        token = _jwt_payload(config, **payload, filepath=str(path))
+        signed = SignedUrl(
+            url=f"{config.local_file_provider_server_url}/upload?{urlencode({'token': token})}",
+            file=filename,
+            fields=[SignedUrlField(name="token", value=token)],
         )
-
-    root_path = Path(_upload_root(config, name)).resolve()
-    destination = root_path / upload_id / "inputs" / _safe_component(input_name) / filename
-    allowed_roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
-    if not any(destination.is_relative_to(allowed) for allowed in allowed_roots):
-        raise InvalidPipeline("Pipeline upload root is not an allowed local upload root.")
-    token = _jwt_payload(
-        config,
-        kind="pipeline-submission-upload",
-        pipeline=name,
-        input=input_name,
-        filepath=str(destination),
-    )
-    url = f"{config.local_file_provider_server_url}/upload?{urlencode({'token': token})}"
-    signed = SignedUrl(
-        url=url,
-        file=filename,
-        fields=[SignedUrlField(name="token", value=token)],
-    )
     return SubmissionUpload(
-        upload_id=token,
-        url=signed.url,
-        file=signed.file,
-        fields=signed.fields,
-        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires),
-        max_bytes=max_bytes,
+        upload_id=token, url=signed.url, file=signed.file, fields=signed.fields,
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires), max_bytes=max_bytes,
     )
 
 
-def _decode_upload(services, submission: PipelineSubmissionInput, source: SubmissionDatasetInput) -> str:
-    """Validate an upload token and resolve its uploaded file."""
+def create_submission_upload(services, name: str, input_name: str, filename: str, slices=None) -> SubmissionUpload:
+    """Allocate an upload destination and signed upload details."""
+    dataset = next((item for item in build_submission_form(services, name, slices).inputs if item.name == input_name), None)
+    if dataset is None or not dataset.supported or SubmissionInputMethod.UPLOAD not in dataset.methods:
+        raise InvalidPipeline(f"Uploads are not supported for input {input_name}.")
+    if dataset.kind is SubmissionDatasetKind.PARTITIONED:
+        raise InvalidPipeline("Partitioned inputs require a folder upload.")
+    filename = _safe_filename(filename)
+    root = _upload_root(services.config, name).rstrip("/")
+    destination = f"{root}/{uuid4()}/inputs/{_safe_component(input_name)}/{filename}"
+    return _allocate_upload(services.config, name, input_name, destination, filename)
+
+
+def _folder_manifest(config, files: list[SubmissionFolderFileInput]) -> list[dict[str, Any]]:
+    """Validate browser paths and sizes before allocating any destinations."""
+    if not files or len(files) > config.pipeline_submission_partition_upload_max_files:
+        raise InvalidPipeline(f"A folder must contain 1 to {config.pipeline_submission_partition_upload_max_files} files.")
+    result = []
+    seen = set()
+    for file in files:
+        path = file.relative_path
+        parts = path.split("/")
+        if (any(part in {"", ".", ".."} or len(part.encode()) > 255 for part in parts)
+                or "\\" in path or ":" in path or any(ord(char) < 32 for char in path)
+                or len(path.encode()) > 1024):
+            raise InvalidPipeline("Folder files must have safe relative paths without traversal.")
+        if path in seen:
+            raise InvalidPipeline(f"Folder contains duplicate path: {path}")
+        if (not math.isfinite(file.size) or file.size < 0 or not float(file.size).is_integer()
+                or file.size > _upload_max_bytes(config)):
+            raise InvalidPipeline(f"Invalid size or per-file limit exceeded: {path}")
+        seen.add(path)
+        result.append({"path": path, "size": int(file.size)})
+    if sum(file["size"] for file in result) > config.pipeline_submission_partition_upload_max_size_mb * 1024 * 1024:
+        raise InvalidPipeline("Folder exceeds the total upload size limit.")
+    return result
+
+
+def create_submission_folder_upload(services, name: str, input_name: str,
+                                    files: list[SubmissionFolderFileInput], slices=None) -> SubmissionFolderUpload:
+    """Allocate one directory and bind its complete manifest to a signed token."""
+    dataset = next((item for item in build_submission_form(services, name, slices).inputs if item.name == input_name), None)
+    if (dataset is None or not dataset.supported or dataset.kind is not SubmissionDatasetKind.PARTITIONED
+            or SubmissionInputMethod.UPLOAD not in dataset.methods):
+        raise InvalidPipeline(f"Folder uploads are not supported for input {input_name}.")
+    config = services.config
+    manifest = _folder_manifest(config, files)
+    if not any(file["path"].endswith(dataset.filename_suffix or "") for file in manifest):
+        raise InvalidPipeline(f"Folder must contain at least one file ending in {dataset.filename_suffix!r}.")
+    root = _upload_root(config, name).rstrip("/")
+    destination = f"{root}/{uuid4()}/inputs/{_safe_component(input_name)}"
+    if not root.startswith("s3://"):
+        destination = str(Path(destination).resolve())
+    uploads = [SubmissionFolderFileUpload(
+        relative_path=file["path"],
+        upload=_allocate_upload(config, name, input_name, f"{destination}/{file['path']}",
+                                file["path"].rsplit("/", 1)[-1], file["size"]),
+    ) for file in manifest]
+    token = _jwt_payload(config, kind="pipeline-submission-folder-upload", pipeline=name,
+                         input=input_name, destination=destination, files=manifest)
+    return SubmissionFolderUpload(upload_id=token, files=uploads)
+
+
+def _uploaded_file_size(config, location: str, root: str) -> int:
+    """Verify storage scope and return the actual size of an uploaded file."""
+    if location.startswith("s3://"):
+        if not root.startswith("s3://") or not _within_s3_scope(location, [root]):
+            raise InvalidPipeline("Upload destination is outside the configured upload root.")
+        bucket, key = _s3_parts(location)
+        try:
+            return boto3.client("s3").head_object(Bucket=bucket, Key=key)["ContentLength"]
+        except (ClientError, BotoCoreError) as error:
+            raise InvalidPipeline("Uploaded S3 object does not exist or is inaccessible.") from error
+    path = Path(location).resolve()
+    roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
+    if root.startswith("s3://") or not path.is_relative_to(Path(root).resolve()):
+        raise InvalidPipeline("Upload destination is outside the configured upload root.")
+    if not any(path.is_relative_to(allowed) for allowed in roots):
+        raise InvalidPipeline("Upload destination is outside the configured local root.")
+    try:
+        if not path.is_file():
+            raise InvalidPipeline("Uploaded file does not exist.")
+        return path.stat().st_size
+    except OSError as error:
+        raise InvalidPipeline("Uploaded file is inaccessible.") from error
+
+
+def _decode_upload(services, submission: PipelineSubmissionInput, source: SubmissionDatasetInput,
+                   partitioned: bool = False) -> str:
+    """Validate a file or complete folder token and resolve its location."""
     if not source.upload_id:
         raise InvalidPipeline("An upload ID is required.")
     config = services.config
     try:
-        payload = jwt.decode(
-            source.upload_id,
-            config.local_file_provider_jwt_secret_key,
-            algorithms=[config.local_file_provider_jwt_algorithm],
-        )
+        payload = jwt.decode(source.upload_id, config.local_file_provider_jwt_secret_key,
+                             algorithms=[config.local_file_provider_jwt_algorithm])
     except jwt.InvalidTokenError as error:
         raise InvalidPipeline("Upload ID is invalid or expired.") from error
-    if payload.get("kind") != "pipeline-submission-upload" or payload.get("pipeline") != submission.name or payload.get("input") != source.name:
-        raise InvalidPipeline("Upload ID does not belong to this pipeline input.")
-    max_bytes = _upload_max_bytes(config)
+    kind = "pipeline-submission-folder-upload" if partitioned else "pipeline-submission-upload"
+    if payload.get("kind") != kind or payload.get("pipeline") != submission.name or payload.get("input") != source.name:
+        raise InvalidPipeline("Upload ID does not belong to this pipeline input or upload type.")
     root = _upload_root(config, submission.name)
-    if payload.get("s3_uri"):
-        uri = payload["s3_uri"]
-        if not _within_s3_scope(uri, [root]):
-            raise InvalidPipeline("Upload destination is outside the configured upload root.")
-        bucket, key = _s3_parts(uri)
-        try:
-            result = boto3.client("s3").head_object(Bucket=bucket, Key=key)
-        except (ClientError, BotoCoreError) as error:
-            raise InvalidPipeline("Uploaded S3 object does not exist or is inaccessible.") from error
-        if result.get("ContentLength", 0) > max_bytes:
-            raise InvalidPipeline("Uploaded file exceeds the maximum size.")
-        return uri
-    filepath = payload.get("filepath")
-    if not filepath:
+    if partitioned:
+        destination = payload["destination"]
+        manifest = _folder_manifest(config, [SubmissionFolderFileInput(relative_path=file["path"], size=file["size"])
+                                             for file in payload["files"]])
+        sizes = None
+        if destination.startswith("s3://"):
+            if not root.startswith("s3://") or not _within_s3_scope(destination, [root]):
+                raise InvalidPipeline("Upload destination is outside the configured upload root.")
+            bucket, key = _s3_parts(destination)
+            prefix = key.rstrip("/") + "/"
+            try:
+                pages = boto3.client("s3").get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix)
+                sizes = {item["Key"]: item["Size"] for page in pages for item in page.get("Contents", [])}
+            except (ClientError, BotoCoreError) as error:
+                raise InvalidPipeline("Uploaded S3 folder is inaccessible.") from error
+        for file in manifest:
+            size = (sizes.get(prefix + file["path"]) if sizes is not None
+                    else _uploaded_file_size(config, f"{destination}/{file['path']}", root))
+            if size is None:
+                raise InvalidPipeline(f"Uploaded folder file does not exist: {file['path']}")
+            if size != file["size"]:
+                raise InvalidPipeline(f"Uploaded folder file has the wrong size: {file['path']}")
+        return destination.rstrip("/") + "/"
+    location = payload.get("s3_uri") or payload.get("filepath")
+    if not location:
         raise InvalidPipeline("Upload ID has no destination.")
-    path = Path(filepath).resolve()
-    if root.startswith("s3://") or not path.is_relative_to(Path(root).resolve()):
-        raise InvalidPipeline("Upload destination is outside the configured upload root.")
-    roots = [Path(item).resolve() for item in config.local_file_provider_upload_allowed_roots]
-    if not any(path.is_relative_to(root) for root in roots):
-        raise InvalidPipeline("Upload destination is outside the configured local root.")
-    if not path.is_file():
-        raise InvalidPipeline("Uploaded file does not exist.")
-    if path.stat().st_size > max_bytes:
+    if _uploaded_file_size(config, location, root) > _upload_max_bytes(config):
         raise InvalidPipeline("Uploaded file exceeds the maximum size.")
-    return str(path)
+    return location
+
+
+def _check_partitioned_location(name: str, config: Mapping[str, Any], location: str) -> str:
+    """Use Kedro's suffix and checkpoint rules without loading or confirming partitions."""
+    try:
+        dataset = AbstractDataset.from_config(name, _replace_location(config, location))
+        # exists() cannot distinguish a directory marker from a partition when the suffix is empty.
+        eligible = dataset._list_partitions()
+        if "version" in dataset._dataset_config:
+            eligible = [path for partition in eligible for path in dataset._filesystem.find(partition, **dataset._load_args)
+                        if path.endswith(dataset._filename_suffix)]
+        if not any(not path.endswith("/") and dataset._filesystem.isfile(path) for path in eligible):
+            raise InvalidPipeline("No usable partitions were found matching the configured suffix and checkpoint.")
+    except (DatasetError, OSError, BotoCoreError) as error:
+        raise InvalidPipeline("Partition discovery failed; check storage access and dataset configuration.") from error
+    return location
+
+
+def _check_s3_prefix(server_config, uri: str) -> str:
+    """Normalize a directory prefix and guard its S3 scope before discovery."""
+    parsed = urlparse(uri)
+    if (parsed.scheme != "s3" or not parsed.netloc or parsed.query or parsed.fragment
+            or "@" in parsed.netloc or ":" in parsed.netloc):
+        raise InvalidPipeline("S3 prefixes must be s3://bucket/prefix URIs.")
+    location = uri.rstrip("/") + "/"
+    if not _within_s3_scope(location, server_config.pipeline_submission_s3_allowed_prefixes):
+        raise InvalidPipeline("S3 prefix is outside the permitted scope.")
+    return location
 
 
 def _replace_location(config: Mapping[str, Any], location: str | list[str]) -> dict[str, Any]:
@@ -705,6 +885,20 @@ def _replace_location(config: Mapping[str, Any], location: str | list[str]) -> d
         raise InvalidPipeline("Input dataset has no server-configured file location.")
     result[key] = location
     return result
+
+
+def _derive_input_uri(uri: str, rule: SubmissionInputDerivation) -> str:
+    """Resolve a configured suffix operation or Python regex substitution."""
+    if rule.append_suffix is not None:
+        return uri + rule.append_suffix
+    if rule.regex_sub is not None:
+        return re.sub(rule.regex_sub.pattern, rule.regex_sub.replacement, uri)
+    replacement = rule.replace_suffix
+    if replacement is None or not uri.endswith(replacement.from_suffix):
+        suffix = replacement.from_suffix if replacement else ""
+        raise InvalidPipeline(f"Source URI must end with {suffix!r} for suffix replacement.")
+    _s3_parts(uri)
+    return uri[:-len(replacement.from_suffix)] + replacement.to_suffix
 
 
 def _prepare_submission(services, submission: PipelineSubmissionInput):
@@ -720,7 +914,30 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
         if source.name in sources:
             errors.append(SubmissionValidationError(path=source.name, message="Input was supplied more than once."))
         sources[source.name] = source
-    expected = set(input_specs)
+    resolved_inputs = []
+    failed_derivations = set()
+    for registration in services.config.dataset_input_derivations:
+        if registration.pipeline_name != submission.name:
+            continue
+        target = registration.dataset_name
+        descriptor = input_specs.get(target)
+        if descriptor is None:
+            continue
+        rule = descriptor.derivation
+        source = sources.get(rule.source_dataset) if rule else None
+        if target in sources or not rule or source is None or source.method is not SubmissionInputMethod.S3_URI:
+            continue
+        try:
+            uri = _derive_input_uri(source.s3_uri, rule) if source.s3_uri else None
+        except InvalidPipeline as error:
+            errors.append(SubmissionValidationError(path=target, message=str(error)))
+            sources.pop(target, None)
+            failed_derivations.add(target)
+            continue
+        sources[target] = SubmissionDatasetInput(name=target, method=SubmissionInputMethod.S3_URI, s3_uri=uri)
+        if uri:
+            resolved_inputs.append(ResolvedSubmissionInput(name=target, s3_uri=uri))
+    expected = set(input_specs) - failed_derivations
     for name in sorted(expected - set(sources)):
         errors.append(SubmissionValidationError(path=name, message="Required input was not supplied."))
     for name in sorted(set(sources) - expected):
@@ -750,8 +967,9 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
             errors.append(SubmissionValidationError(path=path, message="Parameter value does not match its declared type."))
             continue
         try:
-            _set_parameter(merged_parameters, segments, override.value)
-        except InvalidPipeline as error:
+            value = float(override.value) if spec.value_type is SubmissionValueType.FLOAT else override.value
+            _set_parameter(merged_parameters, segments, value)
+        except (InvalidPipeline, OverflowError) as error:
             errors.append(SubmissionValidationError(path=path, message=str(error)))
 
     catalog_inputs: list[DataSetInput] = []
@@ -775,16 +993,21 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
                 else:
                     if source.s3_uris or not source.s3_uri:
                         raise InvalidPipeline("Supply one S3 URI for this input.")
-                    location = _check_s3_uri(services.config, source.s3_uri)
+                    location = (_check_s3_prefix(services.config, source.s3_uri)
+                                if descriptor.kind is SubmissionDatasetKind.PARTITIONED
+                                else _check_s3_uri(services.config, source.s3_uri))
             else:
-                location = _decode_upload(services, submission, source)
+                location = _decode_upload(services, submission, source,
+                                          partitioned=descriptor.kind is SubmissionDatasetKind.PARTITIONED)
             original = resolved_catalog.get(name) or catalog.get(name)
+            if descriptor.kind is SubmissionDatasetKind.PARTITIONED:
+                location = _check_partitioned_location(name, original, location)
             catalog_inputs.append(DataSetInput(name=name, config=json.dumps(_replace_location(original, location))))
         except InvalidPipeline as error:
             errors.append(SubmissionValidationError(path=name, message=str(error)))
 
     if errors:
-        return None, errors, []
+        return None, errors, [], resolved_inputs
 
     managed_outputs = [
         output.name
@@ -801,23 +1024,26 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
     transform = services.config.pipeline_submission_transform
     if transform:
         module, name = transform.rsplit(".", 1)
-        pipeline_input, managed_outputs = getattr(import_module(module), name)(
-            pipeline_input, merged_parameters, managed_outputs
-        )
-    return pipeline_input, [], managed_outputs
+        try:
+            pipeline_input, managed_outputs = getattr(import_module(module), name)(
+                pipeline_input, merged_parameters, managed_outputs
+            )
+        except (InvalidPipeline, ValueError) as error:
+            return None, [SubmissionValidationError(path=None, message=str(error))], [], resolved_inputs
+    return pipeline_input, [], managed_outputs, resolved_inputs
 
 
 async def validate_pipeline_submission(services, submission: PipelineSubmissionInput) -> SubmissionValidationResult:
     """Validate a submission without persisting or running it."""
     try:
-        pipeline_input, errors, managed_outputs = _prepare_submission(services, submission)
+        pipeline_input, errors, managed_outputs, resolved_inputs = _prepare_submission(services, submission)
     except (InvalidPipeline, ValueError) as error:
         return SubmissionValidationResult(
             valid=False,
             errors=[SubmissionValidationError(path=None, message=str(error))],
         )
     if errors:
-        return SubmissionValidationResult(valid=False, errors=errors)
+        return SubmissionValidationResult(valid=False, errors=errors, resolved_inputs=resolved_inputs)
     try:
         from .pipeline_service import create_pipeline
 
@@ -832,13 +1058,14 @@ async def validate_pipeline_submission(services, submission: PipelineSubmissionI
         return SubmissionValidationResult(
             valid=False,
             errors=[SubmissionValidationError(path=None, message=str(error))],
+            resolved_inputs=resolved_inputs,
         )
-    return SubmissionValidationResult(valid=True, errors=[])
+    return SubmissionValidationResult(valid=True, errors=[], resolved_inputs=resolved_inputs)
 
 
 async def submit_pipeline(services, submission: PipelineSubmissionInput, caller) -> Any:
     """Create and start a validated pipeline submission."""
-    pipeline_input, errors, managed_outputs = _prepare_submission(services, submission)
+    pipeline_input, errors, managed_outputs, _ = _prepare_submission(services, submission)
     if errors:
         raise InvalidPipeline("; ".join(error.message for error in errors))
     from .pipeline_service import create_pipeline

@@ -1,9 +1,10 @@
 import asyncio
-import shutil
+import os
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
+from uuid import uuid4
 
 import jwt
 import strawberry
@@ -30,6 +31,25 @@ from .permissions import get_permissions
 from .project import ProjectMetadata
 from .schema import build_schema
 from .signed_url.base import SignedUrlProvider
+
+
+def _write_uploaded_file(source, path: Path, max_bytes: int, expected_size: int | None = None):
+    """Publish a complete upload atomically, enforcing limits while copying."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".upload-{uuid4()}"
+    try:
+        with temporary.open("xb") as output:
+            size = 0
+            while chunk := source.read(1024 * 1024):
+                size += len(chunk)
+                if size > max_bytes or (expected_size is not None and size > expected_size):
+                    raise HTTPException(status_code=400, detail="File size exceeds the upload limit")
+                output.write(chunk)
+            if expected_size is not None and size != expected_size:
+                raise HTTPException(status_code=400, detail="File size does not match the folder manifest")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True)
@@ -203,6 +223,8 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
             raise HTTPException(status_code=403, detail="Token expired")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=403, detail="Invalid token")
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(status_code=403, detail="Invalid upload destination")
         roots = [
             Path(root).resolve()
             for root in config.local_file_provider_upload_allowed_roots
@@ -210,9 +232,9 @@ def create_app(config: KedroGraphQLConfig, metadata: ProjectMetadata) -> FastAPI
         if not any(path.is_relative_to(root) for root in roots):
             raise HTTPException(status_code=403, detail=f"Path {path} is not allowed")
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("wb") as output:
-                shutil.copyfileobj(file.file, output)
+            _write_uploaded_file(file.file, path,
+                                 config.local_file_provider_upload_max_file_size_mb * 1024 * 1024,
+                                 payload.get("expected_size"))
         except OSError as error:
             raise HTTPException(status_code=500, detail=f"Upload failed: {error}")
         return {"status": "success", "path": str(path)}

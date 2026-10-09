@@ -8,6 +8,7 @@ from kedro.pipeline import Pipeline as KedroPipeline
 from omegaconf import OmegaConf
 
 from .config import KedroGraphQLConfig
+from .dataset_input_derivations import validate_dataset_input_derivations
 from .models import PipelineTemplate
 
 
@@ -77,6 +78,7 @@ def load_project_metadata(
         raise ValueError(f"Empty pipeline config sources: {empty_sources}")
 
     exposed = {name: pipelines[name] for name in config.pipeline_config_sources}
+    validate_dataset_input_derivations(config.dataset_input_derivations, exposed)
     sources = {
         name: source if source.is_absolute() else project_path / source
         for name, value in config.pipeline_config_sources.items()

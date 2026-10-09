@@ -8,6 +8,8 @@ import yaml
 from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 
+from .dataset_input_derivations import DerivationRegistrations
+
 
 def _alias(name: str) -> str:
     return f"KEDRO_GRAPHQL_{name.upper()}"
@@ -60,6 +62,9 @@ class KedroGraphQLConfig(BaseModel):
     mongo_db_collection: str = "pipelines"
     mongo_db_name: str = "pipelines"
     mongo_uri: str = "mongodb://root:example@localhost:27017/"
+    catalog_search_tag_keys: list[str] | None = None
+    catalog_search_term_expander: str | None = None
+    dataset_search_timeout_seconds: float = Field(default=10, gt=0, allow_inf_nan=False)
     mongo_indexes: list[dict[str, Any]] = Field(default_factory=list)
     permissions: str = "kedro_graphql.permissions.IsAuthenticatedAlways"
     permissions_group_to_role_map: dict[str, str] = Field(
@@ -84,12 +89,19 @@ class KedroGraphQLConfig(BaseModel):
         }
     )
     pipeline_config_sources: dict[str, str] = Field(default_factory=dict)
+    pipeline_name_allowlist: list[str] | None = None
+    pipeline_name_disallowlist: list[str] = Field(default_factory=list)
     pipeline_submission_batch_max_size: PositiveInt = 10
     pipeline_submission_batch_max_sizes: dict[str, PositiveInt] = Field(default_factory=dict)
+    pipeline_submission_parameter_allowlists: dict[str, list[str]] = Field(default_factory=dict)
+    pipeline_submission_parameter_disallowlists: dict[str, list[str]] = Field(default_factory=dict)
     dataset_input_providers: list[InputProviderRegistration] = Field(default_factory=list)
+    dataset_input_derivations: DerivationRegistrations = Field(default_factory=list)
     pipeline_submission_max_bytes: int = Field(default=1_048_576, gt=0)
     pipeline_submission_s3_allowed_prefixes: list[str] = Field(default_factory=list)
     pipeline_submission_upload_expires_in_sec: int = Field(default=3600, gt=0)
+    pipeline_submission_partition_upload_max_files: PositiveInt = 1000
+    pipeline_submission_partition_upload_max_size_mb: PositiveInt = 1024
     pipeline_submission_upload_root: str = "./data/submissions"
     pipeline_submission_upload_roots: dict[str, str] = Field(default_factory=dict)
     project_name: str | None = Field(default=None, alias="KEDRO_PROJECT_NAME")
@@ -101,6 +113,9 @@ class KedroGraphQLConfig(BaseModel):
     signed_url_provider: str = "kedro_graphql.signed_url.s3_provider.S3Provider"
 
     @field_validator(
+        "catalog_search_tag_keys",
+        "pipeline_name_allowlist",
+        "pipeline_name_disallowlist",
         "always_hooks",
         "imports",
         "local_file_provider_download_allowed_roots",
@@ -121,6 +136,7 @@ class KedroGraphQLConfig(BaseModel):
     @field_validator(
         "mongo_indexes",
         "dataset_input_providers",
+        "dataset_input_derivations",
         "events_config",
         "dataset_filepath_masks",
         "dataset_filepath_allowed_roots",
@@ -130,11 +146,25 @@ class KedroGraphQLConfig(BaseModel):
         "pipeline_runners",
         "pipeline_submission_upload_roots",
         "pipeline_submission_batch_max_sizes",
+        "pipeline_submission_parameter_allowlists",
+        "pipeline_submission_parameter_disallowlists",
         mode="before",
     )
     @classmethod
     def _parse_json(cls, value):
         return json.loads(value) if isinstance(value, str) else value
+
+    @field_validator(
+        "pipeline_submission_parameter_allowlists",
+        "pipeline_submission_parameter_disallowlists",
+    )
+    @classmethod
+    def _validate_parameter_paths(cls, value):
+        for pipeline, paths in value.items():
+            for path in paths:
+                if any(not segment.strip() for segment in path.split(".")):
+                    raise ValueError(f"Invalid parameter path {path!r} for pipeline {pipeline!r}")
+        return value
 
 
 def load_api_spec(path: str | Path | None = None) -> dict[str, Any]:

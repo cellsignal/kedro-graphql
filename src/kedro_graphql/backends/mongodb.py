@@ -11,6 +11,7 @@ from pymongo import AsyncMongoClient
 
 from kedro_graphql.logs.logger import logger
 from kedro_graphql.models import Pipeline
+from kedro_graphql.catalog_search import build_pipeline_document, pipeline_document_update, public_pipeline_document
 
 from .base import BaseBackend
 
@@ -114,7 +115,7 @@ class MongoBackend(BaseBackend):
         results = []
         async for r in raw:
             r["id"] = str(r.pop("_id"))
-            p = Pipeline.from_dict(r)
+            p = Pipeline.from_dict(public_pipeline_document(r))
             _ = p.current_status
             results.append(p)
         return results
@@ -131,7 +132,7 @@ class MongoBackend(BaseBackend):
 
         if r:
             r["id"] = str(r.pop("_id"))
-            p = Pipeline.from_dict(r)
+            p = Pipeline.from_dict(public_pipeline_document(r))
             _ = p.current_status
             return p
         else:
@@ -141,14 +142,14 @@ class MongoBackend(BaseBackend):
         """Save a pipeline"""
         collection = self._get_collection()
 
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         pipeline_id = values.pop("id", None)
         if pipeline_id is not None:
             values["_id"] = ObjectId(pipeline_id)
         created = await collection.insert_one(values)
         created = await collection.find_one({"_id": created.inserted_id})
         created["id"] = str(created.pop("_id"))
-        p = Pipeline.from_dict(created)
+        p = Pipeline.from_dict(public_pipeline_document(created))
         return p
 
     async def update(self, pipeline: Pipeline = None):
@@ -157,9 +158,9 @@ class MongoBackend(BaseBackend):
 
         id = ObjectId(pipeline.id)
         filter = {'_id': id}
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         values.pop("id")  # we dont want to update the id
-        newvalues = {"$set": values}
+        newvalues = pipeline_document_update(values)
         await collection.update_one(filter, newvalues)
 
         p = await self.read(id=id)
@@ -169,7 +170,7 @@ class MongoBackend(BaseBackend):
     async def update_if_current(self, pipeline, expected_state, status_count):
         """Reject stale lifecycle writers instead of replacing newer state."""
         collection = self._get_collection()
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         values.pop("id")
         result = await collection.update_one(
             {
@@ -177,7 +178,7 @@ class MongoBackend(BaseBackend):
                 f"status.{status_count - 1}.state": expected_state.value,
                 "status": {"$size": status_count},
             },
-            {"$set": values},
+            pipeline_document_update(values),
         )
         if not result.matched_count:
             return None
