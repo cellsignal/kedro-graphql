@@ -23,7 +23,7 @@ from .pipeline_visibility import pipeline_search_filter
 class CatalogSearchInput:
     text: str = ""
     pipeline_id: str | None = None
-    dataset_type: str | None = None
+    dataset_name: str | None = None
 
 
 @strawberry.type
@@ -161,8 +161,11 @@ async def search_catalog(services, search, pipeline_limit=10, dataset_limit=50,
         raise ValueError("Enter at least three characters or an exact pipeline ID.")
     config = services.config
     terms = expanded_terms(text, config)
+    name_filter = (search.dataset_name or "").strip().casefold()
+    if len(name_filter) > 1024:
+        raise ValueError("Dataset name filter must be at most 1024 characters.")
     keys = config.catalog_search_tag_keys
-    identity = {"terms": terms, "id": search.pipeline_id, "type": search.dataset_type,
+    identity = {"terms": terms, "id": search.pipeline_id, "dataset_name": name_filter,
                 "keys": keys, "allow": config.pipeline_name_allowlist,
                 "disallow": config.pipeline_name_disallowlist, "masks": config.dataset_filepath_masks}
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -232,7 +235,7 @@ async def search_catalog(services, search, pipeline_limit=10, dataset_limit=50,
                         for offset, entry in enumerate(matching if connection != "pipelines" else []):
                             if offset % 128 == 0:
                                 await asyncio.sleep(0)
-                            if search.dataset_type and search.dataset_type.casefold() not in (entry["type_folded"], entry["type_short_folded"]):
+                            if name_filter and name_filter not in entry["name_folded"]:
                                 continue
                             key = (entry["name_folded"], str(document["_id"]), entry["catalog_index"])
                             retain(datasets, key, (document, entry["catalog_index"]), dataset_after, dataset_limit)

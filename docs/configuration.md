@@ -741,7 +741,7 @@ query {
     pipelines { id name createdAt tags { key value } }
     pageMeta { nextCursor }
   }
-  searchCatalogDatasets(search: {text: "12345", datasetType: "BamDataset"}, limit: 50) {
+  searchCatalogDatasets(search: {text: "12345", datasetName: "full.bam"}, limit: 50) {
     datasets { dataset { name config } pipelineId pipelineName catalogIndex }
     pageMeta { nextCursor }
   }
@@ -750,11 +750,12 @@ query {
 
 Text is a literal case-insensitive substring of pipeline tag values or configured
 `filepath`, `path`, and string entries in `paths`. File names match as part of those
-locations. Logical dataset names, pipeline names/descriptions, and dataset tags
-are not searched. Partition prefixes are searched without listing partition files.
+locations. The main text does not search logical dataset names, pipeline
+names/descriptions, or dataset tags. Partition prefixes are searched without listing partition files.
 A pipeline matches a tag or any dataset location. A dataset matches its parent
-pipeline's tag or its own location. Dataset type accepts exact full or short class
-names and filters only dataset rows, never pipeline inclusion. Optional `pipelineId`
+pipeline's tag or its own location. The optional `datasetName` filter then narrows
+these dataset rows by literal case-insensitive substring of their logical name,
+before sorting and pagination. It does not affect pipeline inclusion. Optional `pipelineId`
 is an exact Mongo ObjectId filter. Empty text with an ID returns the pipeline and
 its datasets. Otherwise text must contain at least three trimmed characters.
 

@@ -72,14 +72,14 @@ def test_projection_and_atomic_best_effort():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('enriched', [True, False])
-async def test_union_parent_tags_locations_and_type_only_dataset(enriched):
-    docs = [document(1, tags=[{'key': 'barcode', 'value': 'L12345'}], catalog=[dataset('memory'), dataset('other', type='CSV')], enriched=enriched),
+async def test_union_parent_tags_locations_and_name_only_dataset(enriched):
+    docs = [document(1, tags=[{'key': 'barcode', 'value': 'L12345'}], catalog=[dataset('memory'), dataset('Memory.csv', type='CSV')], enriched=enriched),
             document(2, catalog=[dataset('logical12345'), dataset('file', filepath='s3://bucket/L12345/run.bam')], enriched=enriched),
-            document(3, catalog=[dataset('logical12345')], enriched=enriched)]
+            document(3, catalog=[dataset('memory')], enriched=enriched)]
     services, collection = services_for_search(docs)
-    result = await search_catalog(services, CatalogSearchInput(text='12345', dataset_type='BamDataset'))
+    result = await search_catalog(services, CatalogSearchInput(text='12345', dataset_name='EM'))
     assert [row.id for row in result.pipelines.pipelines] == [str(docs[1]['_id']), str(docs[0]['_id'])]
-    assert [row.dataset.name for row in result.datasets.datasets] == ['file', 'memory']
+    assert [row.dataset.name for row in result.datasets.datasets] == ['memory', 'Memory.csv']
     assert 'name_folded' not in str(collection.find.call_args)
 
 
