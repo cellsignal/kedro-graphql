@@ -420,3 +420,13 @@ Application across collections is not transactional: earlier successful creation
 can remain after an error. Always provision before starting writers that depend
 on uniqueness constraints. Indexes alone do not make unanchored, case-insensitive
 substring searches efficient; query changes are a separate concern.
+
+## Archived pipeline logs
+
+`pipelineArchivedLogs(id, before, maxBytes)` reads the latest completed attempt from
+`log_path_prefix/runs/<pipeline-id>/<task-id>/events.jsonl`. The query requires
+`read_pipeline` and `subscribe_to_logs` permissions. It returns bounded JSONL
+chunks; use `earlierCursor` to page backwards. Cursors are bound to the pipeline
+and task. Reads support fsspec storage such as local filesystems and S3. Missing
+archives return `UNAVAILABLE`; storage errors return `UNREADABLE` without exposing
+storage details. The first read defaults to 64 KiB; `maxBytes` accepts 1–262144.

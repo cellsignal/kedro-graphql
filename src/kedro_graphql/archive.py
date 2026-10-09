@@ -16,7 +16,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import fsspec
 
-from .pipeline_config import _CREDENTIAL_FIELDS
+from .pipeline_config import _CREDENTIAL_FIELDS, _normalize_credential_field
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def _sanitize_string(value: str) -> str:
         (
             key,
             "[REDACTED]"
-            if key.lower().replace("-", "_") in _CREDENTIAL_FIELDS
+            if _normalize_credential_field(key) in _CREDENTIAL_FIELDS
             or key.lower().replace("-", "_") in _URL_SECRET_FIELDS
             else item,
         )
@@ -72,7 +72,7 @@ def sanitize_config(value: Any, *, _key: str | None = None) -> Any:
     if isinstance(value, Mapping):
         sanitized = {}
         for key, item in value.items():
-            normalized = str(key).lower().replace("-", "_")
+            normalized = _normalize_credential_field(key)
             sanitized[key] = (
                 sanitize_config(item, _key=normalized)
                 if normalized == "credentials" and isinstance(item, str)

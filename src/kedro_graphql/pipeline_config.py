@@ -1,6 +1,7 @@
 """Pipeline-aware catalog resolution and validation."""
 
 import json
+import re
 from collections.abc import Mapping
 
 from kedro.io import AbstractDataset, DataCatalog, MemoryDataset
@@ -29,6 +30,10 @@ _CREDENTIAL_FIELDS = {
 }
 
 
+def _normalize_credential_field(value):
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(value)).lower().replace("-", "_")
+
+
 def _add_parameter(feed_dict, name, value):
     feed_dict[f"params:{name}"] = value
     if isinstance(value, dict):
@@ -52,7 +57,7 @@ def validate_configuration_boundary(catalog, parameters, max_bytes):
     def visit(value, path):
         if isinstance(value, Mapping):
             for key, item in value.items():
-                normalized = str(key).lower().replace("-", "_")
+                normalized = _normalize_credential_field(key)
                 item_path = f"{path}.{key}"
                 if normalized in _CREDENTIAL_FIELDS:
                     raise InvalidPipeline(

@@ -18,6 +18,8 @@ from strawberry.schema.config import StrawberryConfig
 from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
+from .archived_logs import ArchivedLogChunk, pipeline_archived_logs
+
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
@@ -379,6 +381,10 @@ class Query:
             pipeline_templates=sliced_pipes, page_meta=PageMeta(
                 next_cursor=next_cursor)
         )
+
+    @strawberry.field(description="Read a bounded chunk of the latest attempt's archived logs.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline"), AppPermission(action="subscribe_to_logs")])])
+    async def pipeline_archived_logs(self, id: str, info: Info, before: str | None = None, max_bytes: int = 65536) -> ArchivedLogChunk:
+        return await pipeline_archived_logs(_services(info), id, before, max_bytes)
 
     @strawberry.field(description="Get a pipeline instance.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline")]), PipelineExtension()])
     async def read_pipeline(self, id: str, info: Info) -> Pipeline:
