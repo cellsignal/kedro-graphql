@@ -175,6 +175,7 @@ def test_run_pipeline_child_process_recreates_catalog():
             hook_manager_for.return_value = mock_hook_manager
             pipeline_registry.__getitem__.return_value.only_nodes.return_value = mock_pipeline
 
+            record_data = {}
             _run_pipeline_in_child_process(
                 runner="tests.test_tasks.MetadataRunner",
                 runner_kwargs={"is_async": True},
@@ -184,7 +185,7 @@ def test_run_pipeline_child_process_recreates_catalog():
                 parameters=parameters,
                 hook_names=["test-hook"],
                 session_id="test-session",
-                record_data={},
+                record_data=record_data,
                 pipeline_id="pipeline-id",
                 task_id="test-task-id",
                 runner_metadata={},
@@ -218,8 +219,13 @@ def test_run_pipeline_child_process_recreates_catalog():
             ):
                 assert callback.call_args.kwargs["catalog"] is mock_catalog_instance
             
+            hook_params = mock_hook_manager.hook.before_pipeline_run.call_args.kwargs["run_params"]
+            hook_params["emit_pipeline_tags"]([{"key": "barcode", "value": "ABP1"}])
+            assert result_queue.put.call_args.args[0] == ("pipeline_tags", [{"key": "barcode", "value": "ABP1"}])
+            assert "emit_pipeline_tags" not in record_data
+
             # Verify success was reported
-            result_queue.put.assert_called_with((State.SUCCESS, None, None))
+            assert ((State.SUCCESS, None, None),) in [call.args for call in result_queue.put.call_args_list]
             mock_hook_manager.hook.after_pipeline_run.assert_called_once()
             mock_hook_manager.hook.on_pipeline_error.assert_not_called()
 

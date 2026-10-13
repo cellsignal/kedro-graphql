@@ -122,7 +122,7 @@ def _unique_location(location: str, pipeline_id: str) -> str:
     return parsed._replace(path=scoped).geturl()
 
 
-def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
+def generate_unique_paths(pipeline: Pipeline, datasets: list, output_root: str | None = None) -> Pipeline:
     """Modifies filepaths in the pipeline's data catalog to ensure they are unique.
 
     Args:
@@ -139,14 +139,16 @@ def generate_unique_paths(pipeline: Pipeline, datasets: list) -> Pipeline:
             c = json.loads(d.config)
             if c.get("filepath", None):
                 filepath = c["filepath"]
-                new_path = _unique_location(filepath, pipeline.id)
+                new_path = (f"{output_root.rstrip('/')}/{pipeline.id}/{urlparse(filepath).path.rsplit('/', 1)[-1]}"
+                            if output_root else _unique_location(filepath, pipeline.id))
                 c["filepath"] = new_path
                 logger.info(
                     f"Modifying dataset {d.name} filepath to {new_path} to ensure uniqueness.")
                 d.config = json.dumps(c)
             elif c.get("path", None):
                 path = c["path"]
-                new_path = _unique_location(path, pipeline.id)
+                new_path = (f"{output_root.rstrip('/')}/{pipeline.id}/"
+                            if output_root else _unique_location(path, pipeline.id))
                 c["path"] = new_path
                 logger.info(
                     f"Modifying dataset {d.name} path to {new_path} to ensure uniqueness.")

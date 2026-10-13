@@ -49,6 +49,10 @@ class DatasetInputProvider(ABC):
     def supports(self, context: DatasetInputContext) -> bool:
         ...
 
+    def resolve(self, context: DatasetInputContext, value: str) -> str:
+        """Resolve an application input value before standard location validation."""
+        return value
+
     @abstractmethod
     def search(self, context: DatasetInputContext, query: str, limit: int) -> InputSuggestions:
         ...

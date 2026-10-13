@@ -895,7 +895,7 @@ async def test_validate_and_submit_use_identical_derivation_resolution(tmp_path,
 async def test_derived_paths_survive_application_validation_errors(tmp_path, monkeypatch):
     services, _ = _derived_services(tmp_path, monkeypatch)
     monkeypatch.setattr(pipeline_submission, "_check_s3_uri", lambda config, uri: uri)
-    services.config.pipeline_submission_transform = "kedro_graphql.pipeline_submission._test_transform"
+    services.config.pipeline_submission_transforms = {"toy": "kedro_graphql.pipeline_submission._test_transform"}
     def reject(*args):
         raise InvalidPipeline("A sample barcode is required.")
     monkeypatch.setattr(pipeline_submission, "_test_transform", reject, raising=False)
@@ -1082,3 +1082,30 @@ def test_chained_derivations_resolve_in_order_and_use_intermediate_overrides(tmp
         _, failed_errors, _, candidates = _prepare_submission(services, submission)
         assert any(error.path == failed_name for error in failed_errors)
         assert next(item.s3_uri for item in candidates if item.name == "dedup_index") == paths["dedup_index"]
+
+
+def test_submission_only_allowlist_blocks_forms_and_uploads(tmp_path, monkeypatch):
+    services = _services(tmp_path, monkeypatch)
+    services.config.pipeline_submission_name_allowlist = ["aggregate"]
+    with pytest.raises(InvalidPipeline, match="generic submission"):
+        build_submission_form(services, "toy", [])
+    with pytest.raises(InvalidPipeline, match="generic submission"):
+        create_submission_upload(services, "toy", "raw", "raw.txt")
+    assert build_submission_form(services, "aggregate", []).pipeline_name == "aggregate"
+
+
+@pytest.mark.asyncio
+async def test_submission_transform_only_runs_for_named_pipeline(tmp_path, monkeypatch):
+    services, _ = _derived_services(tmp_path, monkeypatch)
+    monkeypatch.setattr("kedro_graphql.pipeline_service.create_pipeline", AsyncMock())
+    monkeypatch.setattr(pipeline_submission, "_check_s3_uri", lambda config, uri: uri)
+    transform = Mock(side_effect=lambda pipeline, parameters, outputs: (pipeline, outputs))
+    monkeypatch.setattr(pipeline_submission, "_test_transform", transform, raising=False)
+    services.config.pipeline_submission_transforms = {"another_pipeline": "kedro_graphql.pipeline_submission._test_transform"}
+    result = await validate_pipeline_submission(services, _derived_submission())
+    assert result.valid
+    transform.assert_not_called()
+    services.config.pipeline_submission_transforms = {"toy": "kedro_graphql.pipeline_submission._test_transform"}
+    result = await validate_pipeline_submission(services, _derived_submission())
+    assert result.valid
+    transform.assert_called_once()

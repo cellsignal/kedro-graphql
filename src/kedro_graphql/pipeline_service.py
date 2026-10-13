@@ -297,7 +297,7 @@ async def create_pipeline(
         logger.info("Staging pipeline %s", pipeline.name)
         pipeline.id = str(ObjectId())
         if unique_paths:
-            pipeline = generate_unique_paths(pipeline, unique_paths)
+            pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
         pipeline = await services.backend.create(pipeline)
         logger.info(
             "user=%s, action=create_pipeline, id=%s, name=%s, state=STAGED",
@@ -313,7 +313,7 @@ async def create_pipeline(
         return pipeline
     pipeline.id = str(ObjectId())
     if unique_paths:
-        pipeline = generate_unique_paths(pipeline, unique_paths)
+        pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
     pipeline = await services.backend.create(pipeline)
     await _publish_or_record_failure(services, pipeline, values)
     logger.info(
@@ -422,7 +422,7 @@ async def update_pipeline(
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
 
     if unique_paths:
-        pipeline = generate_unique_paths(pipeline, unique_paths)
+        pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
 
     current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})

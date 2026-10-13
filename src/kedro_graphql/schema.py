@@ -24,7 +24,7 @@ from .autocomplete import InputSuggestions, dataset_input_suggestions
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
 from .exceptions import InvalidPipeline
-from .pipeline_visibility import pipeline_name_allowed, pipeline_search_filter
+from .pipeline_visibility import pipeline_name_allowed, pipeline_search_filter, pipeline_submission_name_allowed
 from .logs.logger import PipelineLogStream, logger
 from .models import (
     DataSet,
@@ -375,6 +375,17 @@ class Query:
                     f"user={_permission_class(info).get_user_info(info)['email']}, action=read_pipeline_template, id={id}")
                 return p
         raise InvalidPipeline(f"Pipeline {id} does not exist in the project.")
+
+    @strawberry.field(description="List templates available for generic submission.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_templates")])])
+    def pipeline_submission_templates(self, info: Info, limit: int = 200, cursor: Optional[str] = None) -> PipelineTemplates:
+        if not 1 <= limit <= 200:
+            raise ValueError("Submission template limit must be between 1 and 200")
+        start = decode_cursor(cursor) if cursor else ""
+        templates = [template for template in _services(info).metadata.templates
+                     if template.id >= start and pipeline_submission_name_allowed(_config(info), template.name)]
+        page = templates[:limit + 1]
+        next_cursor = encode_cursor(str(page.pop().id)) if len(page) > limit else None
+        return PipelineTemplates(pipeline_templates=page, page_meta=PageMeta(next_cursor=next_cursor))
 
     @strawberry.field(description="Get a list of pipeline templates.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline_templates")])])
     def pipeline_templates(self, info: Info, limit: int, cursor: Optional[str] = None) -> PipelineTemplates:

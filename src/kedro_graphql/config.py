@@ -31,11 +31,13 @@ class KedroGraphQLConfig(BaseModel):
     app: str = "kedro_graphql.asgi.create_app"
     app_description: str = "A tool for serving kedro projects as a GraphQL API"
     app_title: str = "Kedro GraphQL API"
-    pipeline_submission_transform: str | None = None
+    pipeline_submission_output_roots: dict[str, str] = Field(default_factory=dict)
+    pipeline_submission_transforms: dict[str, str] = Field(default_factory=dict)
     always_hooks: list[str] = Field(default_factory=list)
     backend: str = "kedro_graphql.backends.mongodb.MongoBackend"
     broker: str = "redis://localhost"
     celery_result_backend: str = "redis://localhost"
+    celery_task_imports: list[str] = Field(default_factory=list)
     celery_abort_polling_interval: float = 5
     celery_abort_grace_period: float = 60
     client_uri_graphql: str = "http://localhost:5000/graphql"
@@ -90,6 +92,7 @@ class KedroGraphQLConfig(BaseModel):
     )
     pipeline_config_sources: dict[str, str] = Field(default_factory=dict)
     pipeline_name_allowlist: list[str] | None = None
+    pipeline_submission_name_allowlist: list[str] | None = None
     pipeline_name_disallowlist: list[str] = Field(default_factory=list)
     pipeline_submission_batch_max_size: PositiveInt = 10
     pipeline_submission_batch_max_sizes: dict[str, PositiveInt] = Field(default_factory=dict)
@@ -113,6 +116,8 @@ class KedroGraphQLConfig(BaseModel):
     signed_url_provider: str = "kedro_graphql.signed_url.s3_provider.S3Provider"
 
     @field_validator(
+        "celery_task_imports",
+        "pipeline_submission_name_allowlist",
         "catalog_search_tag_keys",
         "pipeline_name_allowlist",
         "pipeline_name_disallowlist",
@@ -143,6 +148,8 @@ class KedroGraphQLConfig(BaseModel):
         "permissions_group_to_role_map",
         "permissions_role_to_action_map",
         "pipeline_config_sources",
+        "pipeline_submission_transforms",
+        "pipeline_submission_output_roots",
         "pipeline_runners",
         "pipeline_submission_upload_roots",
         "pipeline_submission_batch_max_sizes",

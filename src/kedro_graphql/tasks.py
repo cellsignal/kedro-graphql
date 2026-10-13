@@ -28,6 +28,7 @@ from kedro_graphql.pipeline_config import (
 )
 from kedro_graphql.models import (
     ParameterInput,
+    Tag,
     Pipeline,
     PipelineInput,
     extension_metadata_entries,
@@ -53,6 +54,20 @@ from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import from_json, to_json
 
 logger = logging.getLogger(__name__)
+
+
+def _pipeline_tag_entries(values):
+    if not isinstance(values, list) or len(values) > 1000:
+        raise ValueError("Pipeline tag events require a list of at most 1000 tags")
+    tags = []
+    for item in values:
+        if (not isinstance(item, dict) or set(item) != {"key", "value"}
+                or not isinstance(item["key"], str) or not item["key"]
+                or not isinstance(item["value"], str)
+                or len(item["key"]) > 256 or len(item["value"]) > 4096):
+            raise ValueError("Pipeline tag events require bounded string keys and values")
+        tags.append(Tag(key=item["key"], value=item["value"]))
+    return tags
 
 
 def _status_metadata(status) -> dict[str, str]:
@@ -135,6 +150,18 @@ class KedroGraphqlTask(AbortableTask):
                 task_id,
             )
         return updated
+
+    def _persist_pipeline_tags(self, pipeline_id, task_id, values):
+        tags = _pipeline_tag_entries(values)
+        pipeline = run_sync(self.db.read(id=pipeline_id))
+        if pipeline is None or pipeline.current_status.task_id != task_id:
+            return None
+        existing = {(tag.key, tag.value) for tag in pipeline.tags}
+        for tag in tags:
+            if (tag.key, tag.value) not in existing:
+                pipeline.tags.append(tag)
+                existing.add((tag.key, tag.value))
+        return self._update_current(pipeline, pipeline.current_status.state, task_id, "tags")
 
     def _transition(self, pipeline_id, celery_task_id, target, **fields):
         pipeline = run_sync(self.db.read(id=pipeline_id))
@@ -545,6 +572,12 @@ def _run_pipeline_in_child_process(
         extension_metadata_entries(values)
         result_queue.put(("metadata", dict(values)))
 
+    def emit_pipeline_tags(values):
+        _pipeline_tag_entries(values)
+        result_queue.put(("pipeline_tags", values))
+
+    hook_run_params = {**record_data, "emit_pipeline_tags": emit_pipeline_tags}
+
     try:
         external_runner = has_external_lifecycle(runner)
         celery_hook_manager = (
@@ -577,7 +610,7 @@ def _run_pipeline_in_child_process(
             load_versions=None,
         )
         celery_hook_manager.hook.before_pipeline_run(
-            run_params=record_data,
+            run_params=hook_run_params,
             pipeline=filtered_pipeline,
             catalog=io,
         )
@@ -596,7 +629,7 @@ def _run_pipeline_in_child_process(
             try:
                 if outcome is State.SUCCESS:
                     celery_hook_manager.hook.after_pipeline_run(
-                        run_params=record_data,
+                        run_params=hook_run_params,
                         run_result=run_result,
                         pipeline=filtered_pipeline,
                         catalog=io,
@@ -604,7 +637,7 @@ def _run_pipeline_in_child_process(
                 else:
                     celery_hook_manager.hook.on_pipeline_error(
                         error=child_error,
-                        run_params=record_data,
+                        run_params=hook_run_params,
                         pipeline=filtered_pipeline,
                         catalog=io,
                     )
@@ -805,6 +838,8 @@ def run_pipeline(self,
                     if archive is not None:
                         archive.update(runner_metadata=runner_metadata)
                     self._persist_runner_metadata(id, self.request.id, event[1])
+                elif len(event) == 2 and event[0] == "pipeline_tags":
+                    self._persist_pipeline_tags(id, self.request.id, event[1])
                 else:
                     child_result = event
 

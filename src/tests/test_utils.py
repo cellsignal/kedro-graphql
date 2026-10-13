@@ -72,3 +72,20 @@ def test_unique_paths_partitioned_datasests():
 def test_unique_location_relative_and_partition_roots(location, expected):
     from kedro_graphql.utils import _unique_location
     assert _unique_location(location, "run") == expected
+
+
+@pytest.mark.parametrize("root", ["s3://bucket/kgql_outs", "s3://bucket/kgql_outs/"])
+def test_configured_output_root_flattens_outputs_and_preserves_inputs(root):
+    from kedro_graphql.models import DataSet, Pipeline
+    from kedro_graphql.utils import generate_unique_paths
+
+    pipeline = Pipeline(id="run", name="qc", data_catalog=[
+        DataSet(name="input", config=json.dumps({"filepath": "s3://bucket/input.csv"})),
+        DataSet(name="table", config=json.dumps({"filepath": "s3://bucket/intermediate/table.csv"})),
+        DataSet(name="sequences", config=json.dumps({"path": "s3://bucket/primary/sequences/", "filename_suffix": ".fasta"})),
+    ])
+    result = generate_unique_paths(pipeline, ["table", "sequences"], root)
+    catalog = {dataset.name: json.loads(dataset.config) for dataset in result.data_catalog}
+    assert catalog["input"]["filepath"] == "s3://bucket/input.csv"
+    assert catalog["table"]["filepath"] == "s3://bucket/kgql_outs/run/table.csv"
+    assert catalog["sequences"] == {"path": "s3://bucket/kgql_outs/run/", "filename_suffix": ".fasta"}

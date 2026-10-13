@@ -26,7 +26,7 @@ from kedro.io.core import parse_dataset_definition
 from kedro_datasets.partitions import PartitionedDataset
 
 from .exceptions import InvalidPipeline
-from .pipeline_visibility import require_pipeline_name_allowed
+from .pipeline_visibility import require_pipeline_submission_name_allowed
 from .models import (
     DataSetInput,
     Node,
@@ -447,7 +447,7 @@ def _dataset_descriptor(
 
 def _form_context(services, name: str, slices: list[PipelineSlice] | None):
     """Load and normalize the selected pipeline context."""
-    require_pipeline_name_allowed(services.config, name)
+    require_pipeline_submission_name_allowed(services.config, name)
     if name not in services.metadata.pipelines:
         raise InvalidPipeline(f"Pipeline {name} does not exist in the project.")
     selected = filter_pipeline(services.metadata.pipelines[name], _slice_payload(slices))
@@ -993,9 +993,12 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
                 else:
                     if source.s3_uris or not source.s3_uri:
                         raise InvalidPipeline("Supply one S3 URI for this input.")
-                    location = (_check_s3_prefix(services.config, source.s3_uri)
+                    context = DatasetInputContext(submission.name, name, resolved_catalog.get(name) or catalog.get(name) or {}, tuple(submission.slices or []), None)
+                    provider = find_input_provider(services, context, [source.method.value])
+                    uri = provider.resolve(context, source.s3_uri) if provider else source.s3_uri
+                    location = (_check_s3_prefix(services.config, uri)
                                 if descriptor.kind is SubmissionDatasetKind.PARTITIONED
-                                else _check_s3_uri(services.config, source.s3_uri))
+                                else _check_s3_uri(services.config, uri))
             else:
                 location = _decode_upload(services, submission, source,
                                           partitioned=descriptor.kind is SubmissionDatasetKind.PARTITIONED)
@@ -1021,7 +1024,7 @@ def _prepare_submission(services, submission: PipelineSubmissionInput):
         data_catalog=catalog_inputs,
         slices=list(submission.slices),
     )
-    transform = services.config.pipeline_submission_transform
+    transform = services.config.pipeline_submission_transforms.get(submission.name)
     if transform:
         module, name = transform.rsplit(".", 1)
         try:

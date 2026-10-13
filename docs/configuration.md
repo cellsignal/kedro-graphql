@@ -461,6 +461,8 @@ caller access where required. Search returns `InputSuggestions` with
 `InputSuggestion(label, value)` entries and a `truncated` flag. Values are JSON;
 consumers map them to the advertised existing input method.
 
+Providers may override `resolve(context, value)` to expand an application value to a storage location before standard S3 scope and location validation; the default returns the supplied location unchanged.
+
 Providers are loaded once at application startup. No providers are registered
 by default. Overlapping registrations for the same input are an error. The
 submission form exposes nullable `autocomplete { method }`; the query
@@ -481,10 +483,25 @@ other options. Collection uploads are not exposed by this submission form.
 Dataset constructors retain their own format/protocol restrictions. Ordinary
 partitioned inputs use a directory prefix or folder upload rather than a list of file URIs.
 
+### Submission output directories
+
+`pipeline_submission_output_roots` maps pipeline names to an output root.
+All managed outputs for a configured pipeline share `<root>/<pipeline-id>/`;
+single files retain their basename and partitioned datasets write their partitions
+directly into that directory. Output filenames must be distinct across datasets.
+
 ### Application submission transformation
 
-`pipeline_submission_transform` is an optional dotted Python callable. The API
-calls it after validating frontend inputs and parameters, before constructing
+`pipeline_submission_transforms` maps pipeline names to dotted Python callables.
+Only submissions for a listed pipeline invoke its transform; unlisted pipelines
+receive no transformation. For example:
+
+```yaml
+pipeline_submission_transforms:
+  xmt_abp_qc: molbio.submission.prepare_submission
+```
+
+The API calls the selected transform after validating frontend inputs and parameters, before constructing
 or persisting a pipeline, for both validation and submission. Its signature is
 `transform(pipeline_input, merged_parameters, managed_outputs)` and it returns
 `(pipeline_input, managed_outputs)`. Applications can set run-specific globals
@@ -816,3 +833,26 @@ times after concurrent changes. No maintenance runs at startup. Direct Mongo
 writers bypass the builder; check/rebuild detects and repairs their stale data.
 No new collection or mandatory migration is required. Deploy API and workers
 together; index application, record rebuilds, and restarts are separate operations.
+
+## Generic submission eligibility and worker extensions
+
+`pipeline_submission_name_allowlist` restricts `pipelineSubmissionTemplates` and
+all generic form, suggestion, upload, validation, and submission operations.
+Unset means every generally visible pipeline is eligible; an empty list allows
+none. General pipeline allow/disallow rules still apply. This list does not
+restrict raw pipeline mutations or history search, allowing service webhooks to
+run pipelines that are not offered by the generic form. The template query
+filters before pagination and accepts limits from 1 through 200.
+
+`celery_task_imports` adds application task modules to the worker's core imports.
+For example, use `[molbio.cloning_submission]` to register custom shared tasks
+without depending on API factory imports.
+
+Selected local Kedro hooks receive `run_params["emit_pipeline_tags"]`, a callback
+accepting a list of `{key: str, value: str}` pairs. The worker merges distinct
+pairs into the owning current run through the backend's conditional document
+update; unrelated tags remain intact and search projections are rebuilt by the
+normal document builder. Events permit at most 1,000 tags, keys up to 256
+characters, and values up to 4,096 characters. The callback exists only in child
+runtime hook parameters and is not persisted in attempt records or transmitted
+to external runners.
