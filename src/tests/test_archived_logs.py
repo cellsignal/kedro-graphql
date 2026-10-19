@@ -132,3 +132,29 @@ class ArchiveQueryTests(unittest.IsolatedAsyncioTestCase):
                      if field.python_name == 'pipeline_archived_logs')
         self.assertEqual([permission.action for permission in field.extensions[0].permissions],
                          ['read_pipeline', 'subscribe_to_logs'])
+
+
+    async def test_full_download_signs_all_terminal_states_without_reading_chunks(self):
+        from kedro_graphql.archived_logs import pipeline_log_download
+        from kedro_graphql.models import SignedUrl
+        for state in [State.SUCCESS, State.FAILURE, State.ABORTED, State.REVOKED]:
+            services = self.services(state)
+            services.config.log_path_prefix = 's3://bucket/logs/'
+            services.config.signed_url_max_expires_in_sec = 3600
+            signed = SignedUrl(url='https://example.invalid/log', file='events.jsonl')
+            with patch('kedro_graphql.signed_url.s3_provider.S3Provider.presigned_url', return_value=signed) as signer, patch('kedro_graphql.archived_logs._read_chunk') as reader:
+                self.assertIs(await pipeline_log_download(services, None, 'pipeline'), signed)
+                signer.assert_called_once_with('s3://bucket/logs/runs/pipeline/task/events.jsonl', 300, 'pipeline-task.jsonl')
+                reader.assert_not_called()
+
+    async def test_active_download_is_rejected_before_storage_access(self):
+        from kedro_graphql.archived_logs import pipeline_log_download
+        with patch('kedro_graphql.signed_url.s3_provider.S3Provider.presigned_url') as signer:
+            with self.assertRaises(InvalidPipeline):
+                await pipeline_log_download(self.services(State.STARTED), None, 'pipeline')
+            signer.assert_not_called()
+
+    async def test_download_requires_pipeline_and_log_permissions(self):
+        from kedro_graphql.schema import Query
+        field = next(field for field in Query.__strawberry_definition__.fields if field.python_name == 'pipeline_log_download')
+        self.assertEqual([permission.action for permission in field.extensions[0].permissions], ['read_pipeline', 'subscribe_to_logs'])

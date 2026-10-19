@@ -120,3 +120,35 @@ async def pipeline_archived_logs(services, id, before=None, max_bytes=65536):
         logger.warning("Unable to read archived logs pipeline_id=%s task_id=%s", id, task_id)
         return ArchivedLogChunk(task_id=task_id, availability=ArchiveAvailability.UNREADABLE,
                                 message="Archived logs could not be read. You can retry.")
+
+
+async def pipeline_log_download(services, info, id):
+    """Sign the full latest-attempt archive without loading it into API memory."""
+    from .models import DataSet
+    from .signed_url.s3_provider import S3Provider
+    from .signed_url.local_file_provider import LocalFileProvider
+
+    pipeline = await services.backend.read(id=id)
+    if pipeline is None:
+        raise InvalidPipeline("Pipeline not found.")
+    current = pipeline.current_status
+    if current.state not in TERMINAL_STATES.union({State.REVOKED}):
+        raise InvalidPipeline("Logs can be downloaded after execution completes.")
+    prefix = services.config.log_path_prefix
+    if not prefix or not current.task_id:
+        raise InvalidPipeline("Archived logs are unavailable for this attempt.")
+    pipeline_id, task_id = _safe_segment(str(pipeline.id)), _safe_segment(current.task_id)
+    location = f"{prefix.rstrip('/')}/runs/{pipeline_id}/{task_id}/events.jsonl"
+    expires = min(300, services.config.signed_url_max_expires_in_sec)
+    try:
+        if location.startswith("s3://"):
+            signed = await run_in_threadpool(S3Provider.presigned_url, location, expires,
+                f"{pipeline_id}-{task_id}.jsonl")
+        else:
+            dataset = DataSet(name="pipeline_logs", config=json.dumps({"type": "text.TextDataset", "filepath": location}))
+            signed = await run_in_threadpool(LocalFileProvider.read, info, dataset, expires)
+        if signed is None:
+            raise FileNotFoundError()
+        return signed
+    except FileNotFoundError:
+        raise InvalidPipeline("Archived logs are not available yet, or were not retained.") from None

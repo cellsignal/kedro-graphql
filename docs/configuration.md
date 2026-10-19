@@ -856,3 +856,8 @@ normal document builder. Events permit at most 1,000 tags, keys up to 256
 characters, and values up to 4,096 characters. The callback exists only in child
 runtime hook parameters and is not persisted in attempt records or transmitted
 to external runners.
+
+
+## Full archived log downloads and pipeline-name filtering
+
+Monitoring opens by default in the shared UI. `pipelineLogDownload(id:)` returns a short-lived signed URL for the complete latest-attempt `events.jsonl` archive after SUCCESS, FAILURE, ABORTED, or REVOKED. It requires both `read_pipeline` and `subscribe_to_logs`, derives the path from the configured log root and recorded attempt, and does not read the archive into API memory. S3 downloads specify attachment disposition; local archives use the existing signed-file download route. Missing archives produce an actionable error. The bounded monitor preview remains separate from the complete download.

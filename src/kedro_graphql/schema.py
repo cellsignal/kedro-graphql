@@ -19,7 +19,7 @@ from strawberry.scalars import JSON
 from strawberry.extensions import FieldExtension
 
 from .catalog_search import CatalogSearchInput, DatasetSearchResults, search_catalog
-from .archived_logs import ArchivedLogChunk, pipeline_archived_logs
+from .archived_logs import ArchivedLogChunk, pipeline_archived_logs, pipeline_log_download
 from .autocomplete import InputSuggestions, dataset_input_suggestions
 from .pipeline_updates import PipelineUpdate, pipeline_updates
 from .pipeline_event_monitor import PipelineEventMonitor
@@ -414,6 +414,10 @@ class Query:
             pipeline_templates=sliced_pipes, page_meta=PageMeta(
                 next_cursor=next_cursor)
         )
+
+    @strawberry.field(description="Download the full latest-attempt archive for a terminal pipeline.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline"), AppPermission(action="subscribe_to_logs")])])
+    async def pipeline_log_download(self, id: str, info: Info) -> SignedUrl:
+        return await pipeline_log_download(_services(info), info, id)
 
     @strawberry.field(description="Read a bounded chunk of the latest attempt's archived logs.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipeline"), AppPermission(action="subscribe_to_logs")])])
     async def pipeline_archived_logs(self, id: str, info: Info, before: str | None = None, max_bytes: int = 65536) -> ArchivedLogChunk:

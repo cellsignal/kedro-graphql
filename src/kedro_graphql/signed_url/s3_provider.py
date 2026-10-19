@@ -18,7 +18,7 @@ class S3Provider(SignedUrlProvider):
     """
 
     @staticmethod
-    def presigned_url(filepath: str, expires_in_sec: int) -> SignedUrl | None:
+    def presigned_url(filepath: str, expires_in_sec: int, download_filename: str | None = None) -> SignedUrl | None:
         """
         Generate a signed URL for an S3 file.
         Args:
@@ -39,6 +39,8 @@ class S3Provider(SignedUrlProvider):
 
         try:
             size = s3_client.head_object(**params)["ContentLength"]
+            if download_filename:
+                params["ResponseContentDisposition"] = f'attachment; filename="{download_filename}"'
             return SignedUrl(
                 url=s3_client.generate_presigned_url(
                     'get_object',
@@ -122,10 +124,10 @@ class S3Provider(SignedUrlProvider):
                     # if no partitions provided,
                     # need the list of files in the partitioned dataset to generate signed URLs for each partition
                     files = AbstractDataset.from_config(dataset.name, c).load()
-                    files = [path + "/" + f + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + f + c.get("filename_suffix", "")
                              for f in files]
                 else:
-                    files = [path + "/" + partition + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + partition + c.get("filename_suffix", "")
                              for partition in partitions]
                 signed_urls = []
                 for file in files:
@@ -135,6 +137,8 @@ class S3Provider(SignedUrlProvider):
                     signed = S3Provider.presigned_url(
                         file, expires_in_sec)
 
+                    if signed is None:
+                        raise DataSetError(f"Cannot sign partition {file} for dataset {dataset.name}")
                     signed_urls.append(signed)
                 return SignedUrls(urls=signed_urls)
 
@@ -207,10 +211,10 @@ class S3Provider(SignedUrlProvider):
                     # if no partitions provided,
                     # need the list of files in the partitioned dataset to generate signed URLs for each partition
                     files = AbstractDataset.from_config(dataset.name, c).load()
-                    files = [path + "/" + f + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + f + c.get("filename_suffix", "")
                              for f in files]
                 else:
-                    files = [path + "/" + partition + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + partition + c.get("filename_suffix", "")
                              for partition in partitions]
                 signed_urls = []
                 for file in files:
