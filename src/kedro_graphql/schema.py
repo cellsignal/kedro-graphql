@@ -433,6 +433,8 @@ class Query:
     @strawberry.field(description="Get a list of pipeline instances.", extensions=[PermissionExtension(permissions=[AppPermission(action="read_pipelines")]), PipelineExtension()])
     async def read_pipelines(self, info: Info, limit: int, cursor: Optional[str] = None, filter: Optional[str] = "",
                        sort: Optional[str] = "") -> Pipelines:
+        if not 1 <= limit <= 200:
+            raise ValueError("Pipeline page size must be between 1 and 200.")
         if cursor is not None:
             # decode the user ID from the given cursor.
             pipe_id = decode_cursor(cursor=cursor)

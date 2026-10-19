@@ -279,3 +279,37 @@ class TestSchemaQuery:
         assert isinstance(resp.data["readDatasets"][0]["urls"], list)
         assert len(resp.data["readDatasets"][0]["urls"]) == 1
         assert resp.errors is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [0, -1, 201])
+async def test_pipeline_listing_rejects_unbounded_page_sizes(limit):
+    from kedro_graphql.schema import Query
+    with pytest.raises(ValueError, match="between 1 and 200"):
+        await Query().read_pipelines(None, limit=limit)
+
+
+@pytest.mark.asyncio
+async def test_recent_pipeline_pages_have_stable_descending_order(mock_app, mock_info):
+    from datetime import datetime, timedelta, timezone
+    from kedro_graphql.schema import Query
+
+    from kedro_graphql.models import PipelineStatus, State
+
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    records = [await mock_app.state.services.backend.create(
+        Pipeline(name="example00", created_at=base + timedelta(days=day),
+            status=[PipelineStatus(state=State.STAGED)]))
+        for day in [0, 1, 1, 2, 3]]
+    expected = sorted(records, key=lambda p: (p.created_at, p.id), reverse=True)
+    results = []
+    cursor = None
+    while True:
+        page = await Query().read_pipelines(mock_info, limit=2, cursor=cursor,
+            sort="[('created_at', -1), ('_id', -1)]")
+        assert len(page.pipelines) <= 2
+        results.extend(p.id for p in page.pipelines)
+        cursor = page.page_meta.next_cursor
+        if cursor is None:
+            break
+    assert results == [p.id for p in expected]

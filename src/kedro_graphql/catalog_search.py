@@ -24,6 +24,7 @@ class CatalogSearchInput:
     text: str = ""
     pipeline_id: str | None = None
     dataset_name: str | None = None
+    pipeline_name: str | None = None
 
 
 @strawberry.type
@@ -157,7 +158,10 @@ async def search_catalog(services, search, pipeline_limit=10, dataset_limit=50,
     if not all(1 <= limit <= 200 for limit in (pipeline_limit, dataset_limit)):
         raise ValueError("Search limits must be between 1 and 200.")
     text = search.text.strip()
-    if len(text) > 1024 or (len(text) < 3 and not search.pipeline_id):
+    pipeline_name = (search.pipeline_name or "").strip()
+    if len(pipeline_name) > 256:
+        raise ValueError("Pipeline name must be at most 256 characters.")
+    if len(text) > 1024 or (len(text) < 3 and not search.pipeline_id and not pipeline_name):
         raise ValueError("Enter at least three characters or an exact pipeline ID.")
     config = services.config
     terms = expanded_terms(text, config)
@@ -165,13 +169,15 @@ async def search_catalog(services, search, pipeline_limit=10, dataset_limit=50,
     if len(name_filter) > 1024:
         raise ValueError("Dataset name filter must be at most 1024 characters.")
     keys = config.catalog_search_tag_keys
-    identity = {"terms": terms, "id": search.pipeline_id, "dataset_name": name_filter,
+    identity = {"terms": terms, "id": search.pipeline_id, "dataset_name": name_filter, "pipeline_name": pipeline_name,
                 "keys": keys, "allow": config.pipeline_name_allowlist,
                 "disallow": config.pipeline_name_disallowlist, "masks": config.dataset_filepath_masks}
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     pipeline_after = decode_cursor(pipeline_cursor, fingerprint + "pipelines", 2)
     dataset_after = decode_cursor(dataset_cursor, fingerprint + "datasets", 3)
     scope = json.loads(pipeline_search_filter(config, "{}"))
+    if pipeline_name:
+        scope = {"$and": [scope, {"name": pipeline_name}]}
     if search.pipeline_id:
         if not ObjectId.is_valid(search.pipeline_id):
             raise ValueError("Pipeline ID must be a valid Mongo object ID.")

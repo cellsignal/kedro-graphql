@@ -752,6 +752,11 @@ concurrently and render either table without waiting for the other. Both require
 `read_pipelines` and `read_dataset`, apply pipeline-name visibility, and mask all
 configured locations in returned catalogs. General `readPipelines` remains available.
 
+All three pipeline/catalog list operations enforce page sizes from 1 through 200.
+There is no total cap across pages; use the returned cursor to fetch the next page.
+For a recent-pipeline view without search criteria, use `readPipelines` with
+`sort: "[('created_at', -1), ('_id', -1)]"` for descending creation time and a stable ID tiebreaker.
+
 ```graphql
 query {
   searchCatalogPipelines(search: {text: "12345"}, limit: 10) {
@@ -861,3 +866,5 @@ to external runners.
 ## Full archived log downloads and pipeline-name filtering
 
 Monitoring opens by default in the shared UI. `pipelineLogDownload(id:)` returns a short-lived signed URL for the complete latest-attempt `events.jsonl` archive after SUCCESS, FAILURE, ABORTED, or REVOKED. It requires both `read_pipeline` and `subscribe_to_logs`, derives the path from the configured log root and recorded attempt, and does not read the archive into API memory. S3 downloads specify attachment disposition; local archives use the existing signed-file download route. Missing archives produce an actionable error. The bounded monitor preview remains separate from the complete download.
+
+`CatalogSearchInput.pipelineName` selects one exact pipeline name and applies to both pipeline and dataset results. A name alone is sufficient without three text characters. The filter is included in cursor identity, so changing the name requires restarting pagination. The shared UI loads the dropdown from all generally visible pipeline templates, rather than the generic submission allowlist.

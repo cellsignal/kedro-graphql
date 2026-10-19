@@ -308,3 +308,22 @@ def test_schema_replaces_search_modes_with_independent_connections():
     schema = strawberry.Schema(query=Query).as_str()
     assert 'searchCatalogPipelines' in schema and 'searchCatalogDatasets' in schema
     assert 'searchDatasets(' not in schema and 'DatasetMatchMode' not in schema
+
+
+@pytest.mark.asyncio
+async def test_pipeline_name_filters_both_connections_and_binds_cursors(mock_app):
+    from kedro_graphql.models import DataSet, PipelineStatus
+    services = mock_app.state.services
+    for day, name in [(1, 'example00'), (2, 'example01'), (3, 'example00')]:
+        await services.backend.create(Pipeline(name=name, created_at=datetime(2026, 1, day, tzinfo=timezone.utc),
+            status=[PipelineStatus(state=State.STAGED)],
+            data_catalog=[DataSet(name='input', config=json.dumps({'type': 'text.TextDataset', 'filepath': f's3://bucket/{day}.txt'}))]))
+    result = await search_catalog(services, CatalogSearchInput(pipeline_name='example00'), pipeline_limit=1, dataset_limit=1)
+    assert [p.name for p in result.pipelines.pipelines] == ['example00']
+    assert [row.pipeline_name for row in result.datasets.datasets] == ['example00']
+    cursor = result.pipelines.page_meta.next_cursor
+    assert cursor
+    next_page = await search_catalog(services, CatalogSearchInput(pipeline_name='example00'), pipeline_limit=1, pipeline_cursor=cursor)
+    assert next_page.pipelines.pipelines[0].id != result.pipelines.pipelines[0].id
+    with pytest.raises(ValueError, match='cursor'):
+        await search_catalog(services, CatalogSearchInput(pipeline_name='example01'), pipeline_cursor=cursor)
