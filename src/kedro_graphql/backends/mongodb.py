@@ -11,6 +11,7 @@ from pymongo import AsyncMongoClient
 
 from kedro_graphql.logs.logger import logger
 from kedro_graphql.models import Pipeline
+from kedro_graphql.catalog_search import build_pipeline_document, pipeline_document_update, public_pipeline_document
 
 from .base import BaseBackend
 
@@ -73,31 +74,48 @@ class MongoBackend(BaseBackend):
     async def list(self, cursor: uuid.UUID = None, limit=10, filter="", sort=""):
         collection = self._get_collection()
 
-        query = {}
-        if len(filter) > 0:
-            filter = json.loads(filter)
-            query = filter
+        query = json.loads(filter) if filter else {}
+        if not isinstance(query, dict):
+            raise ValueError("Filter must be a JSON object")
+        try:
+            ordering = ast.literal_eval(sort) if sort else [("_id", 1)]
+        except (ValueError, SyntaxError) as error:
+            raise ValueError("Invalid sort parameter format") from error
+        if not isinstance(ordering, list) or not ordering or not all(
+            isinstance(item, tuple) and len(item) == 2
+            and isinstance(item[0], str) and item[0] and not item[0].startswith("$")
+            and type(item[1]) is int and item[1] in (-1, 1)
+            for item in ordering
+        ):
+            raise ValueError("Sort must be a list of (field, 1 or -1) tuples")
+        if not any(field == "_id" for field, _ in ordering):
+            ordering.append(("_id", ordering[-1][1]))
         if cursor is not None:
-            query.update({'_id': {'$gte': ObjectId(cursor)}})
-
-        if sort:
-            try:
-                sort = ast.literal_eval(sort)
-                # Validate that sort is a list of tuples like [('created_at', -1)]
-                if isinstance(sort, list) and all(isinstance(i, tuple) and len(i) == 2 for i in sort):
-                    raw = collection.find(query).sort(sort).limit(limit)
-                else:
-                    raise ValueError(
-                        "Sort parameter should be a list of tuples like [('field', order)]")
-            except (ValueError, SyntaxError) as e:
-                raise ValueError(f"Invalid sort parameter format: {e}")
-        else:
-            raw = collection.find(query).limit(limit)
+            anchor = await collection.find_one({"_id": ObjectId(cursor)},
+                                               {field: 1 for field, _ in ordering})
+            if anchor is None:
+                raise ValueError("Pagination cursor no longer exists; refresh the search")
+            equal = []
+            after = []
+            for index, (field, direction) in enumerate(ordering):
+                value = anchor
+                for segment in field.split("."):
+                    value = value.get(segment) if isinstance(value, dict) else None
+                actual = {"$ifNull": [f"${field}", None]}
+                expected = {"$literal": value}
+                operator = "$gt" if direction == 1 else "$lt"
+                # The cursor identifies the lookahead row, so include that row on the next page.
+                if index == len(ordering) - 1:
+                    operator = "$gte" if direction == 1 else "$lte"
+                after.append({"$and": [*equal, {operator: [actual, expected]}]})
+                equal.append({"$eq": [actual, expected]})
+            query = {"$and": [query, {"$expr": {"$or": after}}]}
+        raw = collection.find(query).sort(ordering).limit(limit)
 
         results = []
         async for r in raw:
             r["id"] = str(r.pop("_id"))
-            p = Pipeline.from_dict(r)
+            p = Pipeline.from_dict(public_pipeline_document(r))
             _ = p.current_status
             results.append(p)
         return results
@@ -114,7 +132,7 @@ class MongoBackend(BaseBackend):
 
         if r:
             r["id"] = str(r.pop("_id"))
-            p = Pipeline.from_dict(r)
+            p = Pipeline.from_dict(public_pipeline_document(r))
             _ = p.current_status
             return p
         else:
@@ -124,14 +142,14 @@ class MongoBackend(BaseBackend):
         """Save a pipeline"""
         collection = self._get_collection()
 
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         pipeline_id = values.pop("id", None)
         if pipeline_id is not None:
             values["_id"] = ObjectId(pipeline_id)
         created = await collection.insert_one(values)
         created = await collection.find_one({"_id": created.inserted_id})
         created["id"] = str(created.pop("_id"))
-        p = Pipeline.from_dict(created)
+        p = Pipeline.from_dict(public_pipeline_document(created))
         return p
 
     async def update(self, pipeline: Pipeline = None):
@@ -140,9 +158,9 @@ class MongoBackend(BaseBackend):
 
         id = ObjectId(pipeline.id)
         filter = {'_id': id}
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         values.pop("id")  # we dont want to update the id
-        newvalues = {"$set": values}
+        newvalues = pipeline_document_update(values)
         await collection.update_one(filter, newvalues)
 
         p = await self.read(id=id)
@@ -152,7 +170,7 @@ class MongoBackend(BaseBackend):
     async def update_if_current(self, pipeline, expected_state, status_count):
         """Reject stale lifecycle writers instead of replacing newer state."""
         collection = self._get_collection()
-        values = pipeline.to_dict()
+        values = build_pipeline_document(pipeline)
         values.pop("id")
         result = await collection.update_one(
             {
@@ -160,7 +178,7 @@ class MongoBackend(BaseBackend):
                 f"status.{status_count - 1}.state": expected_state.value,
                 "status": {"$size": status_count},
             },
-            {"$set": values},
+            pipeline_document_update(values),
         )
         if not result.matched_count:
             return None

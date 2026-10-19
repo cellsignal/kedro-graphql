@@ -2,8 +2,11 @@ import json
 import signal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
+import fsspec
 import pytest
+from kedro.framework.hooks import _create_hook_manager
 from unittest.mock import patch, MagicMock
 
 from kedro_graphql.models import (
@@ -22,6 +25,8 @@ from kedro_graphql.tasks import (
     _run_pipeline_in_child_process,
     run_pipeline,
 )
+from kedro_graphql.hooks import LOCAL_HOOK_CALLBACKS
+from kedro_graphql.archive import AttemptArchive
 from cloudevents.pydantic.v1 import CloudEvent
 from cloudevents.conversion import to_json
 
@@ -62,6 +67,7 @@ async def test_run_pipeline(mock_app,
     parameters = [{"name": "example", "value": "hello"}]
     tags = [{"key": "author", "value": "opensean"}, {
         "key": "package", "value": "kedro-graphql"}]
+    task_id = str(uuid4())
 
     p = Pipeline(
         name="example00",
@@ -73,12 +79,12 @@ async def test_run_pipeline(mock_app,
                                session=None,
                                started_at=None,
                                finished_at=None,
-                               task_id=None,
+                               task_id=task_id,
                                task_name=None)]
     )
 
     p = await mock_app.state.services.backend.create(p)
-    result = run_pipeline.delay(id=str(p.id))
+    result = run_pipeline.apply_async(kwargs={"id": str(p.id)}, task_id=task_id)
     assert result.wait(timeout=None, interval=0.5) == "success"
     stored = await mock_app.state.services.backend.read(id=p.id)
     assert stored.current_status.metadata == [
@@ -116,12 +122,15 @@ async def test_run_pipeline_preserves_child_traceback(
             PipelineStatus(
                 state=State.STAGED,
                 runner="tests.test_tasks.FailingRunner",
+                task_id=(task_id := str(uuid4())),
             )
         ],
     )
     pipeline = await mock_app.state.services.backend.create(pipeline)
 
-    result = run_pipeline.delay(id=str(pipeline.id))
+    result = run_pipeline.apply_async(
+        kwargs={"id": str(pipeline.id)}, task_id=task_id
+    )
 
     with pytest.raises(RuntimeError) as error:
         result.wait(timeout=None, interval=0.5)
@@ -166,6 +175,7 @@ def test_run_pipeline_child_process_recreates_catalog():
             hook_manager_for.return_value = mock_hook_manager
             pipeline_registry.__getitem__.return_value.only_nodes.return_value = mock_pipeline
 
+            record_data = {}
             _run_pipeline_in_child_process(
                 runner="tests.test_tasks.MetadataRunner",
                 runner_kwargs={"is_async": True},
@@ -175,7 +185,7 @@ def test_run_pipeline_child_process_recreates_catalog():
                 parameters=parameters,
                 hook_names=["test-hook"],
                 session_id="test-session",
-                record_data={},
+                record_data=record_data,
                 pipeline_id="pipeline-id",
                 task_id="test-task-id",
                 runner_metadata={},
@@ -201,6 +211,7 @@ def test_run_pipeline_child_process_recreates_catalog():
             mock_runner.run.assert_called_once()
             call_args = mock_runner.run.call_args
             assert call_args[1]['catalog'] == mock_catalog_instance
+            assert call_args[1]['hook_manager'] is mock_hook_manager
             for callback in (
                 mock_hook_manager.hook.after_catalog_created,
                 mock_hook_manager.hook.before_pipeline_run,
@@ -208,10 +219,72 @@ def test_run_pipeline_child_process_recreates_catalog():
             ):
                 assert callback.call_args.kwargs["catalog"] is mock_catalog_instance
             
+            hook_params = mock_hook_manager.hook.before_pipeline_run.call_args.kwargs["run_params"]
+            hook_params["emit_pipeline_tags"]([{"key": "barcode", "value": "ABP1"}])
+            assert result_queue.put.call_args.args[0] == ("pipeline_tags", [{"key": "barcode", "value": "ABP1"}])
+            assert "emit_pipeline_tags" not in record_data
+
             # Verify success was reported
-            result_queue.put.assert_called_with((State.SUCCESS, None, None))
+            assert ((State.SUCCESS, None, None),) in [call.args for call in result_queue.put.call_args_list]
             mock_hook_manager.hook.after_pipeline_run.assert_called_once()
             mock_hook_manager.hook.on_pipeline_error.assert_not_called()
+
+
+def test_external_child_uses_local_hooks_and_assigns_remote_specs():
+    result_queue = MagicMock()
+    runner = MagicMock()
+    celery_hook_manager = MagicMock()
+    runner_hook_manager = _create_hook_manager()
+    specs = [
+        {
+            "name": "selected",
+            "module": "hooks",
+            "attribute": "plugin",
+            "callbacks": ["before_node_run"],
+        }
+    ]
+
+    with patch("kedro_graphql.tasks.has_external_lifecycle", return_value=True), patch(
+        "kedro_graphql.tasks.hook_manager_for", return_value=celery_hook_manager
+    ) as hook_manager_for, patch(
+        "kedro_graphql.tasks.remote_hook_specs_for", return_value=specs
+    ) as remote_hook_specs_for, patch(
+        "kedro_graphql.tasks.init_runner", return_value=runner
+    ), patch(
+        "kedro_graphql.tasks._create_hook_manager", return_value=runner_hook_manager
+    ), patch("kedro_graphql.tasks.build_catalog", return_value=MagicMock()), patch(
+        "kedro_graphql.tasks.pipelines"
+    ) as pipeline_registry, patch("kedro_graphql.tasks.KedroGraphQLLogHandler"):
+        pipeline_registry.__getitem__.return_value.only_nodes.return_value = MagicMock()
+        runner.run.return_value = {}
+
+        _run_pipeline_in_child_process(
+            "tests.test_tasks.LifecycleRunner",
+            {},
+            "pipeline",
+            ["node"],
+            {},
+            {},
+            ["selected"],
+            "session",
+            {},
+            "pipeline-id",
+            "task-id",
+            {},
+            "redis://localhost",
+            result_queue,
+        )
+
+    hook_manager_for.assert_called_once_with(
+        ["selected"], callbacks=LOCAL_HOOK_CALLBACKS
+    )
+    remote_hook_specs_for.assert_called_once_with(["selected"])
+    assert runner.remote_hook_specs == specs
+    assert runner.run.call_args.kwargs["hook_manager"] is runner_hook_manager
+    assert runner_hook_manager.get_plugins() == set()
+    celery_hook_manager.hook.after_catalog_created.assert_called_once()
+    celery_hook_manager.hook.before_pipeline_run.assert_called_once()
+    celery_hook_manager.hook.after_pipeline_run.assert_called_once()
 
 
 def test_run_pipeline_child_process_reports_abort_once():
@@ -264,7 +337,7 @@ def test_duplicate_and_missing_callback_delivery_is_idempotent():
     pipeline = Pipeline(
         id="000000000000000000000001",
         name="example",
-        status=[PipelineStatus(state=State.SUCCESS)],
+        status=[PipelineStatus(state=State.SUCCESS, task_id="task")],
     )
     backend = SimpleNamespace(
         read=AsyncMock(side_effect=[pipeline, None]),
@@ -340,6 +413,86 @@ def test_external_runner_local_exit_does_not_confirm_abort():
     backend.update_if_current.assert_not_awaited()
 
 
+def test_archive_failure_preserves_task_logs(tmp_path):
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.SUCCESS)],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+    task._gql_config = SimpleNamespace(log_tmp_dir=str(tmp_path))
+    task_log_dir = tmp_path / "task-id"
+    task_log_dir.mkdir()
+    (task_log_dir / "info.log").write_text("recovery log")
+
+    archive = AttemptArchive(
+        str(tmp_path / "archive"),
+        str(pipeline.id),
+        "task-id",
+        task_log_dir,
+    )
+    archive.failed = True
+    task._archives = {"task-id": archive}
+
+    task.after_return(
+        "SUCCESS",
+        "success",
+        "task-id",
+        (),
+        {"id": str(pipeline.id)},
+        None,
+    )
+
+    assert task_log_dir.exists()
+    assert (task_log_dir / "info.log").read_text() == "recovery log"
+
+
+def test_on_retry_finalizes_archive_and_retains_task_logs(tmp_path):
+    pipeline = Pipeline(
+        id="000000000000000000000001",
+        name="example",
+        status=[PipelineStatus(state=State.STARTED, task_id="task-id")],
+    )
+    backend = SimpleNamespace(
+        read=AsyncMock(return_value=pipeline),
+        update_if_current=AsyncMock(return_value=pipeline),
+    )
+    task = KedroGraphqlTask()
+    task._db = backend
+    task._gql_config = SimpleNamespace(log_tmp_dir=str(tmp_path))
+    task_log_dir = tmp_path / "task-id"
+    task_log_dir.mkdir()
+    (task_log_dir / "info.log").write_text('{"message":"retry"}\n')
+
+    prefix = f"memory://task-retry-{uuid4()}"
+    archive = AttemptArchive(prefix, str(pipeline.id), "task-id", task_log_dir)
+    archive.start_attempt({"started_at": "now"})
+    task._archives = {"task-id": archive}
+
+    task.on_retry(
+        RuntimeError("retry"),
+        "task-id",
+        (),
+        {"id": str(pipeline.id)},
+        None,
+    )
+
+    assert task_log_dir.exists()
+    fs, root = fsspec.core.url_to_fs(prefix)
+    with fs.open(
+        f"{root}/runs/{pipeline.id}/task-id/manifest.json",
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        manifest = json.load(stream)
+    assert manifest["outcome"] == "RETRY"
+
+
 @pytest.mark.parametrize(
     ("runner", "expected"),
     [
@@ -407,5 +560,24 @@ def test_child_emits_runner_metadata_over_parent_queue():
     assert runner.run_context == {
         "pipeline_id": "pipeline-id",
         "task_id": "task-id",
+        "pipeline_name": "pipeline",
         "metadata": {"x-existing": "value"},
     }
+
+
+def test_external_termination_is_reported_as_aborted_by_child():
+    from kedro_graphql.runners import ExternalRunnerAborted
+    result_queue = MagicMock()
+    runner = MagicMock()
+    runner.run.side_effect = ExternalRunnerAborted("Workflow terminated")
+    with patch("kedro_graphql.tasks.signal.signal"), patch(
+        "kedro_graphql.tasks.init_runner", return_value=runner
+    ), patch("kedro_graphql.tasks.hook_manager_for", return_value=MagicMock()), patch(
+        "kedro_graphql.tasks.pipelines"
+    ) as registry, patch("kedro_graphql.tasks.KedroGraphQLLogHandler"):
+        registry.__getitem__.return_value.only_nodes.return_value = MagicMock()
+        _run_pipeline_in_child_process(
+            "tests.test_tasks.MetadataRunner", {}, "pipeline", ["node"], {}, {}, [],
+            "session", {}, "pipeline-id", "task", {}, "redis://localhost", result_queue,
+        )
+    assert result_queue.put.call_args.args[0][0] is State.ABORTED

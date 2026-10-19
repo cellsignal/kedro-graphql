@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import __version__ as kedro_graphql_version
 from .exceptions import InvalidPipeline
+from .pipeline_visibility import require_pipeline_name_allowed
 from .logs.logger import logger
 from .models import (
     DataSet,
@@ -149,6 +150,7 @@ def _external_runner(pipeline: Pipeline) -> ExternalRunnerLifecycle | None:
     runner.run_context = {
         "pipeline_id": str(pipeline.id),
         "task_id": status.task_id,
+        "pipeline_name": pipeline.name,
         "metadata": {item.key: item.value for item in status.metadata},
     }
     return runner
@@ -221,7 +223,7 @@ def _prepare_new_pipeline(
     requested_state = PipelineInputStatus(values["state"])
     pipeline = Pipeline.from_input(pipeline_input)
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
-    runner = values.get("runner") or services.config.runner
+    runner = services.config.pipeline_runners.get(pipeline.name) or values.get("runner") or services.config.runner
     pipeline = _normalize_pipeline(
         pipeline,
         services,
@@ -283,6 +285,7 @@ async def create_pipeline(
     unique_paths: list[str] | None = None,
     dry_run: bool = False,
 ) -> Pipeline:
+    require_pipeline_name_allowed(services.config, pipeline_input.name)
     pipeline, values, runner, requested_state = _prepare_new_pipeline(
         services, pipeline_input
     )
@@ -294,7 +297,7 @@ async def create_pipeline(
         logger.info("Staging pipeline %s", pipeline.name)
         pipeline.id = str(ObjectId())
         if unique_paths:
-            pipeline = generate_unique_paths(pipeline, unique_paths)
+            pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
         pipeline = await services.backend.create(pipeline)
         logger.info(
             "user=%s, action=create_pipeline, id=%s, name=%s, state=STAGED",
@@ -310,7 +313,7 @@ async def create_pipeline(
         return pipeline
     pipeline.id = str(ObjectId())
     if unique_paths:
-        pipeline = generate_unique_paths(pipeline, unique_paths)
+        pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
     pipeline = await services.backend.create(pipeline)
     await _publish_or_record_failure(services, pipeline, values)
     logger.info(
@@ -400,7 +403,7 @@ async def update_pipeline(
 
     expected_state = pipeline.current_status.state
     expected_status_count = len(pipeline.status)
-    runner = values.get("runner") or services.config.runner
+    runner = services.config.pipeline_runners.get(pipeline.name) or values.get("runner") or services.config.runner
     submitted = _normalize_pipeline(
         Pipeline.from_input(pipeline_input),
         services,
@@ -419,7 +422,7 @@ async def update_pipeline(
     pipeline.hooks = _effective_hooks(services, pipeline_input.hooks)
 
     if unique_paths:
-        pipeline = generate_unique_paths(pipeline, unique_paths)
+        pipeline = generate_unique_paths(pipeline, unique_paths, services.config.pipeline_submission_output_roots.get(pipeline.name))
 
     current_state = pipeline.current_status.state.value
     active_states = UNREADY_STATES.union({"READY"})

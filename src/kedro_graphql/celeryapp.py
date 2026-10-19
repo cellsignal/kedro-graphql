@@ -17,7 +17,7 @@ def celery_app(config: KedroGraphQLConfig, backend, project_path):
         enable_utc = True
         worker_send_task_events = True
         task_send_sent_event = True
-        imports = "kedro_graphql.tasks"
+        imports = tuple(dict.fromkeys(["kedro_graphql.tasks", *config.celery_task_imports]))
         worker_soft_shutdown_timeout = 10
         broker_connection_retry_on_startup = True
 

@@ -14,6 +14,7 @@ class TestS3Provider:
         """Fixture to mock boto3 S3 client"""
         mock_boto3 = mocker.patch("kedro_graphql.signed_url.s3_provider.boto3")
         mock_s3 = mock_boto3.client.return_value
+        mock_s3.head_object.return_value = {"ContentLength": 123}
         mock_s3.generate_presigned_url.return_value = "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
         mock_s3.generate_presigned_post.return_value = {
             "url": "https://your-bucket-name.s3.amazonaws.com/",
@@ -54,6 +55,7 @@ class TestS3Provider:
         assert isinstance(output, SignedUrl)
 
         assert output.url == "https://your-bucket-name.s3.amazonaws.com/your-object-key?AWSAccessKeyId=your-access-key-id&Signature=your-signature&x-amz-security-token=your-security-token&Expires=expiration-time"
+        assert output.size == 123
 
     def test_read_partitions(self, mock_s3_client, mock_info, mock_partitioned_dataset):
         """Test reading multiple partitions from a PartitionedDataset"""
@@ -118,3 +120,29 @@ class TestS3Provider:
 
         for index, item in enumerate(output.urls):
             assert item == expected.urls[index]
+
+
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+@pytest.mark.parametrize("method", ["read", "create"])
+@pytest.mark.parametrize("explicit", [True, False])
+def test_partition_keys_have_one_separator(trailing_slash, method, explicit, mocker, mock_info):
+    client = mocker.patch("kedro_graphql.signed_url.s3_provider.boto3.client").return_value
+    client.head_object.return_value = {"ContentLength": 123}
+    client.generate_presigned_url.return_value = "https://example.invalid/file"
+    client.generate_presigned_post.return_value = {"url": "https://example.invalid", "fields": {}}
+    mocker.patch("kedro_graphql.signed_url.s3_provider.AbstractDataset.from_config").return_value.load.return_value = {"nested/part": None}
+    dataset = DataSet(name="parts", config=json.dumps({"type": "partitions.PartitionedDataset", "path": "s3://bucket/root" + trailing_slash, "filename_suffix": ".txt", "dataset": {"type": "text.TextDataset"}}))
+    result = getattr(S3Provider, method)(mock_info, dataset, 10, ["nested/part"] if explicit else None)
+    assert len(result.urls) == 1
+    if method == "read":
+        client.head_object.assert_called_once_with(Bucket="bucket", Key="root/nested/part.txt")
+    else:
+        assert client.generate_presigned_post.call_args.args[1] == "root/nested/part.txt"
+
+
+def test_missing_partition_has_actionable_error(mocker, mock_info):
+    from kedro_graphql.exceptions import DataSetError
+    mocker.patch.object(S3Provider, "presigned_url", return_value=None)
+    dataset = DataSet(name="parts", config=json.dumps({"type": "partitions.PartitionedDataset", "path": "s3://bucket/root/", "filename_suffix": ".txt", "dataset": {"type": "text.TextDataset"}}))
+    with pytest.raises(DataSetError, match="Cannot sign partition.*missing.txt"):
+        S3Provider.read(mock_info, dataset, 10, ["missing"])

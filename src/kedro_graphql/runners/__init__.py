@@ -7,8 +7,18 @@ from kedro_graphql.models import State
 logger = logging.getLogger("kedro")
 
 
+class ExternalRunnerAborted(Exception):
+    """The external execution has confirmed termination."""
+
+
 class ExternalRunnerLifecycle(ABC):
-    """Operations required to manage execution outside the Celery worker."""
+    """Operations required to manage execution outside the Celery worker.
+
+    The worker sets ``remote_hook_specs`` before calling ``run``. External
+    runners may serialize those specifications for their execution backend.
+    """
+
+    remote_hook_specs: list[dict[str, object]]
 
     @abstractmethod
     def reconcile(self) -> State | None:

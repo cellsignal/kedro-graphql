@@ -37,7 +37,84 @@ def commands():
     pass
 
 
-@commands.command()
+@click.command(name="mongo-indexes")
+@click.pass_context
+@click.option("--apply", "apply_indexes", is_flag=True, help="Create configured indexes; never drop indexes.")
+def mongo_indexes(ctx, apply_indexes):
+    """List Mongo indexes, or explicitly create the configured definitions."""
+    import json
+
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+
+    from .mongo_indexes import index_models
+
+    config = ctx.meta["gql_config"]
+    try:
+        collections = index_models(config)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if apply_indexes and not collections:
+        click.echo("No indexes configured; nothing to apply.")
+        return
+    collection = config.mongo_db_collection
+    try:
+        with MongoClient(config.mongo_uri, serverSelectionTimeoutMS=10000) as client:
+            database = client[config.mongo_db_name]
+            for collection in collections or {config.mongo_db_collection: []}:
+                if apply_indexes:
+                    names = database[collection].create_indexes(collections[collection])
+                    click.echo(f"{collection}: ensured {', '.join(names)}")
+                else:
+                    indexes = list(database[collection].list_indexes())
+                    click.echo(json.dumps({"collection": collection, "indexes": indexes}, default=str))
+    except (PyMongoError, ValueError) as exc:
+        # Driver errors can contain credentials from the connection URI.
+        code = getattr(exc, "code", None)
+        detail = f", code {code}" if code is not None else ""
+        raise click.ClickException(
+            f"Mongo index operation failed for {collection} ({type(exc).__name__}{detail}). "
+            "No indexes were dropped; check Mongo diagnostics. Earlier creations may remain."
+        ) from exc
+
+
+@click.group(name="dataset-search")
+def dataset_search_commands():
+    """Inspect or rebuild catalog/tag search fields without changing their sources."""
+
+
+def _maintain_dataset_search(ctx, rebuild):
+    import json
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+    from .dataset_search_maintenance import maintain_dataset_search
+
+    config = ctx.meta["gql_config"]
+    try:
+        with MongoClient(config.mongo_uri, serverSelectionTimeoutMS=10000) as client:
+            counts = maintain_dataset_search(client[config.mongo_db_name][config.mongo_db_collection], rebuild)
+        click.echo(json.dumps(counts))
+        if counts["failed"]:
+            raise click.ClickException("Some records could not be inspected or rebuilt; see the reported counts.")
+    except PyMongoError as error:
+        raise click.ClickException(f"Dataset search maintenance failed ({type(error).__name__}); check Mongo diagnostics.") from error
+
+
+@dataset_search_commands.command(name="check")
+@click.pass_context
+def dataset_search_check(ctx):
+    """Report missing, unsupported, or inconsistent search projections."""
+    _maintain_dataset_search(ctx, False)
+
+
+@dataset_search_commands.command(name="rebuild")
+@click.pass_context
+def dataset_search_rebuild(ctx):
+    """Recompute projections, retrying catalog or tag changes up to three times."""
+    _maintain_dataset_search(ctx, True)
+
+
+@commands.group(invoke_without_command=True)
 @click.pass_obj
 @click.option("--app", "-a", default=None, help="Application import path")
 @click.option("--app-title", default=None, help="Title of the Kedro GraphQL application")
@@ -64,6 +141,7 @@ def commands():
 @click.option("--local-file-provider-upload-max-file-size-mb", default=None, type=int, help="Maximum allowed upload file size in megabytes")
 @click.option("--log-path-prefix", default=None, help="Prefix of path to save logs")
 @click.option("--log-tmp-dir", default=None, help="Temporary directory for logs")
+@click.option("--dataset-search-timeout-seconds", default=None, type=float, help="Maximum duration of a dataset search, including unenriched records")
 @click.option("--mongo-db-collection", default=None, help="Name of the MongoDB collection to use")
 @click.option("--mongo-db-name", default=None, help="Name to use for collection in mongo e.g. 'pipelines'")
 @click.option("--mongo-uri", default=None, help="URI to mongodb e.g. 'mongodb://root:example@localhost:27017/'")
@@ -86,7 +164,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         local_file_provider_download_allowed_roots,
         local_file_provider_jwt_algorithm, local_file_provider_jwt_secret_key, local_file_provider_server_url,
         local_file_provider_upload_allowed_roots, local_file_provider_upload_max_file_size_mb,
-        log_path_prefix, log_tmp_dir, mongo_db_collection, mongo_db_name, mongo_uri, permissions,
+        log_path_prefix, log_tmp_dir, dataset_search_timeout_seconds, mongo_db_collection, mongo_db_name, mongo_uri, permissions,
         permissions_group_to_role_map, permissions_role_to_action_map, project_version, root_path, runner,
         signed_url_max_expires_in_sec, signed_url_provider,
         reload, reload_path, api_spec, ui, ui_spec, worker):
@@ -118,6 +196,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
         "local_file_provider_upload_max_file_size_mb": local_file_provider_upload_max_file_size_mb,
         "log_path_prefix": log_path_prefix,
         "log_tmp_dir": log_tmp_dir,
+        "dataset_search_timeout_seconds": dataset_search_timeout_seconds,
         "mongo_db_collection": mongo_db_collection,
         "mongo_db_name": mongo_db_name,
         "mongo_uri": mongo_uri,
@@ -138,7 +217,16 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
     overrides = {
         name: value for name, value in option_values.items() if value is not None
     }
-    config = load_config(overrides, api_spec)
+    ctx = click.get_current_context()
+    try:
+        config = load_config(overrides, api_spec)
+    except (ValueError, TypeError) as exc:
+        if ctx.invoked_subcommand:
+            raise click.ClickException("Invalid configuration: check mongo_indexes and Mongo settings.") from exc
+        raise
+    if ctx.invoked_subcommand:
+        ctx.meta["gql_config"] = config
+        return
     logger.debug("configuration loaded by {s}".format(s=__name__))
 
     if not reload_path:
@@ -167,3 +255,7 @@ def gql(metadata, app, app_title, app_description, backend, broker, celery_resul
             run_process(reload_path, target=start_app, args=(config, metadata.project_path))
         else:
             start_app(config, metadata.project_path)
+
+
+gql.add_command(mongo_indexes)
+gql.add_command(dataset_search_commands)

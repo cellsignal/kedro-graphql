@@ -18,7 +18,7 @@ class S3Provider(SignedUrlProvider):
     """
 
     @staticmethod
-    def presigned_url(filepath: str, expires_in_sec: int) -> SignedUrl | None:
+    def presigned_url(filepath: str, expires_in_sec: int, download_filename: str | None = None) -> SignedUrl | None:
         """
         Generate a signed URL for an S3 file.
         Args:
@@ -38,18 +38,29 @@ class S3Provider(SignedUrlProvider):
         }
 
         try:
-            return SignedUrl(url=s3_client.generate_presigned_url(
-                'get_object',
-                Params=params,
-                ExpiresIn=expires_in_sec
-            ),
-                file=filename)
+            size = s3_client.head_object(**params)["ContentLength"]
+            if download_filename:
+                params["ResponseContentDisposition"] = f'attachment; filename="{download_filename}"'
+            return SignedUrl(
+                url=s3_client.generate_presigned_url(
+                    'get_object',
+                    Params=params,
+                    ExpiresIn=expires_in_sec
+                ),
+                file=filename,
+                size=size,
+            )
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")
             return None
 
     @staticmethod
-    def presigned_post(filepath: str, expires_in_sec: int) -> SignedUrl | None:
+    def presigned_post(
+        filepath: str,
+        expires_in_sec: int,
+        max_bytes: int | None = None,
+        min_bytes: int = 1,
+    ) -> SignedUrl | None:
         """
         Generate a presigned POST URL for uploading to S3.
         Args:
@@ -63,11 +74,16 @@ class S3Provider(SignedUrlProvider):
 
         s3_client = boto3.client('s3')
         try:
-            resp = s3_client.generate_presigned_post(bucket_name,
-                                                     f"{key}/{filename}",
-                                                     Fields=None,
-                                                     Conditions=None,
-                                                     ExpiresIn=expires_in_sec)
+            conditions = None
+            if max_bytes is not None:
+                conditions = [["content-length-range", min_bytes, max_bytes]]
+            resp = s3_client.generate_presigned_post(
+                bucket_name,
+                f"{key}/{filename}",
+                Fields=None,
+                Conditions=conditions,
+                ExpiresIn=expires_in_sec,
+            )
             return SignedUrl(url=resp["url"], file=filename, fields=[SignedUrlField(name=k, value=v) for k, v in resp["fields"].items()])
         except ClientError as e:
             logger.error(f"Failed to generate signed URL: {e}")
@@ -108,10 +124,10 @@ class S3Provider(SignedUrlProvider):
                     # if no partitions provided,
                     # need the list of files in the partitioned dataset to generate signed URLs for each partition
                     files = AbstractDataset.from_config(dataset.name, c).load()
-                    files = [path + "/" + f + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + f + c.get("filename_suffix", "")
                              for f in files]
                 else:
-                    files = [path + "/" + partition + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + partition + c.get("filename_suffix", "")
                              for partition in partitions]
                 signed_urls = []
                 for file in files:
@@ -121,6 +137,8 @@ class S3Provider(SignedUrlProvider):
                     signed = S3Provider.presigned_url(
                         file, expires_in_sec)
 
+                    if signed is None:
+                        raise DataSetError(f"Cannot sign partition {file} for dataset {dataset.name}")
                     signed_urls.append(signed)
                 return SignedUrls(urls=signed_urls)
 
@@ -193,10 +211,10 @@ class S3Provider(SignedUrlProvider):
                     # if no partitions provided,
                     # need the list of files in the partitioned dataset to generate signed URLs for each partition
                     files = AbstractDataset.from_config(dataset.name, c).load()
-                    files = [path + "/" + f + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + f + c.get("filename_suffix", "")
                              for f in files]
                 else:
-                    files = [path + "/" + partition + c.get("filename_suffix", "")
+                    files = [path.rstrip("/") + "/" + partition + c.get("filename_suffix", "")
                              for partition in partitions]
                 signed_urls = []
                 for file in files:
